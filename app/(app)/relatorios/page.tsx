@@ -16,6 +16,7 @@ function reportRange(period: Period, reference = new Date()) {
 }
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
+const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const { period: requestedPeriod } = await searchParams;
@@ -32,10 +33,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <Link href="/relatorios?period=week" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'week' ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Últimos 7 dias</Link>
       <Link href="/relatorios?period=month" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'month' ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Últimos 30 dias</Link>
     </nav>
-    <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <Metric label="Abordagens" value={String(report.conversion.approaches)} detail="Atividades no período" />
       <Metric label="Ganhos" value={String(report.conversion.wins)} detail="Eventos WON no período" />
       <Metric label="Conversão" value={percent(report.conversion.rate)} detail="Ganhos ÷ abordagens" />
+      <Metric label="Receita vendida" value={money(report.revenue.sales)} detail="Valores de eventos WON no período" />
+      <Metric label="MRR" value={money(report.revenue.mrr)} detail="MRR de eventos WON no período" />
       <Metric label="Follow-ups pendentes" value={String(report.followUps.pending)} detail={`${report.followUps.overdue} vencido${report.followUps.overdue === 1 ? '' : 's'}`} />
     </div>
     <div className="mt-8 grid gap-6 lg:grid-cols-2">

@@ -17,11 +17,11 @@ describe('commercial reports', () => {
 
   test('uses CRM records and win events to calculate channel conversion for the selected range', async () => {
     const converted = await prisma.lead.create({
-      data: { osmId: 'report-converted', name: 'Oficina Um', stage: 'WON', saleValue: 1200, wonAt: new Date('2026-09-10T10:00:00.000Z'), wonById: 'ana' }
+      data: { osmId: 'report-converted', name: 'Oficina Um', stage: 'WON', saleValue: 1200, mrr: 297, wonAt: new Date('2026-09-10T10:00:00.000Z'), wonById: 'ana' }
     });
     const open = await prisma.lead.create({ data: { osmId: 'report-open', name: 'Oficina Dois', stage: 'INTEREST' } });
     const oldWin = await prisma.lead.create({
-      data: { osmId: 'report-old-win', name: 'Oficina Três', stage: 'WON', saleValue: 900, wonAt: new Date('2026-08-30T10:00:00.000Z'), wonById: 'ana' }
+      data: { osmId: 'report-old-win', name: 'Oficina Três', stage: 'WON', saleValue: 900, mrr: 90, wonAt: new Date('2026-08-30T10:00:00.000Z'), wonById: 'ana' }
     });
     await prisma.activity.createMany({
       data: [
@@ -35,6 +35,7 @@ describe('commercial reports', () => {
     const report = await buildReport({ from: new Date('2026-09-07T00:00:00.000Z'), to: new Date('2026-09-14T00:00:00.000Z'), now: new Date('2026-09-12T12:00:00.000Z') });
 
     expect(report.conversion).toEqual({ approaches: 3, wins: 1, rate: 0.33 });
+    expect(report.revenue).toEqual({ sales: 1200, mrr: 297 });
     expect(report.channels).toContainEqual({ channel: 'WHATSAPP', approaches: 2, wins: 1, conversionRate: 0.5 });
     expect(report.channels).toContainEqual({ channel: 'PHONE', approaches: 1, wins: 0, conversionRate: 0 });
     expect(report.funnel).toContainEqual({ stage: 'WON', leads: 2 });
@@ -45,6 +46,7 @@ describe('commercial reports', () => {
   test('recommends reducing overdue follow-ups from the measured report, without a predictive claim', () => {
     const report = {
       conversion: { approaches: 3, wins: 1, rate: 0.33 },
+      revenue: { sales: 1200, mrr: 297 },
       channels: [], funnel: [], followUps: { pending: 2, overdue: 1 }, notes: { total: 1, recent: ['Retornar amanhã.'] },
       period: { from: new Date('2026-09-07T00:00:00.000Z'), to: new Date('2026-09-14T00:00:00.000Z') }
     };
