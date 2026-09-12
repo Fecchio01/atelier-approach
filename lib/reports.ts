@@ -3,6 +3,7 @@ import { Channel, LeadStage } from '@prisma/client';
 import { prisma } from './db';
 
 export type ReportRange = { from: Date; to: Date; now?: Date };
+export type RecentReportPeriod = 'week' | 'month';
 
 export type WeeklyMonthlyReport = {
   period: { from: Date; to: Date };
@@ -23,6 +24,15 @@ export type Recommendation = {
 
 const inRange = (date: Date, { from, to }: ReportRange) => date >= from && date < to;
 const rate = (numerator: number, denominator: number) => denominator ? Number((numerator / denominator).toFixed(2)) : 0;
+
+export function getRecentReportRange(period: RecentReportPeriod, reference = new Date()): Pick<ReportRange, 'from' | 'to'> {
+  const to = new Date(reference);
+  to.setHours(0, 0, 0, 0);
+  to.setDate(to.getDate() + 1);
+  const from = new Date(to);
+  from.setDate(from.getDate() - (period === 'week' ? 7 : 30));
+  return { from, to };
+}
 
 export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyReport> {
   const [leads, activities, followUps] = await Promise.all([

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 vi.mock('../../lib/auth', () => ({ getCurrentUser: mocks.getCurrentUser }));
 
-import { buildRecommendations, buildReport } from '../../lib/reports';
+import { buildRecommendations, buildReport, getRecentReportRange } from '../../lib/reports';
 import { prisma } from '../../lib/db';
 import { GET } from '../../app/api/reports/route';
 
@@ -61,5 +61,18 @@ describe('commercial reports', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ report: { period: { from: '2026-09-07T00:00:00.000Z', to: '2026-09-14T00:00:00.000Z' } } });
+  });
+
+  test('includes activity and win events from the current day in the recent period', async () => {
+    const now = new Date('2026-09-12T14:00:00.000Z');
+    const lead = await prisma.lead.create({
+      data: { osmId: 'report-today', stage: 'WON', saleValue: 500, wonAt: now, wonById: 'ana' }
+    });
+    await prisma.activity.create({ data: { leadId: lead.id, actorId: 'ana', channel: 'EMAIL', note: 'Ganho registrado hoje.', createdAt: now } });
+
+    const report = await buildReport({ ...getRecentReportRange('week', now), now });
+
+    expect(report.conversion).toEqual({ approaches: 1, wins: 1, rate: 1 });
+    expect(report.revenue.sales).toBe(500);
   });
 });

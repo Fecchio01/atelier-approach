@@ -1,19 +1,10 @@
 import Link from 'next/link';
 
-import { buildRecommendations, buildReport } from '@/lib/reports';
+import { buildRecommendations, buildReport, getRecentReportRange } from '@/lib/reports';
 
 export const dynamic = 'force-dynamic';
 
 type Period = 'week' | 'month';
-
-function reportRange(period: Period, reference = new Date()) {
-  const to = new Date(reference);
-  to.setHours(0, 0, 0, 0);
-  const from = new Date(to);
-  if (period === 'week') from.setDate(from.getDate() - 7);
-  else from.setMonth(from.getMonth() - 1);
-  return { from, to };
-}
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
@@ -21,7 +12,7 @@ const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'curren
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const { period: requestedPeriod } = await searchParams;
   const period: Period = requestedPeriod === 'month' ? 'month' : 'week';
-  const report = await buildReport(reportRange(period));
+  const report = await buildReport(getRecentReportRange(period));
   const recommendations = buildRecommendations(report);
 
   return <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
