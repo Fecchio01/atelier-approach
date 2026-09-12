@@ -36,18 +36,14 @@ export function getRecentReportRange(period: RecentReportPeriod, reference = new
 }
 
 export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyReport> {
-  const [leads, activities, followUps, stageHistory] = await Promise.all([
+  const [leads, activities, followUps] = await Promise.all([
     prisma.lead.findMany({ select: { id: true, stage: true, wonAt: true, wonById: true, saleValue: true, mrr: true } }),
     prisma.activity.findMany({
       where: { createdAt: { gte: range.from, lt: range.to } },
       select: { leadId: true, actorId: true, channel: true, note: true, createdAt: true },
       orderBy: { createdAt: 'desc' }
     }),
-    prisma.followUp.findMany({ select: { dueDate: true, state: true } }),
-    prisma.stageHistory.findMany({
-      where: { createdAt: { gte: range.from, lt: range.to } },
-      select: { leadId: true, actorId: true, toStage: true }
-    })
+    prisma.followUp.findMany({ select: { dueDate: true, state: true } })
   ]);
   const wins = leads.filter((lead) => lead.wonAt && inRange(lead.wonAt, range));
   const winIds = new Set(wins.map((lead) => lead.id));
@@ -67,17 +63,11 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
     return created;
   };
 
-  const historyLeadIds = new Set(stageHistory.map((entry) => entry.leadId));
   for (const activity of activities) {
     const result = member(activity.actorId);
     result.approaches += 1;
-    if (!historyLeadIds.has(activity.leadId) && activity.note === 'Etapa alterada para INTEREST.') result.interests += 1;
-    if (!historyLeadIds.has(activity.leadId) && activity.note === 'Etapa alterada para FOLLOW_UP.') result.meetings += 1;
-  }
-  for (const entry of stageHistory) {
-    const result = member(entry.actorId);
-    if (entry.toStage === 'INTEREST') result.interests += 1;
-    if (entry.toStage === 'FOLLOW_UP') result.meetings += 1;
+    if (activity.note === 'Etapa alterada para INTEREST.') result.interests += 1;
+    if (activity.note === 'Etapa alterada para FOLLOW_UP.') result.meetings += 1;
   }
   for (const lead of wins) {
     if (!lead.wonById) continue;

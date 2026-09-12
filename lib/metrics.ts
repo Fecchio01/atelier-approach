@@ -20,7 +20,6 @@ export type MetricLead = {
   wonAt?: Date | null;
   wonById?: string | null;
   activities: MetricActivity[];
-  stageHistory?: { actorId: string; toStage: string; createdAt: Date }[];
   followUps: MetricFollowUp[];
 };
 
@@ -101,15 +100,6 @@ export function getDashboardMetrics(leads: MetricLead[], goals: WeeklyGoalInput[
   }
 
   for (const lead of leads) {
-    const histories = lead.stageHistory?.filter((entry) => inRange(entry.createdAt, range)) ?? [];
-    if (histories.length) {
-      for (const entry of histories) {
-        personalResults[entry.actorId] ??= { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 };
-        if (entry.toStage === 'INTEREST') personalResults[entry.actorId].interests += 1;
-        if (entry.toStage === 'FOLLOW_UP') personalResults[entry.actorId].meetings += 1;
-      }
-      continue;
-    }
     for (const activity of lead.activities.filter((entry) => inRange(entry.createdAt, range))) {
       personalResults[activity.actorId] ??= { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 };
       if (stageEvent(activity, 'INTEREST')) personalResults[activity.actorId].interests += 1;
