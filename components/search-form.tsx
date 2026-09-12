@@ -13,6 +13,11 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
   const [niche, setNiche] = useState('');
   const [region, setRegion] = useState('');
   const [radiusKm, setRadiusKm] = useState('5');
+  const [phoneOnly, setPhoneOnly] = useState(false);
+  const [digitalPresence, setDigitalPresence] = useState(false);
+  const [minScore, setMinScore] = useState('0');
+  const [maxScore, setMaxScore] = useState('50');
+  const [includeWorked, setIncludeWorked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -22,7 +27,16 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
     setIsLoading(true);
 
     try {
-      const params = new URLSearchParams({ niche, region, radiusKm });
+      const params = new URLSearchParams({
+        niche,
+        region,
+        radiusKm,
+        phoneOnly: String(phoneOnly),
+        digitalPresence: String(digitalPresence),
+        minScore,
+        maxScore,
+        includeWorked: String(includeWorked)
+      });
       const response = await fetch(`/api/search?${params}`);
       const payload = (await response.json()) as { businesses?: ExternalBusiness[]; error?: string };
 
@@ -80,6 +94,38 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
       >
         {isLoading ? 'Pesquisando…' : 'Pesquisar'}
       </button>
+      <fieldset className="grid gap-3 border-t border-white/10 pt-4 text-sm md:col-span-4 md:grid-cols-2 xl:grid-cols-5">
+        <legend className="sr-only">Filtros da pesquisa</legend>
+        <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
+          <input checked={phoneOnly} onChange={(event) => setPhoneOnly(event.target.checked)} type="checkbox" />
+          Somente com telefone
+        </label>
+        <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
+          <input checked={digitalPresence} onChange={(event) => setDigitalPresence(event.target.checked)} type="checkbox" />
+          Com site ou Instagram
+        </label>
+        <label className="grid gap-1 text-xs text-white/75">
+          Prioridade mínima
+          <select aria-label="Prioridade mínima" value={minScore} onChange={(event) => setMinScore(event.target.value)} className="min-h-10 rounded-lg border border-white/20 bg-black px-3 text-sm text-white">
+            <option value="0">Qualquer</option>
+            <option value="15">15 pontos</option>
+            <option value="35">35 pontos</option>
+            <option value="50">50 pontos</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs text-white/75">
+          Prioridade máxima
+          <select aria-label="Prioridade máxima" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} className="min-h-10 rounded-lg border border-white/20 bg-black px-3 text-sm text-white">
+            <option value="15">15 pontos</option>
+            <option value="35">35 pontos</option>
+            <option value="50">50 pontos</option>
+          </select>
+        </label>
+        <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
+          <input checked={includeWorked} onChange={(event) => setIncludeWorked(event.target.checked)} type="checkbox" />
+          Mostrar empresas já trabalhadas
+        </label>
+      </fieldset>
       {error ? <p role="alert" className="text-sm text-red-200 md:col-span-4">{error}</p> : null}
     </form>
   );

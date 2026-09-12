@@ -2,6 +2,7 @@ const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
 const MAX_RESULTS = 50;
+const CACHE_TTL_MS = 5 * 60_000;
 
 export type ExternalBusiness = {
   osmId: string;
@@ -9,17 +10,47 @@ export type ExternalBusiness = {
   phone: string | null;
   website: string | null;
   instagram: string | null;
+  whatsapp?: string | null;
+  address?: string | null;
+  category?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  lastSyncedAt?: string | null;
+  alreadyWorked?: boolean;
+  crmHref?: string | null;
+};
+
+export type SearchBusinessesInput = {
+  niche: string;
+  region: string;
+  radiusKm: number;
 };
 
 type OverpassElement = {
   type: 'node' | 'way' | 'relation';
   id: number;
+  lat?: number;
+  lon?: number;
+  center?: { lat?: number; lon?: number };
+  timestamp?: string;
   tags?: Record<string, string | undefined>;
 };
 
-type OverpassResponse = {
-  elements?: OverpassElement[];
+type OverpassResponse = { elements?: OverpassElement[] };
+
+type SchedulerOptions = {
+  minIntervalMs?: number;
+  now?: () => number;
+  wait?: (milliseconds: number) => Promise<void>;
 };
+
+type SearchServiceOptions = {
+  scheduler?: OsmRequestScheduler;
+  now?: () => number;
+  cacheTtlMs?: number;
+};
+
+type CachedValue<T> = { expiresAt: number; value: T };
 
 export class OsmUnavailableError extends Error {
   constructor() {
@@ -28,115 +59,186 @@ export class OsmUnavailableError extends Error {
   }
 }
 
-export async function searchBusinesses(input: {
-  niche: string;
-  region: string;
-  radiusKm: number;
-}): Promise<ExternalBusiness[]> {
-  const coordinates = await geocodeRegion(input.region);
-  let response: Response;
+export class OsmRequestScheduler {
+  private readonly minIntervalMs: number;
+  private readonly now: () => number;
+  private readonly wait: (milliseconds: number) => Promise<void>;
+  private nextRequestAt = 0;
+  private queue: Promise<void> = Promise.resolve();
 
-  try {
-    response = await fetch(OVERPASS_URL, {
-      method: 'POST',
-      body: buildOverpassQuery(input, coordinates),
-      signal: AbortSignal.timeout(12_000),
-      headers: {
-        'Content-Type': 'text/plain;charset=UTF-8',
-        'User-Agent': USER_AGENT
-      }
+  constructor(options: SchedulerOptions = {}) {
+    this.minIntervalMs = options.minIntervalMs ?? 1_000;
+    this.now = options.now ?? Date.now;
+    this.wait = options.wait ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  }
+
+  schedule<T>(request: () => Promise<T>): Promise<T> {
+    const scheduled = this.queue.then(async () => {
+      const delay = Math.max(0, this.nextRequestAt - this.now());
+      if (delay > 0) await this.wait(delay);
+      this.nextRequestAt = this.now() + this.minIntervalMs;
+      return request();
     });
-  } catch {
-    throw new OsmUnavailableError();
+    this.queue = scheduled.then(() => undefined, () => undefined);
+    return scheduled;
   }
-
-  if (!response.ok) {
-    throw new OsmUnavailableError();
-  }
-
-  let payload: OverpassResponse;
-  try {
-    payload = (await response.json()) as OverpassResponse;
-  } catch {
-    throw new OsmUnavailableError();
-  }
-
-  if (!Array.isArray(payload.elements)) {
-    throw new OsmUnavailableError();
-  }
-
-  return payload.elements.flatMap(normalizeBusiness);
 }
 
-async function geocodeRegion(region: string) {
-  let response: Response;
+export function createOsmSearchService(options: SearchServiceOptions = {}) {
+  const scheduler = options.scheduler ?? new OsmRequestScheduler();
+  const now = options.now ?? Date.now;
+  const cacheTtlMs = options.cacheTtlMs ?? CACHE_TTL_MS;
+  const searchCache = new Map<string, CachedValue<ExternalBusiness[]>>();
+  const geocodeCache = new Map<string, CachedValue<{ latitude: number; longitude: number }>>();
 
-  try {
-    const params = new URLSearchParams({ format: 'jsonv2', limit: '1', q: region.trim() });
-    response = await fetch(`${NOMINATIM_URL}?${params}`, {
-      signal: AbortSignal.timeout(12_000),
-      headers: { Accept: 'application/json', 'User-Agent': USER_AGENT }
-    });
-  } catch {
-    throw new OsmUnavailableError();
+  async function searchBusinesses(input: SearchBusinessesInput): Promise<ExternalBusiness[]> {
+    const cacheKey = `${normalizeText(input.niche)}|${normalizeText(input.region)}|${input.radiusKm}`;
+    const cached = getCached(searchCache, cacheKey);
+    if (cached) return cached;
+
+    const coordinates = await geocodeRegion(input.region);
+    let response: Response;
+    try {
+      response = await scheduler.schedule(() => fetch(OVERPASS_URL, {
+        method: 'POST',
+        body: buildOverpassQuery(input, coordinates),
+        signal: AbortSignal.timeout(12_000),
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'User-Agent': USER_AGENT }
+      }));
+    } catch {
+      throw new OsmUnavailableError();
+    }
+    if (!response.ok) throw new OsmUnavailableError();
+
+    let payload: OverpassResponse;
+    try {
+      payload = (await response.json()) as OverpassResponse;
+    } catch {
+      throw new OsmUnavailableError();
+    }
+    if (!Array.isArray(payload.elements)) throw new OsmUnavailableError();
+
+    const businesses = payload.elements.flatMap(normalizeBusiness);
+    setCached(searchCache, cacheKey, businesses);
+    return businesses;
   }
 
-  if (!response.ok) {
-    throw new OsmUnavailableError();
+  async function geocodeRegion(region: string) {
+    const cacheKey = normalizeText(region);
+    const cached = getCached(geocodeCache, cacheKey);
+    if (cached) return cached;
+
+    let response: Response;
+    try {
+      const params = new URLSearchParams({ format: 'jsonv2', limit: '1', q: region.trim() });
+      response = await scheduler.schedule(() => fetch(`${NOMINATIM_URL}?${params}`, {
+        signal: AbortSignal.timeout(12_000),
+        headers: { Accept: 'application/json', 'User-Agent': USER_AGENT }
+      }));
+    } catch {
+      throw new OsmUnavailableError();
+    }
+    if (!response.ok) throw new OsmUnavailableError();
+
+    let places: Array<{ lat?: string; lon?: string }>;
+    try {
+      places = (await response.json()) as Array<{ lat?: string; lon?: string }>;
+    } catch {
+      throw new OsmUnavailableError();
+    }
+    const latitude = Number(places[0]?.lat);
+    const longitude = Number(places[0]?.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new OsmUnavailableError();
+
+    const coordinates = { latitude, longitude };
+    setCached(geocodeCache, cacheKey, coordinates);
+    return coordinates;
   }
 
-  let places: Array<{ lat?: string; lon?: string }>;
-  try {
-    places = (await response.json()) as Array<{ lat?: string; lon?: string }>;
-  } catch {
-    throw new OsmUnavailableError();
+  function getCached<T>(cache: Map<string, CachedValue<T>>, key: string) {
+    const cached = cache.get(key);
+    if (!cached) return null;
+    if (cached.expiresAt > now()) return cached.value;
+    cache.delete(key);
+    return null;
   }
 
-  const place = places[0];
-  const latitude = Number(place?.lat);
-  const longitude = Number(place?.lon);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    throw new OsmUnavailableError();
+  function setCached<T>(cache: Map<string, CachedValue<T>>, key: string, value: T) {
+    cache.set(key, { expiresAt: now() + cacheTtlMs, value });
   }
 
-  return { latitude, longitude };
+  return { searchBusinesses };
 }
 
-function buildOverpassQuery(
-  input: { niche: string; region: string; radiusKm: number },
-  coordinates: { latitude: number; longitude: number }
-) {
-  const niche = escapeOverpassRegex(input.niche.trim());
+const defaultSearchService = createOsmSearchService();
+
+export const searchBusinesses = defaultSearchService.searchBusinesses;
+
+function buildOverpassQuery(input: SearchBusinessesInput, coordinates: { latitude: number; longitude: number }) {
   const radiusMeters = Math.round(input.radiusKm * 1_000);
+  const around = `(around:${radiusMeters},${coordinates.latitude},${coordinates.longitude})`;
+  const mappedTag = mappedOsmTag(input.niche);
+  const selector = mappedTag
+    ? `nwr["${mappedTag.key}"="${mappedTag.value}"]${around};`
+    : buildTextSelectors(escapeOverpassRegex(input.niche.trim()), around);
 
-  return `[out:json][timeout:10];
-(
-  nwr["name"~"${niche}",i](around:${radiusMeters},${coordinates.latitude},${coordinates.longitude});
-  nwr["shop"~"${niche}",i](around:${radiusMeters},${coordinates.latitude},${coordinates.longitude});
-  nwr["craft"~"${niche}",i](around:${radiusMeters},${coordinates.latitude},${coordinates.longitude});
-);
-out tags ${MAX_RESULTS};`;
+  return `[out:json][timeout:10];\n(\n  ${selector}\n);\nout center meta ${MAX_RESULTS};`;
+}
+
+function buildTextSelectors(niche: string, around: string) {
+  return `nwr["name"~"${niche}",i]${around};\n  nwr["shop"~"${niche}",i]${around};\n  nwr["craft"~"${niche}",i]${around};`;
+}
+
+function mappedOsmTag(niche: string) {
+  const normalized = normalizeText(niche);
+  if (['lavagem', 'lava rapido', 'lava jato', 'estetica automotiva'].some((term) => normalized.includes(term))) {
+    return { key: 'amenity', value: 'car_wash' };
+  }
+  if (['oficina', 'mecanica automotiva', 'reparo automotivo', 'reparacao automotiva'].some((term) => normalized.includes(term))) {
+    return { key: 'shop', value: 'car_repair' };
+  }
+  return null;
 }
 
 function normalizeBusiness(element: OverpassElement): ExternalBusiness[] {
   const name = element.tags?.name?.trim();
-  if (!name) {
-    return [];
-  }
+  if (!name) return [];
+  return [{
+    osmId: `${element.type}/${element.id}`,
+    name,
+    phone: contactValue(element.tags, 'phone'),
+    website: contactValue(element.tags, 'website'),
+    instagram: contactValue(element.tags, 'instagram'),
+    whatsapp: contactValue(element.tags, 'whatsapp'),
+    address: addressValue(element.tags),
+    category: categoryValue(element.tags),
+    latitude: coordinateValue(element.lat ?? element.center?.lat),
+    longitude: coordinateValue(element.lon ?? element.center?.lon),
+    lastSyncedAt: element.timestamp ?? null
+  }];
+}
 
-  return [
-    {
-      osmId: `${element.type}/${element.id}`,
-      name,
-      phone: contactValue(element.tags, 'phone'),
-      website: contactValue(element.tags, 'website'),
-      instagram: contactValue(element.tags, 'instagram')
-    }
-  ];
+function coordinateValue(value: number | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function addressValue(tags: Record<string, string | undefined> | undefined) {
+  const street = [tags?.['addr:street'], tags?.['addr:housenumber']].filter(Boolean).join(', ');
+  const locality = [tags?.['addr:suburb'], tags?.['addr:city'], tags?.['addr:state']].filter(Boolean).join(', ');
+  const address = [street, locality, tags?.['addr:postcode']].filter(Boolean).join(', ');
+  return address || null;
+}
+
+function categoryValue(tags: Record<string, string | undefined> | undefined) {
+  return tags?.amenity?.trim() || tags?.shop?.trim() || tags?.craft?.trim() || null;
 }
 
 function contactValue(tags: Record<string, string | undefined> | undefined, key: string) {
   return tags?.[key]?.trim() || tags?.[`contact:${key}`]?.trim() || null;
+}
+
+function normalizeText(value: string) {
+  return value.trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/\p{Diacritic}/gu, '');
 }
 
 function escapeOverpassRegex(value: string) {

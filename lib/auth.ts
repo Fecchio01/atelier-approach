@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 
 import { authenticateInternalUser } from './internal-auth';
+import { ensureMemberProfile } from './member-profile';
 
 export const { auth, handlers, signIn } = NextAuth({
   session: { strategy: 'jwt' },
@@ -38,5 +39,11 @@ export async function getCurrentUser() {
     return null;
   }
 
-  return session.user;
+  const profile = await ensureMemberProfile({
+    id: session.user.id,
+    name: session.user.name?.trim() || session.user.email || session.user.id,
+    email: session.user.email || `${session.user.id}@atelier.local`
+  });
+
+  return { ...session.user, name: profile.name, email: profile.email, image: profile.avatarUrl };
 }

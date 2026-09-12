@@ -170,3 +170,62 @@ test('keeps the operational dashboard usable on a narrow viewport', async ({ pag
   await expect(page.getByRole('link', { name: 'Pesquisa' })).toBeVisible();
   await expect(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).resolves.toBeTruthy();
 });
+
+test('keeps primary navigation available away from the dashboard', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/pesquisa');
+
+  await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Painel' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'CRM' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Pesquisa' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Metas' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Relatórios' })).toBeVisible();
+});
+
+test('sends the agreed research filters and shows retained OSM company fields', async ({ page }) => {
+  let searchUrl = '';
+  await page.route('**/api/search**', async (route) => {
+    searchUrl = route.request().url();
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        businesses: [{
+          osmId: 'node/filtered-company',
+          name: 'Oficina com dados completos',
+          phone: '+55 19 99999-0000',
+          website: 'https://oficina.example',
+          instagram: '@oficina',
+          whatsapp: '+55 19 98888-0000',
+          address: 'Rua das Flores, 45, Campinas',
+          category: 'car_repair',
+          latitude: -22.9,
+          longitude: -47.06,
+          lastSyncedAt: '2026-09-12T10:00:00Z',
+          alreadyWorked: true,
+          crmHref: '/crm?lead=worked'
+        }]
+      })
+    });
+  });
+
+  await signIn(page);
+  await page.goto('/pesquisa');
+  await page.getByLabel('Nicho').fill('oficina mecânica');
+  await page.getByLabel('Região').fill('Campinas, SP');
+  await page.getByLabel('Somente com telefone').check();
+  await page.getByLabel('Com site ou Instagram').check();
+  await page.getByLabel('Prioridade mínima').selectOption('15');
+  await page.getByLabel('Prioridade máxima').selectOption('50');
+  await page.getByLabel('Mostrar empresas já trabalhadas').check();
+  await page.getByRole('button', { name: 'Pesquisar' }).click();
+
+  expect(searchUrl).toContain('phoneOnly=true');
+  expect(searchUrl).toContain('digitalPresence=true');
+  expect(searchUrl).toContain('minScore=15');
+  expect(searchUrl).toContain('maxScore=50');
+  expect(searchUrl).toContain('includeWorked=true');
+  await expect(page.getByText('Rua das Flores, 45, Campinas')).toBeVisible();
+  await expect(page.getByText('car_repair')).toBeVisible();
+  await expect(page.getByText('+55 19 98888-0000')).toBeVisible();
+  await expect(page.getByText('Já trabalhada no CRM')).toBeVisible();
+});

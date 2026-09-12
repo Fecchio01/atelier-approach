@@ -56,6 +56,8 @@ export function LeadCard({ business, result }: LeadCardProps) {
       </div>
 
       <dl className="grid gap-3 text-sm text-white/75">
+        {business.address ? <div><dt className="text-white/45">Endereço</dt><dd>{business.address}</dd></div> : null}
+        {business.category ? <div><dt className="text-white/45">Categoria OSM</dt><dd>{business.category}</dd></div> : null}
         <div>
           <dt className="text-white/45">Telefone</dt>
           <dd>{business.phone ?? 'Não informado'}</dd>
@@ -68,6 +70,12 @@ export function LeadCard({ business, result }: LeadCardProps) {
           <dt className="text-white/45">Instagram</dt>
           <dd>{business.instagram ?? 'Não informado'}</dd>
         </div>
+        <div>
+          <dt className="text-white/45">WhatsApp</dt>
+          <dd>{business.whatsapp ?? 'Não informado'}</dd>
+        </div>
+        {business.latitude !== undefined && business.longitude !== undefined && business.latitude !== null && business.longitude !== null ? <div><dt className="text-white/45">Coordenadas</dt><dd>{business.latitude}, {business.longitude}</dd></div> : null}
+        {business.lastSyncedAt ? <div><dt className="text-white/45">Última atualização OSM</dt><dd>{new Date(business.lastSyncedAt).toLocaleString('pt-BR')}</dd></div> : null}
       </dl>
 
       <div>
@@ -85,7 +93,9 @@ export function LeadCard({ business, result }: LeadCardProps) {
         </ul>
       </div>
 
-      {isApproaching ? (
+      {business.alreadyWorked && business.crmHref ? (
+        <div className="grid gap-3 rounded-xl border border-[var(--atelier-green)]/50 bg-[var(--atelier-green)]/10 p-3"><p className="text-sm font-medium">Já trabalhada no CRM</p><button type="button" onClick={() => router.push(business.crmHref!)} className="min-h-10 rounded-lg border border-[var(--atelier-green)] px-4 font-semibold text-[var(--atelier-green)]">Abrir no CRM</button></div>
+      ) : isApproaching ? (
         <div className="grid gap-3 rounded-xl border border-white/15 bg-black/20 p-3">
           <label className="grid gap-1 text-sm text-white/80">
             Canal

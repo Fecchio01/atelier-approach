@@ -91,4 +91,58 @@ describe('GET /api/search', () => {
       ]
     });
   });
+
+  test('applies research filters and can include companies already worked in the CRM', async () => {
+    await prisma.activity.deleteMany();
+    await prisma.followUp.deleteMany();
+    await prisma.lead.deleteMany();
+    const workedLead = await prisma.lead.create({ data: { osmId: 'node/worked' } });
+    mocks.getCurrentUser.mockResolvedValue({ id: 'filtered-search-user' });
+    mocks.searchBusinesses.mockResolvedValue([
+      {
+        osmId: 'node/worked',
+        name: 'Oficina já trabalhada',
+        phone: '+55 19 99999-0000',
+        website: 'https://oficina.example',
+        instagram: '@oficina',
+        address: 'Rua das Flores, 45, Campinas',
+        category: 'car_repair',
+        latitude: -22.9,
+        longitude: -47.06,
+        whatsapp: '+55 19 98888-0000',
+        lastSyncedAt: '2026-09-12T10:00:00Z'
+      },
+      {
+        osmId: 'node/no-digital',
+        name: 'Sem presença digital',
+        phone: '+55 19 97777-0000',
+        website: null,
+        instagram: null
+      }
+    ]);
+
+    const response = await GET(new Request(
+      'http://localhost/api/search?niche=oficina%20mec%C3%A2nica&region=Campinas&radiusKm=5&phoneOnly=true&digitalPresence=true&minScore=15&maxScore=15&includeWorked=true'
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      businesses: [
+        expect.objectContaining({
+          osmId: 'node/worked',
+          alreadyWorked: true,
+          crmHref: `/crm?lead=${workedLead.id}`,
+          address: 'Rua das Flores, 45, Campinas',
+          category: 'car_repair',
+          latitude: -22.9,
+          longitude: -47.06,
+          phone: '+55 19 99999-0000',
+          website: 'https://oficina.example',
+          instagram: '@oficina',
+          whatsapp: '+55 19 98888-0000',
+          lastSyncedAt: '2026-09-12T10:00:00Z'
+        })
+      ]
+    });
+  });
 });

@@ -10,8 +10,9 @@ export type WeeklyMonthlyReport = {
   conversion: { approaches: number; wins: number; rate: number };
   revenue: { sales: number; mrr: number };
   channels: { channel: Channel; approaches: number; wins: number; conversionRate: number }[];
+  members: { memberId: string; approaches: number; interests: number; meetings: number; wins: number; sales: number; mrr: number }[];
   funnel: { stage: LeadStage; leads: number }[];
-  followUps: { pending: number; overdue: number };
+  followUps: { pending: number; completed: number; cancelled: number; overdue: number };
   notes: { total: number; recent: string[] };
 };
 
@@ -35,14 +36,18 @@ export function getRecentReportRange(period: RecentReportPeriod, reference = new
 }
 
 export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyReport> {
-  const [leads, activities, followUps] = await Promise.all([
-    prisma.lead.findMany({ select: { id: true, stage: true, wonAt: true, saleValue: true, mrr: true } }),
+  const [leads, activities, followUps, stageHistory] = await Promise.all([
+    prisma.lead.findMany({ select: { id: true, stage: true, wonAt: true, wonById: true, saleValue: true, mrr: true } }),
     prisma.activity.findMany({
       where: { createdAt: { gte: range.from, lt: range.to } },
-      select: { leadId: true, channel: true, note: true, createdAt: true },
+      select: { leadId: true, actorId: true, channel: true, note: true, createdAt: true },
       orderBy: { createdAt: 'desc' }
     }),
-    prisma.followUp.findMany({ where: { state: 'PENDING' }, select: { dueDate: true } })
+    prisma.followUp.findMany({ select: { dueDate: true, state: true } }),
+    prisma.stageHistory.findMany({
+      where: { createdAt: { gte: range.from, lt: range.to } },
+      select: { leadId: true, actorId: true, toStage: true }
+    })
   ]);
   const wins = leads.filter((lead) => lead.wonAt && inRange(lead.wonAt, range));
   const winIds = new Set(wins.map((lead) => lead.id));
@@ -53,6 +58,34 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
     return { channel, approaches: channelActivities.length, wins: channelWins, conversionRate: rate(channelWins, channelActivities.length) };
   }).filter((channel) => channel.approaches > 0);
   const now = range.now ?? new Date();
+  const memberResults = new Map<string, { approaches: number; interests: number; meetings: number; wins: number; sales: number; mrr: number }>();
+  const member = (memberId: string) => {
+    const existing = memberResults.get(memberId);
+    if (existing) return existing;
+    const created = { approaches: 0, interests: 0, meetings: 0, wins: 0, sales: 0, mrr: 0 };
+    memberResults.set(memberId, created);
+    return created;
+  };
+
+  const historyLeadIds = new Set(stageHistory.map((entry) => entry.leadId));
+  for (const activity of activities) {
+    const result = member(activity.actorId);
+    result.approaches += 1;
+    if (!historyLeadIds.has(activity.leadId) && activity.note === 'Etapa alterada para INTEREST.') result.interests += 1;
+    if (!historyLeadIds.has(activity.leadId) && activity.note === 'Etapa alterada para FOLLOW_UP.') result.meetings += 1;
+  }
+  for (const entry of stageHistory) {
+    const result = member(entry.actorId);
+    if (entry.toStage === 'INTEREST') result.interests += 1;
+    if (entry.toStage === 'FOLLOW_UP') result.meetings += 1;
+  }
+  for (const lead of wins) {
+    if (!lead.wonById) continue;
+    const result = member(lead.wonById);
+    result.wins += 1;
+    result.sales += Number(lead.saleValue ?? 0);
+    result.mrr += Number(lead.mrr ?? 0);
+  }
 
   return {
     period: { from: range.from, to: range.to },
@@ -62,8 +95,14 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
       mrr: wins.reduce((total, lead) => total + Number(lead.mrr ?? 0), 0)
     },
     channels,
+    members: [...memberResults.entries()].map(([memberId, result]) => ({ memberId, ...result })).sort((first, second) => first.memberId.localeCompare(second.memberId)),
     funnel: Object.values(LeadStage).map((stage) => ({ stage, leads: leads.filter((lead) => lead.stage === stage).length })),
-    followUps: { pending: followUps.length, overdue: followUps.filter((followUp) => followUp.dueDate < now).length },
+    followUps: {
+      pending: followUps.filter((followUp) => followUp.state === 'PENDING').length,
+      completed: followUps.filter((followUp) => followUp.state === 'COMPLETED').length,
+      cancelled: followUps.filter((followUp) => followUp.state === 'CANCELLED').length,
+      overdue: followUps.filter((followUp) => followUp.state === 'PENDING' && followUp.dueDate < now).length
+    },
     notes: { total: activities.length, recent: activities.map((activity) => activity.note) }
   };
 }

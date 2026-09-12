@@ -81,10 +81,22 @@ model Goal {
   ownerId           String
   weekStart         DateTime
   approachesTarget  Int
+  interestsTarget   Int      @default(0)
+  meetingsTarget    Int      @default(0)
+  salesTarget       Int      @default(0)
   revenueTarget     Float
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   @@unique([ownerId, weekStart])
   @@index([weekStart])
+}
+
+model MemberProfile {
+  id        String   @id
+  name      String
+  email     String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -39,7 +39,9 @@ describe('commercial reports', () => {
     expect(report.channels).toContainEqual({ channel: 'WHATSAPP', approaches: 2, wins: 1, conversionRate: 0.5 });
     expect(report.channels).toContainEqual({ channel: 'PHONE', approaches: 1, wins: 0, conversionRate: 0 });
     expect(report.funnel).toContainEqual({ stage: 'WON', leads: 2 });
-    expect(report.followUps).toEqual({ pending: 1, overdue: 1 });
+    expect(report.followUps).toEqual({ pending: 1, completed: 0, cancelled: 0, overdue: 1 });
+    expect(report.members).toContainEqual({ memberId: 'ana', approaches: 2, interests: 0, meetings: 0, wins: 1, sales: 1200, mrr: 297 });
+    expect(report.members).toContainEqual({ memberId: 'bia', approaches: 1, interests: 0, meetings: 0, wins: 0, sales: 0, mrr: 0 });
     expect(report.notes).toEqual({ total: 3, recent: ['Aguardando retorno.', 'Contato de acompanhamento.', 'Pediu proposta.'] });
   });
 
@@ -47,7 +49,7 @@ describe('commercial reports', () => {
     const report = {
       conversion: { approaches: 3, wins: 1, rate: 0.33 },
       revenue: { sales: 1200, mrr: 297 },
-      channels: [], funnel: [], followUps: { pending: 2, overdue: 1 }, notes: { total: 1, recent: ['Retornar amanhã.'] },
+      channels: [], funnel: [], members: [], followUps: { pending: 2, completed: 0, cancelled: 0, overdue: 1 }, notes: { total: 1, recent: ['Retornar amanhã.'] },
       period: { from: new Date('2026-09-07T00:00:00.000Z'), to: new Date('2026-09-14T00:00:00.000Z') }
     };
 
