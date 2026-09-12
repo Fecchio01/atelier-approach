@@ -1,0 +1,26 @@
+{
+  "name": "atelier-approach",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "next": "^15.5.25",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0",
+    "@tailwindcss/postcss": "4.1.13",
+    "@types/node": "22.18.0",
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9",
+    "postcss": "8.5.6",
+    "tailwindcss": "4.1.13",
+    "typescript": "5.9.2"
+  }
+}
