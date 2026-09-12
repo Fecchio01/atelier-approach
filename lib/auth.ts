@@ -1,8 +1,25 @@
 import NextAuth from 'next-auth';
+import Credentials from 'next-auth/providers/credentials';
 
-export const { auth, handlers } = NextAuth({
+import { authenticateInternalUser } from './internal-auth';
+
+export const { auth, handlers, signIn } = NextAuth({
   session: { strategy: 'jwt' },
-  providers: [],
+  providers: [
+    Credentials({
+      credentials: {
+        email: { label: 'E-mail', type: 'email' },
+        password: { label: 'Senha', type: 'password' }
+      },
+      authorize(credentials) {
+        if (typeof credentials?.email !== 'string' || typeof credentials.password !== 'string') {
+          return null;
+        }
+
+        return authenticateInternalUser(credentials.email, credentials.password);
+      }
+    })
+  ],
   callbacks: {
     session({ session, token }) {
       if (session.user && token.sub) {

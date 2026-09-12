@@ -3,7 +3,11 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 
 export default auth((request) => {
-  if (request.nextUrl.pathname === '/login') {
+  const { pathname } = request.nextUrl;
+  const isRequiredAuthEndpoint =
+    pathname === '/api/auth/csrf' || pathname === '/api/auth/callback/credentials';
+
+  if (pathname === '/login' || isRequiredAuthEndpoint) {
     return NextResponse.next();
   }
 

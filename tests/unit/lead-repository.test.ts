@@ -4,6 +4,10 @@ import { prisma } from '../../lib/db';
 import { createActivity } from '../../lib/lead-repository';
 
 describe('createActivity', () => {
+  test('uses the isolated SQLite test database', () => {
+    expect(process.env.DATABASE_URL).toBe('file:./test.db');
+  });
+
   beforeEach(async () => {
     await prisma.activity.deleteMany();
     await prisma.followUp.deleteMany();
