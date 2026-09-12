@@ -1,0 +1,4 @@
+ALTER TABLE "Lead" ADD COLUMN "name" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "phone" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "website" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "instagram" TEXT;

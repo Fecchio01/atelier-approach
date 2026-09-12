@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+import type { Channel } from '@prisma/client';
 import type { ExternalBusiness } from '@/lib/osm';
 import type { BusinessScore } from '@/lib/lead-score';
 
@@ -7,6 +11,37 @@ type LeadCardProps = {
 };
 
 export function LeadCard({ business, result }: LeadCardProps) {
+  const router = useRouter();
+  const [isApproaching, setIsApproaching] = useState(false);
+  const [channel, setChannel] = useState<Channel>('WHATSAPP');
+  const [note, setNote] = useState('Abordagem iniciada a partir da pesquisa.');
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function saveApproach() {
+    setError(null);
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business, channel, note })
+      });
+      const payload = (await response.json()) as { error?: string; href?: string };
+      if (response.status === 409 && payload.href) {
+        router.push(payload.href);
+        return;
+      }
+      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível salvar a abordagem.');
+      router.push('/crm');
+      router.refresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível salvar a abordagem.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <article className="flex flex-col gap-5 rounded-2xl border border-white/15 bg-white/5 p-5">
       <div className="flex items-start justify-between gap-4">
@@ -48,6 +83,34 @@ export function LeadCard({ business, result }: LeadCardProps) {
           )}
         </ul>
       </div>
+
+      {isApproaching ? (
+        <div className="grid gap-3 rounded-xl border border-white/15 bg-black/20 p-3">
+          <label className="grid gap-1 text-sm text-white/80">
+            Canal
+            <select aria-label="Canal" value={channel} onChange={(event) => setChannel(event.target.value as Channel)} className="min-h-10 rounded-lg border border-white/20 bg-black px-3 text-white">
+              <option value="WHATSAPP">WhatsApp</option>
+              <option value="PHONE">Telefone</option>
+              <option value="EMAIL">E-mail</option>
+              <option value="INSTAGRAM">Instagram</option>
+              <option value="IN_PERSON">Presencial</option>
+              <option value="OTHER">Outro</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm text-white/80">
+            Nota da abordagem
+            <textarea value={note} onChange={(event) => setNote(event.target.value)} className="min-h-20 rounded-lg border border-white/20 bg-black px-3 py-2 text-white" />
+          </label>
+          {error ? <p className="text-sm text-red-300">{error}</p> : null}
+          <button type="button" onClick={saveApproach} disabled={isSaving} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 font-semibold text-black disabled:opacity-60">
+            {isSaving ? 'Salvando…' : 'Salvar abordagem'}
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setIsApproaching(true)} className="min-h-10 rounded-lg border border-[var(--atelier-green)] px-4 font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)] hover:text-black">
+          Marcar como abordada
+        </button>
+      )}
     </article>
   );
 }

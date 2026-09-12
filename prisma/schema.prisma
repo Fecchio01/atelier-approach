@@ -35,6 +35,10 @@ enum FollowUpState {
 model Lead {
   id        String     @id @default(cuid())
   osmId     String     @unique
+  name      String?
+  phone     String?
+  website   String?
+  instagram String?
   stage     LeadStage  @default(NEW)
   saleValue Decimal?
   mrr       Decimal?
