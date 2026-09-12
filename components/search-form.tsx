@@ -6,9 +6,10 @@ import type { ExternalBusiness } from '@/lib/osm';
 
 type SearchFormProps = {
   onResults: (businesses: ExternalBusiness[]) => void;
+  onFailure: () => void;
 };
 
-export function SearchForm({ onResults }: SearchFormProps) {
+export function SearchForm({ onResults, onFailure }: SearchFormProps) {
   const [niche, setNiche] = useState('');
   const [region, setRegion] = useState('');
   const [radiusKm, setRadiusKm] = useState('5');
@@ -31,6 +32,7 @@ export function SearchForm({ onResults }: SearchFormProps) {
 
       onResults(payload.businesses);
     } catch (requestError) {
+      onFailure();
       setError(requestError instanceof Error ? requestError.message : 'Não foi possível concluir a pesquisa.');
     } finally {
       setIsLoading(false);

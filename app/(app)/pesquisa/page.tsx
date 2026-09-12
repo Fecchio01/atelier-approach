@@ -22,6 +22,11 @@ export default function PesquisaPage() {
     );
   }
 
+  function handleFailure() {
+    setHasSearched(false);
+    setBusinesses([]);
+  }
+
   return (
     <section className="mx-auto max-w-6xl px-5 py-12 md:px-8">
       <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--atelier-green)]">Pesquisa de prospecção</p>
@@ -34,7 +39,7 @@ export default function PesquisaPage() {
       </div>
 
       <div className="mt-8">
-        <SearchForm onResults={handleResults} />
+        <SearchForm onResults={handleResults} onFailure={handleFailure} />
       </div>
 
       <div className="mt-10">

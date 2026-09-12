@@ -60,6 +60,29 @@ test('suggests refinements when a successful search returns no companies', async
   await expect(page.getByText('Tente ampliar o raio (até 50 km) ou usar outro termo e categoria.')).toBeVisible();
 });
 
+test('clears successful-empty guidance when a retry fails', async ({ page }) => {
+  let attempts = 0;
+  await page.route('**/api/search**', async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ businesses: [] }) });
+      return;
+    }
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'A pesquisa está indisponível no momento.' }) });
+  });
+
+  await signIn(page);
+  await page.goto('/pesquisa');
+  await page.getByLabel('Nicho').fill('marcenaria');
+  await page.getByLabel('Região').fill('Campinas, SP');
+  await page.getByRole('button', { name: 'Pesquisar' }).click();
+  await expect(page.getByText('Tente ampliar o raio (até 50 km) ou usar outro termo e categoria.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Pesquisar' }).click();
+  await expect(page.locator('p[role="alert"]')).toHaveText('A pesquisa está indisponível no momento.');
+  await expect(page.getByText('Tente ampliar o raio (até 50 km) ou usar outro termo e categoria.')).not.toBeVisible();
+});
+
 test('lets two members share an overdue follow-up and close it with revenue values', async ({ page, browser }) => {
   const suffix = randomUUID();
   const businessName = `Oficina compartilhada ${suffix.slice(0, 8)}`;
@@ -79,6 +102,8 @@ test('lets two members share an overdue follow-up and close it with revenue valu
   await page.getByRole('button', { name: 'Salvar abordagem' }).click();
 
   const lead = page.locator('[data-lead-id]').filter({ hasText: businessName });
+  await lead.getByRole('button', { name: 'Fechar negócio' }).click();
+  await expect(page.locator('p[role="alert"]')).toHaveText('Informe o valor da venda e o MRR para fechar o negócio.');
   await lead.getByLabel('Data do follow-up').fill(new Date(Date.now() - 86_400_000).toISOString().slice(0, 16));
   await lead.getByRole('button', { name: 'Agendar follow-up' }).click();
   await expect(lead.getByText('Retorno vencido')).toBeVisible();

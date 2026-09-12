@@ -16,6 +16,17 @@
 - `npx playwright test --retries=0 --reporter=list` — 7 tests passed.
 - `npm run build` — passed; all 11 application routes generated successfully.
 
+## Review round 2
+
+- A failed retry now clears the parent search result state, so the successful-empty refinement guidance cannot remain visible beside an error alert.
+- Closing-value parsing rejects blank or cleared values before numeric conversion, while explicit `0` remains a valid value.
+
+### Verification evidence
+
+- `npx vitest run` — 9 files / 28 tests passed, including blank/zero closing-value coverage.
+- `npx playwright test --retries=0 --reporter=list` — 11 tests passed, including a successful-empty → failed-retry transition and the blank-value CRM form assertion.
+- `npm run build` — passed; all 11 application routes generated successfully.
+
 ## Review
 
 The final diff was checked with `git diff --check`. Generated local SQLite and TypeScript build artifacts are intentionally excluded from the commit.

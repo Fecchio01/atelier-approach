@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { parseClosingValues } from '@/lib/crm-form';
+
 type Stage = 'NEW' | 'CONTACTED' | 'INTEREST' | 'FOLLOW_UP' | 'WON' | 'NO_RESPONSE' | 'DISCARDED';
 
 export type CrmLead = {
@@ -69,13 +71,12 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
   }
 
   async function closeLead(id: string) {
-    const saleValue = Number(saleValues[id]);
-    const mrr = Number(mrrValues[id]);
-    if (saleValues[id] === undefined || mrrValues[id] === undefined || !Number.isFinite(saleValue) || !Number.isFinite(mrr)) {
+    const closingValues = parseClosingValues(saleValues[id], mrrValues[id]);
+    if (!closingValues) {
       setError('Informe o valor da venda e o MRR para fechar o negócio.');
       return;
     }
-    await moveLead(id, 'WON', { saleValue, mrr });
+    await moveLead(id, 'WON', closingValues);
   }
 
   const renderLead = (lead: CrmLead) => (
