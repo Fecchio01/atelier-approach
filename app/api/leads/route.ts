@@ -51,7 +51,10 @@ export async function POST(request: Request) {
         }
       });
       await tx.activity.create({
-        data: { leadId: createdLead.id, actorId: user.id, channel, note }
+        data: { leadId: createdLead.id, actorId: user.id, type: 'CONTACT', channel, note }
+      });
+      await tx.stageHistory.create({
+        data: { leadId: createdLead.id, actorId: user.id, fromStage: 'NEW', toStage: 'CONTACTED' }
       });
       return createdLead;
     });

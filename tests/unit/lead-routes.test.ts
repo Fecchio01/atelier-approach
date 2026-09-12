@@ -130,4 +130,96 @@ describe('lead routes', () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: 'Valores monetários devem ser não negativos.' });
   });
+
+  test('requires both sale value and MRR before a lead can be marked as won', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/missing-closing-values' } });
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stage: 'WON', saleValue: 1200 })
+      }),
+      { params: Promise.resolve({ id: lead.id }) }
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Informe o valor da venda e o MRR para fechar o negócio.' });
+  });
+
+  test('records structured stage and immutable sale histories, then clears the active sale on reopen', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/reopen-history', stage: 'INTEREST' } });
+
+    const wonResponse = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stage: 'WON', saleValue: 1200, mrr: 300 })
+      }),
+      { params: Promise.resolve({ id: lead.id }) }
+    );
+    expect(wonResponse.status).toBe(200);
+
+    const reopenedResponse = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stage: 'INTEREST' })
+      }),
+      { params: Promise.resolve({ id: lead.id }) }
+    );
+    expect(reopenedResponse.status).toBe(200);
+
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({
+      stage: 'INTEREST', saleValue: null, mrr: null, wonAt: null, wonById: null
+    });
+    await expect(prisma.stageHistory.findMany({ where: { leadId: lead.id }, orderBy: { createdAt: 'asc' } })).resolves.toMatchObject([
+      { fromStage: 'INTEREST', toStage: 'WON', actorId: 'internal-equipe' },
+      { fromStage: 'WON', toStage: 'INTEREST', actorId: 'internal-equipe' }
+    ]);
+    await expect(prisma.saleEvent.findMany({ where: { leadId: lead.id } })).resolves.toMatchObject([
+      { saleValue: expect.anything(), mrr: expect.anything(), actorId: 'internal-equipe' }
+    ]);
+  });
+
+  test('completes, cancels, and reschedules follow-ups while preserving their history', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/follow-up-lifecycle' } });
+    const first = await prisma.followUp.create({
+      data: { leadId: lead.id, ownerId: 'internal-equipe', dueDate: new Date('2026-09-15T10:00:00.000Z'), note: 'Ligar.' }
+    });
+
+    const completeResponse = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH', body: JSON.stringify({ followUpAction: 'COMPLETE', followUpId: first.id })
+      }), { params: Promise.resolve({ id: lead.id }) }
+    );
+    expect(completeResponse.status).toBe(200);
+    await expect(prisma.followUp.findUniqueOrThrow({ where: { id: first.id } })).resolves.toMatchObject({
+      state: 'COMPLETED', completedById: 'internal-equipe', completedAt: expect.any(Date)
+    });
+
+    const second = await prisma.followUp.create({
+      data: { leadId: lead.id, ownerId: 'internal-equipe', dueDate: new Date('2026-09-16T10:00:00.000Z'), note: 'Enviar proposta.' }
+    });
+    const rescheduleResponse = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH', body: JSON.stringify({ followUpAction: 'RESCHEDULE', followUpId: second.id, followUpAt: '2026-09-17T10:00:00.000Z' })
+      }), { params: Promise.resolve({ id: lead.id }) }
+    );
+    expect(rescheduleResponse.status).toBe(200);
+    await expect(prisma.followUp.findUniqueOrThrow({ where: { id: second.id } })).resolves.toMatchObject({ state: 'CANCELLED', cancelledById: 'internal-equipe' });
+    await expect(prisma.followUp.findMany({ where: { leadId: lead.id, state: 'PENDING' } })).resolves.toMatchObject([
+      { dueDate: new Date('2026-09-17T10:00:00.000Z') }
+    ]);
+
+    const third = await prisma.followUp.create({
+      data: { leadId: lead.id, ownerId: 'internal-equipe', dueDate: new Date('2026-09-18T10:00:00.000Z'), note: 'Confirmar proposta.' }
+    });
+    const cancelResponse = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH', body: JSON.stringify({ followUpAction: 'CANCEL', followUpId: third.id })
+      }), { params: Promise.resolve({ id: lead.id }) }
+    );
+    expect(cancelResponse.status).toBe(200);
+    await expect(prisma.followUp.findUniqueOrThrow({ where: { id: third.id } })).resolves.toMatchObject({
+      state: 'CANCELLED', cancelledById: 'internal-equipe', cancelledAt: expect.any(Date)
+    });
+  });
 });

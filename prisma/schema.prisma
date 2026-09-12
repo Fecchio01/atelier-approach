@@ -32,6 +32,17 @@ enum FollowUpState {
   CANCELLED
 }
 
+enum ActivityType {
+  CONTACT
+  STAGE_CHANGE
+  FOLLOW_UP_SCHEDULED
+  FOLLOW_UP_COMPLETED
+  FOLLOW_UP_CANCELLED
+  SALE_WON
+  LEAD_REOPENED
+  DISCARDED
+}
+
 model Lead {
   id        String     @id @default(cuid())
   osmId     String     @unique
@@ -46,19 +57,47 @@ model Lead {
   wonById   String?
   activities Activity[]
   followUps  FollowUp[]
+  stageHistory StageHistory[]
+  saleEvents SaleEvent[]
 }
 
 model Activity {
   id        String   @id @default(cuid())
   leadId    String
   actorId   String
-  channel   Channel
+  type      ActivityType @default(CONTACT)
+  channel   Channel?
   note      String
   createdAt DateTime @default(now())
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId])
   @@index([actorId])
+}
+
+model StageHistory {
+  id        String    @id @default(cuid())
+  leadId    String
+  actorId   String
+  fromStage LeadStage?
+  toStage   LeadStage
+  createdAt DateTime  @default(now())
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+}
+
+model SaleEvent {
+  id        String   @id @default(cuid())
+  leadId    String
+  actorId   String
+  saleValue Decimal
+  mrr       Decimal
+  occurredAt DateTime @default(now())
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, occurredAt])
+  @@index([occurredAt])
 }
 
 model FollowUp {
@@ -70,6 +109,10 @@ model FollowUp {
   note      String
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  completedAt DateTime?
+  completedById String?
+  cancelledAt DateTime?
+  cancelledById String?
   lead      Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId])

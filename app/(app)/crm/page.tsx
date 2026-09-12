@@ -6,7 +6,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const leads = await prisma.lead.findMany({
     include: {
       activities: { orderBy: { createdAt: 'desc' } },
-      followUps: { where: { state: 'PENDING' }, orderBy: { dueDate: 'asc' }, take: 1 }
+      followUps: { orderBy: [{ state: 'asc' }, { dueDate: 'asc' }] }
     },
     orderBy: { id: 'desc' }
   });
