@@ -70,4 +70,19 @@ describe('lead routes', () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: 'Valores monetários devem ser não negativos.' });
   });
+
+  test('rejects malformed monetary values when moving a lead', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/malformed-value' } });
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stage: 'WON', saleValue: '100', mrr: {} })
+      }),
+      { params: Promise.resolve({ id: lead.id }) }
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Valores monetários devem ser não negativos.' });
+  });
 });

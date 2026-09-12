@@ -1,10 +1,11 @@
 import { KanbanBoard, type CrmLead } from '@/components/kanban-board';
 import { prisma } from '@/lib/db';
 
-export default async function CrmPage() {
+export default async function CrmPage({ searchParams }: { searchParams: Promise<{ lead?: string }> }) {
+  const { lead: focusedLeadId } = await searchParams;
   const leads = await prisma.lead.findMany({
     include: {
-      activities: { orderBy: { createdAt: 'desc' }, take: 1 },
+      activities: { orderBy: { createdAt: 'desc' } },
       followUps: { where: { state: 'PENDING' }, orderBy: { dueDate: 'asc' }, take: 1 }
     },
     orderBy: { id: 'desc' }
@@ -22,7 +23,7 @@ export default async function CrmPage() {
       <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--atelier-green)]">CRM compartilhado</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Todas as abordagens, em uma fila da equipe.</h1>
       <p className="mt-2 text-white/65">As movimentações e atividades ficam visíveis para todas as pessoas autenticadas.</p>
-      <div className="mt-8"><KanbanBoard leads={serializedLeads} /></div>
+      <div className="mt-8"><KanbanBoard leads={serializedLeads} focusedLeadId={focusedLeadId} /></div>
     </section>
   );
 }

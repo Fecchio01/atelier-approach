@@ -3,8 +3,8 @@ import { LeadStage } from '@prisma/client';
 import { getCurrentUser } from '../../../../lib/auth';
 import { prisma } from '../../../../lib/db';
 
-function money(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+function isNonNegativeMoney(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -21,10 +21,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (typeof body.stage !== 'string' || !Object.values(LeadStage).includes(body.stage as LeadStage)) {
     return Response.json({ error: 'Etapa inválida.' }, { status: 400 });
   }
-  const saleValue = money(body.saleValue);
-  const mrr = money(body.mrr);
-  if ((saleValue !== undefined && saleValue < 0) || (mrr !== undefined && mrr < 0)) {
-    return Response.json({ error: 'Valores monetários devem ser não negativos.' }, { status: 400 });
+  const hasSaleValue = Object.prototype.hasOwnProperty.call(body, 'saleValue');
+  const hasMrr = Object.prototype.hasOwnProperty.call(body, 'mrr');
+  const saleValue = body.saleValue;
+  const mrr = body.mrr;
+  let validSaleValue: number | undefined;
+  let validMrr: number | undefined;
+  if (hasSaleValue) {
+    if (!isNonNegativeMoney(saleValue)) return Response.json({ error: 'Valores monetários devem ser não negativos.' }, { status: 400 });
+    validSaleValue = saleValue;
+  }
+  if (hasMrr) {
+    if (!isNonNegativeMoney(mrr)) return Response.json({ error: 'Valores monetários devem ser não negativos.' }, { status: 400 });
+    validMrr = mrr;
   }
   let dueDate: Date | undefined;
   if (body.followUpAt !== undefined) {
@@ -41,8 +50,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       where: { id },
       data: {
         stage: body.stage as LeadStage,
-        ...(saleValue !== undefined ? { saleValue } : {}),
-        ...(mrr !== undefined ? { mrr } : {})
+        ...(validSaleValue !== undefined ? { saleValue: validSaleValue } : {}),
+        ...(validMrr !== undefined ? { mrr: validMrr } : {})
       }
     });
     await tx.activity.create({

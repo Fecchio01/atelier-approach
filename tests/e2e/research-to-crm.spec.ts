@@ -36,4 +36,18 @@ test('moves a researched company into the shared CRM', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/crm/);
   await expect(page.getByText('Auto Brilho')).toBeVisible();
+
+  await page.getByLabel('Mover para').selectOption('INTEREST');
+  await expect(page.getByText('Etapa alterada para INTEREST.')).toBeVisible();
+  await expect(page.getByText('Abordagem iniciada a partir da pesquisa.')).toBeVisible();
+
+  await page.goto('/pesquisa');
+  await page.getByLabel('Nicho').fill('estética automotiva');
+  await page.getByLabel('Região').fill('Campinas, SP');
+  await page.getByRole('button', { name: 'Pesquisar' }).click();
+  await page.getByRole('button', { name: 'Marcar como abordada' }).click();
+  await page.getByRole('button', { name: 'Salvar abordagem' }).click();
+
+  await expect(page).toHaveURL(/\/crm\?lead=/);
+  await expect(page.locator('[data-lead-id]').filter({ hasText: 'Auto Brilho' })).toBeFocused();
 });

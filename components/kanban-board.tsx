@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 type Stage = 'NEW' | 'CONTACTED' | 'INTEREST' | 'FOLLOW_UP' | 'WON' | 'NO_RESPONSE' | 'DISCARDED';
@@ -29,10 +29,14 @@ const auxiliary: Array<{ stage: Stage; title: string }> = [
   { stage: 'DISCARDED', title: 'Descartado' }
 ];
 
-export function KanbanBoard({ leads }: { leads: CrmLead[] }) {
+export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focusedLeadId?: string }) {
   const router = useRouter();
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (focusedLeadId) document.getElementById(`lead-${focusedLeadId}`)?.focus();
+  }, [focusedLeadId, leads]);
 
   async function moveLead(id: string, stage: Stage) {
     setSavingId(id);
@@ -54,12 +58,16 @@ export function KanbanBoard({ leads }: { leads: CrmLead[] }) {
   }
 
   const renderLead = (lead: CrmLead) => (
-    <article key={lead.id} className="grid gap-3 rounded-xl border border-white/15 bg-white/5 p-4 shadow-sm">
+    <article id={`lead-${lead.id}`} data-lead-id={lead.id} tabIndex={-1} key={lead.id} className={`grid gap-3 rounded-xl border bg-white/5 p-4 shadow-sm outline-none ${lead.id === focusedLeadId ? 'border-[var(--atelier-green)] ring-2 ring-[var(--atelier-green)]/40' : 'border-white/15'}`}>
       <div>
         <h2 className="font-semibold">{lead.name ?? lead.osmId}</h2>
         <p className="text-xs text-white/45">{lead.osmId}</p>
       </div>
-      {lead.activities[0] ? <p className="text-sm text-white/70">{lead.activities[0].note}</p> : <p className="text-sm text-white/45">Sem atividade registrada.</p>}
+      {lead.activities.length ? (
+        <ol className="grid gap-1 text-sm text-white/70" aria-label="Histórico de atividades">
+          {lead.activities.map((activity) => <li key={activity.id}>{activity.note}</li>)}
+        </ol>
+      ) : <p className="text-sm text-white/45">Sem atividade registrada.</p>}
       {lead.followUps[0] ? <p className="text-xs text-[var(--atelier-green)]">Retorno: {new Date(lead.followUps[0].dueDate).toLocaleDateString('pt-BR')}</p> : null}
       <label className="grid gap-1 text-xs text-white/55">
         Mover para
