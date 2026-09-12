@@ -1,0 +1,7 @@
+.superpowers/
+.worktrees/
+node_modules/
+.next/
+.env
+playwright-report/
+test-results/
