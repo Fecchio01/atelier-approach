@@ -13,6 +13,7 @@ vi.mock('../../lib/osm', () => {
 });
 
 import { GET } from '../../app/api/search/route';
+import { prisma } from '../../lib/db';
 import { OsmUnavailableError } from '../../lib/osm';
 
 describe('GET /api/search', () => {
@@ -47,6 +48,47 @@ describe('GET /api/search', () => {
     expect(response.status).toBe(429);
     await expect(response.json()).resolves.toEqual({
       error: 'Muitas buscas em pouco tempo. Aguarde um minuto antes de tentar novamente.'
+    });
+  });
+
+  test('does not return businesses already registered as leads', async () => {
+    await prisma.activity.deleteMany();
+    await prisma.followUp.deleteMany();
+    await prisma.lead.deleteMany();
+    await prisma.lead.create({ data: { osmId: 'node/registered' } });
+    mocks.getCurrentUser.mockResolvedValue({ id: 'lead-filter-user' });
+    mocks.searchBusinesses.mockResolvedValue([
+      {
+        osmId: 'node/registered',
+        name: 'Já cadastrado',
+        phone: null,
+        website: null,
+        instagram: null
+      },
+      {
+        osmId: 'node/new',
+        name: 'Novo prospect',
+        phone: null,
+        website: null,
+        instagram: null
+      }
+    ]);
+
+    const response = await GET(
+      new Request('http://localhost/api/search?niche=est%C3%A9tica&region=Campinas&radiusKm=5')
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      businesses: [
+        {
+          osmId: 'node/new',
+          name: 'Novo prospect',
+          phone: null,
+          website: null,
+          instagram: null
+        }
+      ]
     });
   });
 });

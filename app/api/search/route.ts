@@ -1,4 +1,5 @@
 import { getCurrentUser } from '../../../lib/auth';
+import { prisma } from '../../../lib/db';
 import { OsmUnavailableError, searchBusinesses } from '../../../lib/osm';
 
 const UNAVAILABLE_MESSAGE = 'A busca no OpenStreetMap está indisponível no momento. Tente novamente em alguns instantes.';
@@ -34,7 +35,15 @@ export async function GET(request: Request) {
 
   try {
     const businesses = await searchBusinesses({ niche, region, radiusKm });
-    return Response.json({ businesses });
+    const existingLeads = await prisma.lead.findMany({
+      where: { osmId: { in: businesses.map((business) => business.osmId) } },
+      select: { osmId: true }
+    });
+    const existingOsmIds = new Set(existingLeads.map((lead) => lead.osmId));
+
+    return Response.json({
+      businesses: businesses.filter((business) => !existingOsmIds.has(business.osmId))
+    });
   } catch (error) {
     if (error instanceof OsmUnavailableError) {
       return Response.json({ error: UNAVAILABLE_MESSAGE }, { status: 503 });
