@@ -73,3 +73,16 @@ model FollowUp {
   @@index([leadId])
   @@index([ownerId, dueDate])
 }
+
+model Goal {
+  id                String   @id @default(cuid())
+  ownerId           String
+  weekStart         DateTime
+  approachesTarget  Int
+  revenueTarget     Float
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([ownerId, weekStart])
+  @@index([weekStart])
+}
