@@ -2,6 +2,10 @@ import { getCurrentUser } from '../../../lib/auth';
 import { OsmUnavailableError, searchBusinesses } from '../../../lib/osm';
 
 const UNAVAILABLE_MESSAGE = 'A busca no OpenStreetMap está indisponível no momento. Tente novamente em alguns instantes.';
+const RATE_LIMIT_MESSAGE = 'Muitas buscas em pouco tempo. Aguarde um minuto antes de tentar novamente.';
+const MAX_SEARCHES_PER_MINUTE = 5;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const searchAttemptsByUser = new Map<string, number[]>();
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
@@ -21,6 +25,13 @@ export async function GET(request: Request) {
     );
   }
 
+  if (hasExceededSearchRateLimit(user.id)) {
+    return Response.json(
+      { error: RATE_LIMIT_MESSAGE },
+      { status: 429, headers: { 'Retry-After': '60' } }
+    );
+  }
+
   try {
     const businesses = await searchBusinesses({ niche, region, radiusKm });
     return Response.json({ businesses });
@@ -31,4 +42,20 @@ export async function GET(request: Request) {
 
     throw error;
   }
+}
+
+function hasExceededSearchRateLimit(userId: string) {
+  const now = Date.now();
+  const recentAttempts = (searchAttemptsByUser.get(userId) ?? []).filter(
+    (attemptedAt) => attemptedAt > now - RATE_LIMIT_WINDOW_MS
+  );
+
+  if (recentAttempts.length >= MAX_SEARCHES_PER_MINUTE) {
+    searchAttemptsByUser.set(userId, recentAttempts);
+    return true;
+  }
+
+  recentAttempts.push(now);
+  searchAttemptsByUser.set(userId, recentAttempts);
+  return false;
 }

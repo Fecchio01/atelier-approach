@@ -8,9 +8,12 @@ describe('searchBusinesses', () => {
   });
 
   test('normalizes a business returned by OpenStreetMap', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ lat: '-22.9', lon: '-47.06' }]), { status: 200 })
+      )
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             elements: [
@@ -45,8 +48,8 @@ describe('searchBusinesses', () => {
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
-      )
-    );
+      );
+    vi.stubGlobal('fetch', fetchMock);
 
     const businesses = await searchBusinesses({
       niche: 'estética automotiva',
@@ -75,12 +78,18 @@ describe('searchBusinesses', () => {
       website: null,
       instagram: null
     });
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ body: expect.stringContaining('around:5000,-22.9,-47.06') })
+    );
   });
 
   test('uses an identifiable user agent when querying OpenStreetMap', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ elements: [] }), { status: 200 })
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ lat: '-22.9', lon: '-47.06' }]), { status: 200 })
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await searchBusinesses({ niche: 'estética automotiva', region: 'Campinas, SP', radiusKm: 5 });

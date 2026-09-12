@@ -29,4 +29,24 @@ describe('GET /api/search', () => {
       error: 'A busca no OpenStreetMap está indisponível no momento. Tente novamente em alguns instantes.'
     });
   });
+
+  test('limits repeated searches from the same authenticated user', async () => {
+    mocks.getCurrentUser.mockReset();
+    mocks.searchBusinesses.mockReset();
+    mocks.getCurrentUser.mockResolvedValue({ id: 'rate-limit-user' });
+    mocks.searchBusinesses.mockResolvedValue([]);
+    const request = () =>
+      new Request('http://localhost/api/search?niche=est%C3%A9tica&region=Campinas&radiusKm=5');
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect((await GET(request())).status).toBe(200);
+    }
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Muitas buscas em pouco tempo. Aguarde um minuto antes de tentar novamente.'
+    });
+  });
 });
