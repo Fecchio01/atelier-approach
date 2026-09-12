@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  INTEREST
+  FOLLOW_UP
+  WON
+  NO_RESPONSE
+  DISCARDED
+}
+
+enum Channel {
+  WHATSAPP
+  PHONE
+  EMAIL
+  INSTAGRAM
+  IN_PERSON
+  OTHER
+}
+
+enum FollowUpState {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model Lead {
+  id        String     @id @default(cuid())
+  osmId     String     @unique
+  stage     LeadStage  @default(NEW)
+  saleValue Decimal?
+  mrr       Decimal?
+  activities Activity[]
+  followUps  FollowUp[]
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  leadId    String
+  actorId   String
+  channel   Channel
+  note      String
+  createdAt DateTime @default(now())
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([actorId])
+}
+
+model FollowUp {
+  id        String        @id @default(cuid())
+  leadId    String
+  dueDate   DateTime
+  ownerId   String
+  state     FollowUpState @default(PENDING)
+  note      String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  lead      Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([ownerId, dueDate])
+}
