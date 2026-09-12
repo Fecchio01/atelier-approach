@@ -1,13 +1,22 @@
 import { defineConfig } from '@playwright/test';
 
+import { e2eCredentials } from './tests/e2e/credentials';
+
+const e2eBaseUrl = 'http://127.0.0.1:3001';
+
 export default defineConfig({
   testDir: './tests/e2e',
   use: {
-    baseURL: 'http://127.0.0.1:3000'
+    baseURL: e2eBaseUrl
   },
   webServer: {
-    command: 'npm run dev',
-    url: 'http://127.0.0.1:3000',
-    reuseExistingServer: !process.env.CI
+    command: 'next dev -p 3001',
+    url: e2eBaseUrl,
+    reuseExistingServer: false,
+    env: {
+      ...process.env,
+      AUTH_INTERNAL_EMAIL: e2eCredentials.email,
+      AUTH_INTERNAL_PASSWORD: e2eCredentials.password
+    }
   }
 });
