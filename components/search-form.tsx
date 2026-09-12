@@ -39,7 +39,7 @@ export function SearchForm({ onResults }: SearchFormProps) {
   }
 
   return (
-    <form className="grid gap-4 rounded-2xl border border-white/15 bg-white/5 p-5 md:grid-cols-[1fr_1fr_8rem_auto] md:items-end" onSubmit={handleSubmit}>
+    <form aria-busy={isLoading} className="grid gap-4 rounded-2xl border border-white/15 bg-white/5 p-5 md:grid-cols-[1fr_1fr_8rem_auto] md:items-end" onSubmit={handleSubmit}>
       <label className="grid gap-2 text-sm font-medium">
         Nicho
         <input
@@ -79,7 +79,7 @@ export function SearchForm({ onResults }: SearchFormProps) {
       >
         {isLoading ? 'Pesquisando…' : 'Pesquisar'}
       </button>
-      {error ? <p className="text-sm text-red-300 md:col-span-4">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm text-red-200 md:col-span-4">{error}</p> : null}
     </form>
   );
 }

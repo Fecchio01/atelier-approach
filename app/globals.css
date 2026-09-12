@@ -18,3 +18,8 @@ body {
   background: var(--atelier-green);
   color: var(--atelier-black);
 }
+
+:focus-visible {
+  outline: 3px solid var(--atelier-green);
+  outline-offset: 3px;
+}

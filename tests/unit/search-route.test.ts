@@ -27,7 +27,7 @@ describe('GET /api/search', () => {
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({
-      error: 'A busca no OpenStreetMap está indisponível no momento. Tente novamente em alguns instantes.'
+      error: 'A pesquisa está indisponível no momento. Tente novamente em alguns instantes.'
     });
   });
 

@@ -50,7 +50,7 @@ describe('lead routes', () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({
-      error: 'Este prospect já está no CRM.',
+      error: 'Esta empresa já está no CRM.',
       leadId: lead.id,
       href: `/crm?lead=${lead.id}`
     });

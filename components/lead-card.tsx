@@ -29,7 +29,8 @@ export function LeadCard({ business, result }: LeadCardProps) {
       });
       const payload = (await response.json()) as { error?: string; href?: string };
       if (response.status === 409 && payload.href) {
-        router.push(payload.href);
+        const separator = payload.href.includes('?') ? '&' : '?';
+        router.push(`${payload.href}${separator}notice=duplicate`);
         return;
       }
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível salvar a abordagem.');
@@ -101,7 +102,7 @@ export function LeadCard({ business, result }: LeadCardProps) {
             Nota da abordagem
             <textarea value={note} onChange={(event) => setNote(event.target.value)} className="min-h-20 rounded-lg border border-white/20 bg-black px-3 py-2 text-white" />
           </label>
-          {error ? <p className="text-sm text-red-300">{error}</p> : null}
+          {error ? <p role="alert" className="text-sm text-red-200">{error}</p> : null}
           <button type="button" onClick={saveApproach} disabled={isSaving} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 font-semibold text-black disabled:opacity-60">
             {isSaving ? 'Salvando…' : 'Salvar abordagem'}
           </button>

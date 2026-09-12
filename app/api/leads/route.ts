@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const existingLead = await prisma.lead.findUnique({ where: { osmId }, select: { id: true } });
       return Response.json(
-        { error: 'Este prospect já está no CRM.', leadId: existingLead?.id, href: existingLead ? `/crm?lead=${existingLead.id}` : '/crm' },
+        { error: 'Esta empresa já está no CRM.', leadId: existingLead?.id, href: existingLead ? `/crm?lead=${existingLead.id}` : '/crm' },
         { status: 409 }
       );
     }

@@ -2,7 +2,7 @@ import { getCurrentUser } from '../../../lib/auth';
 import { prisma } from '../../../lib/db';
 import { OsmUnavailableError, searchBusinesses } from '../../../lib/osm';
 
-const UNAVAILABLE_MESSAGE = 'A busca no OpenStreetMap está indisponível no momento. Tente novamente em alguns instantes.';
+const UNAVAILABLE_MESSAGE = 'A pesquisa está indisponível no momento. Tente novamente em alguns instantes.';
 const RATE_LIMIT_MESSAGE = 'Muitas buscas em pouco tempo. Aguarde um minuto antes de tentar novamente.';
 const MAX_SEARCHES_PER_MINUTE = 5;
 const RATE_LIMIT_WINDOW_MS = 60_000;

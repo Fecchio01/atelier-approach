@@ -6,6 +6,7 @@ const e2eBaseUrl = 'http://127.0.0.1:3001';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  workers: 1,
   use: {
     baseURL: e2eBaseUrl
   },
