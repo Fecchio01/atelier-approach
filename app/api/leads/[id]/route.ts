@@ -50,6 +50,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       where: { id },
       data: {
         stage: body.stage as LeadStage,
+        ...(body.stage === 'WON' && lead.stage !== 'WON' ? { wonAt: new Date(), wonById: user.id } : {}),
         ...(validSaleValue !== undefined ? { saleValue: validSaleValue } : {}),
         ...(validMrr !== undefined ? { mrr: validMrr } : {})
       }

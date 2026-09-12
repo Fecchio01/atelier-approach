@@ -14,7 +14,7 @@ const percent = (value: number) => `${Math.round(value * 100)}%`;
 export default async function Home() {
   const user = await getCurrentUser(); const range = weekRange();
   const [leads, goals] = await Promise.all([
-    prisma.lead.findMany({ include: { activities: { select: { actorId: true, createdAt: true } }, followUps: { include: { lead: { select: { id: true, name: true } } } } } }),
+    prisma.lead.findMany({ include: { activities: { select: { actorId: true, createdAt: true }, orderBy: { createdAt: 'asc' } }, followUps: { include: { lead: { select: { id: true, name: true } } } } } }),
     prisma.goal.findMany({ where: { weekStart: range.start } })
   ]);
   const weeklyGoals: WeeklyGoalInput[] = goals.map((goal) => ({ ownerId: goal.ownerId === '__team__' ? null : goal.ownerId, weekStart: goal.weekStart, approachesTarget: goal.approachesTarget, revenueTarget: goal.revenueTarget }));

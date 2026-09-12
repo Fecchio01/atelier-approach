@@ -15,6 +15,8 @@ export type MetricLead = {
   stage: string;
   saleValue: MetricNumber | null;
   mrr: MetricNumber | null;
+  wonAt?: Date | null;
+  wonById?: string | null;
   activities: MetricActivity[];
   followUps: MetricFollowUp[];
 };
@@ -56,7 +58,7 @@ function isSameDay(first: Date, second: Date) {
 }
 
 export function getDashboardMetrics(leads: MetricLead[], goals: WeeklyGoalInput[], range: DashboardRange): DashboardMetrics {
-  const won = leads.filter((lead) => lead.stage === 'WON' && lead.activities.some((activity) => inRange(activity.createdAt, range)));
+  const won = leads.filter((lead) => lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range));
   const sales = won.reduce((total, lead) => total + Number(lead.saleValue ?? 0), 0);
   const mrr = won.reduce((total, lead) => total + Number(lead.mrr ?? 0), 0);
   const activities = leads.flatMap((lead) => lead.activities.filter((activity) => inRange(activity.createdAt, range)));
@@ -74,7 +76,7 @@ export function getDashboardMetrics(leads: MetricLead[], goals: WeeklyGoalInput[
   }
 
   for (const lead of won) {
-    const actorId = lead.activities.filter((activity) => inRange(activity.createdAt, range)).at(-1)?.actorId;
+    const actorId = lead.wonById;
     if (!actorId) continue;
     personalResults[actorId] ??= { approaches: 0, sales: 0, won: 0 };
     personalResults[actorId].sales += Number(lead.saleValue ?? 0);

@@ -42,6 +42,8 @@ model Lead {
   stage     LeadStage  @default(NEW)
   saleValue Decimal?
   mrr       Decimal?
+  wonAt     DateTime?
+  wonById   String?
   activities Activity[]
   followUps  FollowUp[]
 }

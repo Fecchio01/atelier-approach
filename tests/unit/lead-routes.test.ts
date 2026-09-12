@@ -71,6 +71,23 @@ describe('lead routes', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Valores monetários devem ser não negativos.' });
   });
 
+  test('records the timestamp and actor when a lead is moved to WON', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/win-event', stage: 'INTEREST' } });
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stage: 'WON', saleValue: 1200, mrr: 300 })
+      }),
+      { params: Promise.resolve({ id: lead.id }) }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({
+      stage: 'WON', wonById: 'internal-equipe', wonAt: expect.any(Date)
+    });
+  });
+
   test('rejects malformed monetary values when moving a lead', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/malformed-value' } });
 

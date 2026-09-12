@@ -16,4 +16,10 @@ test('shows operational CRM metrics, goals and follow-up queues on the dashboard
   await expect(page.getByRole('heading', { name: 'Follow-ups vencidos' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Desempenho da equipe' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Meu desempenho' })).toBeVisible();
+
+  await page.goto('/metas');
+  await expect(page.getByRole('heading', { name: 'Meta da equipe' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Minha meta' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Salvar meta da equipe' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Salvar meta pessoal' })).toBeVisible();
 });
