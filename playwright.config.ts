@@ -17,7 +17,9 @@ export default defineConfig({
     env: {
       ...process.env,
       AUTH_INTERNAL_EMAIL: e2eCredentials.email,
-      AUTH_INTERNAL_PASSWORD: e2eCredentials.password
+      AUTH_INTERNAL_PASSWORD: e2eCredentials.password,
+      AUTH_INTERNAL_SECONDARY_EMAIL: e2eCredentials.secondary.email,
+      AUTH_INTERNAL_SECONDARY_PASSWORD: e2eCredentials.secondary.password
     }
   }
 });

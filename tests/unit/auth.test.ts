@@ -21,4 +21,17 @@ describe('authenticateInternalUser', () => {
     });
     expect(authenticateInternalUser('equipe@atelier.local', 'senha-incorreta')).toBeNull();
   });
+
+  test('authenticates a second configured member with a distinct identity', () => {
+    process.env.AUTH_INTERNAL_EMAIL = 'equipe@atelier.local';
+    process.env.AUTH_INTERNAL_PASSWORD = 'senha-segura';
+    process.env.AUTH_INTERNAL_SECONDARY_EMAIL = 'bia@atelier.local';
+    process.env.AUTH_INTERNAL_SECONDARY_PASSWORD = 'senha-da-bia';
+
+    expect(authenticateInternalUser('bia@atelier.local', 'senha-da-bia')).toMatchObject({
+      id: 'internal-equipe-2',
+      name: 'Membro 2',
+      email: 'bia@atelier.local'
+    });
+  });
 });

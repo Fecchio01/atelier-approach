@@ -88,6 +88,34 @@ describe('lead routes', () => {
     });
   });
 
+  test('schedules a follow-up and persists closing values supplied by the CRM', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/ui-controls', stage: 'INTEREST' } });
+
+    const followUpResponse = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stage: 'FOLLOW_UP', followUpAt: '2026-09-10T10:00:00.000Z' })
+      }),
+      { params: Promise.resolve({ id: lead.id }) }
+    );
+    expect(followUpResponse.status).toBe(200);
+    await expect(prisma.followUp.findMany({ where: { leadId: lead.id } })).resolves.toMatchObject([
+      { ownerId: 'internal-equipe', dueDate: new Date('2026-09-10T10:00:00.000Z') }
+    ]);
+
+    const closeResponse = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stage: 'WON', saleValue: 1500, mrr: 250 })
+      }),
+      { params: Promise.resolve({ id: lead.id }) }
+    );
+    expect(closeResponse.status).toBe(200);
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({
+      stage: 'WON', saleValue: expect.anything(), mrr: expect.anything()
+    });
+  });
+
   test('rejects malformed monetary values when moving a lead', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/malformed-value' } });
 

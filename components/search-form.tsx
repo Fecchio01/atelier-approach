@@ -32,7 +32,6 @@ export function SearchForm({ onResults }: SearchFormProps) {
       onResults(payload.businesses);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Não foi possível concluir a pesquisa.');
-      onResults([]);
     } finally {
       setIsLoading(false);
     }

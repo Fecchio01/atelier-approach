@@ -19,3 +19,19 @@
 ## Review
 
 The final diff was checked with `git diff --check`. Generated local SQLite and TypeScript build artifacts are intentionally excluded from the commit.
+
+## Review round 1
+
+- Added a second configured internal-account path (`AUTH_INTERNAL_SECONDARY_EMAIL` and `AUTH_INTERNAL_SECONDARY_PASSWORD`) with a distinct member identity; both members use the existing login form and share the CRM.
+- Added CRM controls to schedule a date/time follow-up and to close a deal with required sale value and MRR. A successful CRM mutation navigates back to the CRM route so the server-rendered board immediately reflects the saved state.
+- Expanded acceptance coverage for a real overdue follow-up on the dashboard, a second member seeing the same record, revenue/MRR changing after closure, missing OSM contacts, successful-empty search guidance, failed-search state separation, and mobile horizontal overflow.
+- Replaced the former typecheck-only `lint` alias with ESLint plus the Next plugin; retained `npm run typecheck` as a separate command.
+- Added radius/term guidance only for a successful empty search; an OSM failure now remains an alert without also showing an empty-state result.
+
+### Verification evidence
+
+- `npm run lint` — passed.
+- `npm run typecheck` — passed.
+- `npx vitest run` — 8 files / 26 tests passed.
+- `npx playwright test --retries=0 --reporter=list` — 10 tests passed.
+- `npm run build` — passed; all 11 application routes generated successfully.
