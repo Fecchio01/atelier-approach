@@ -43,7 +43,7 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
       select: { leadId: true, actorId: true, channel: true, note: true, createdAt: true },
       orderBy: { createdAt: 'desc' }
     }),
-    prisma.followUp.findMany({ select: { dueDate: true, state: true } })
+    prisma.followUp.findMany({ select: { dueDate: true, state: true, completedAt: true, cancelledAt: true } })
   ]);
   const wins = leads.filter((lead) => lead.wonAt && inRange(lead.wonAt, range));
   const winIds = new Set(wins.map((lead) => lead.id));
@@ -88,10 +88,10 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
     members: [...memberResults.entries()].map(([memberId, result]) => ({ memberId, ...result })).sort((first, second) => first.memberId.localeCompare(second.memberId)),
     funnel: Object.values(LeadStage).map((stage) => ({ stage, leads: leads.filter((lead) => lead.stage === stage).length })),
     followUps: {
-      pending: followUps.filter((followUp) => followUp.state === 'PENDING').length,
-      completed: followUps.filter((followUp) => followUp.state === 'COMPLETED').length,
-      cancelled: followUps.filter((followUp) => followUp.state === 'CANCELLED').length,
-      overdue: followUps.filter((followUp) => followUp.state === 'PENDING' && followUp.dueDate < now).length
+      pending: followUps.filter((followUp) => followUp.state === 'PENDING' && inRange(followUp.dueDate, range)).length,
+      completed: followUps.filter((followUp) => followUp.state === 'COMPLETED' && followUp.completedAt && inRange(followUp.completedAt, range)).length,
+      cancelled: followUps.filter((followUp) => followUp.state === 'CANCELLED' && followUp.cancelledAt && inRange(followUp.cancelledAt, range)).length,
+      overdue: followUps.filter((followUp) => followUp.state === 'PENDING' && followUp.dueDate < now && inRange(followUp.dueDate, range)).length
     },
     notes: { total: activities.length, recent: activities.map((activity) => activity.note) }
   };

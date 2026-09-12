@@ -58,6 +58,19 @@ describe('commercial reports', () => {
     }));
   });
 
+  test('counts completed, cancelled, and pending follow-ups within the selected period', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'report-follow-up-states' } });
+    await prisma.followUp.createMany({ data: [
+      { leadId: lead.id, ownerId: 'ana', dueDate: new Date('2026-09-10T10:00:00.000Z'), state: 'COMPLETED', note: 'Concluído.', createdAt: new Date('2026-09-09T10:00:00.000Z'), completedAt: new Date('2026-09-10T11:00:00.000Z'), completedById: 'ana' },
+      { leadId: lead.id, ownerId: 'ana', dueDate: new Date('2026-09-10T10:00:00.000Z'), state: 'CANCELLED', note: 'Cancelado.', createdAt: new Date('2026-09-09T10:00:00.000Z'), cancelledAt: new Date('2026-09-10T11:00:00.000Z'), cancelledById: 'ana' },
+      { leadId: lead.id, ownerId: 'ana', dueDate: new Date('2026-09-20T10:00:00.000Z'), state: 'PENDING', note: 'Fora do período.', createdAt: new Date('2026-09-09T10:00:00.000Z') }
+    ] });
+
+    const report = await buildReport({ from: new Date('2026-09-07T00:00:00.000Z'), to: new Date('2026-09-14T00:00:00.000Z'), now: new Date('2026-09-12T12:00:00.000Z') });
+
+    expect(report.followUps).toEqual({ pending: 0, completed: 1, cancelled: 1, overdue: 0 });
+  });
+
   test('returns a selected report range through the authenticated API', async () => {
     const response = await GET(new Request('http://localhost/api/reports?from=2026-09-07&to=2026-09-14'));
 
