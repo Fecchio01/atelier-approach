@@ -199,7 +199,7 @@ describe('searchBusinesses', () => {
     const first = await service.searchBusinesses(input);
     const second = await service.searchBusinesses(input);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(second).toEqual(first);
     expect(first).toEqual([
       expect.objectContaining({

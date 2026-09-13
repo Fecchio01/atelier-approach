@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { LeadCard } from '@/components/lead-card';
 import { SearchForm } from '@/components/search-form';
-import { scoreBusiness } from '@/lib/lead-score';
+import { approachabilityRank, scoreBusiness } from '@/lib/lead-score';
 import type { ExternalBusiness } from '@/lib/osm';
 
 type ScoredBusiness = ExternalBusiness & ReturnType<typeof scoreBusiness>;
@@ -18,7 +18,7 @@ export default function PesquisaPage() {
     setBusinesses(
       results
         .map((business) => ({ ...business, ...scoreBusiness(business) }))
-        .sort((first, second) => second.score - first.score || first.name.localeCompare(second.name, 'pt-BR'))
+        .sort((first, second) => approachabilityRank(first) - approachabilityRank(second) || second.score - first.score || first.name.localeCompare(second.name, 'pt-BR'))
     );
   }
 

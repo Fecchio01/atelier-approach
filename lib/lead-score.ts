@@ -5,6 +5,13 @@ export type BusinessScore = {
   reasons: string[];
 };
 
+export function approachabilityRank(business: ExternalBusiness) {
+  if (business.whatsapp) return 0;
+  if (business.phone) return 1;
+  if (business.instagram || business.website) return 2;
+  return 3;
+}
+
 export function scoreBusiness(business: ExternalBusiness): BusinessScore {
   const reasons: string[] = [];
 

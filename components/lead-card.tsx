@@ -17,6 +17,8 @@ export function LeadCard({ business, result }: LeadCardProps) {
   const [note, setNote] = useState('Abordagem iniciada a partir da pesquisa.');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const whatsappHref = toWhatsAppHref(business.whatsapp);
+  const instagramHref = toInstagramHref(business.instagram);
 
   async function saveApproach() {
     setError(null);
@@ -45,6 +47,11 @@ export function LeadCard({ business, result }: LeadCardProps) {
 
   return (
     <article className="flex flex-col gap-5 rounded-2xl border border-white/15 bg-white/5 p-5">
+      {business.imageUrl ? (
+        // External Open Graph images are not part of a configured, trusted image host list.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={business.imageUrl} alt={`Foto pública de ${business.name}`} className="h-40 w-full rounded-xl object-cover" />
+      ) : null}
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-white/55">Prospect OSM</p>
@@ -54,6 +61,15 @@ export function LeadCard({ business, result }: LeadCardProps) {
           {result.score} pts
         </span>
       </div>
+
+      {whatsappHref || business.phone || instagramHref || business.website ? (
+        <div className="flex flex-wrap gap-2">
+          {whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label={`Abrir WhatsApp de ${business.name}`} className="rounded-lg bg-[var(--atelier-green)] px-3 py-2 text-sm font-semibold text-black">WhatsApp</a> : null}
+          {business.phone ? <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} aria-label={`Ligar para ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Ligar</a> : null}
+          {instagramHref ? <a href={instagramHref} target="_blank" rel="noreferrer" aria-label={`Abrir Instagram de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Instagram</a> : null}
+          {business.website ? <a href={business.website} target="_blank" rel="noreferrer" aria-label={`Abrir site de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Site</a> : null}
+        </div>
+      ) : null}
 
       <dl className="grid gap-3 text-sm text-white/75">
         {business.address ? <div><dt className="text-white/45">Endereço</dt><dd>{business.address}</dd></div> : null}
@@ -124,4 +140,18 @@ export function LeadCard({ business, result }: LeadCardProps) {
       )}
     </article>
   );
+}
+
+function toWhatsAppHref(value: string | null | undefined) {
+  if (!value) return null;
+  if (/^https:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(value)) return value;
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 10 ? `https://wa.me/${digits}` : null;
+}
+
+function toInstagramHref(value: string | null | undefined) {
+  if (!value) return null;
+  if (/^https?:\/\/(www\.)?instagram\.com\//i.test(value)) return value;
+  const handle = value.replace(/^@/, '').trim();
+  return handle ? `https://instagram.com/${handle}` : null;
 }

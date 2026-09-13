@@ -1,3 +1,5 @@
+import { enrichFromOfficialWebsite } from './prospect-enrichment';
+
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter'
@@ -21,6 +23,7 @@ export type ExternalBusiness = {
   lastSyncedAt?: string | null;
   alreadyWorked?: boolean;
   crmHref?: string | null;
+  imageUrl?: string | null;
 };
 
 export type SearchBusinessesInput = {
@@ -103,7 +106,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     const payload = await fetchOverpass(buildOverpassQuery(input, coordinates));
     if (!Array.isArray(payload.elements)) throw new OsmUnavailableError();
 
-    const businesses = payload.elements.flatMap(normalizeBusiness);
+    const businesses = await enrichBusinesses(payload.elements.flatMap(normalizeBusiness));
     setCached(searchCache, cacheKey, businesses);
     return businesses;
   }
@@ -174,6 +177,26 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
   }
 
   return { searchBusinesses };
+}
+
+async function enrichBusinesses(businesses: ExternalBusiness[]) {
+  const enriched: ExternalBusiness[] = [];
+  for (let index = 0; index < businesses.length; index += 3) {
+    const batch = await Promise.all(businesses.slice(index, index + 3).map(async (business) => {
+      if (!business.website) return business;
+      const contacts = await enrichFromOfficialWebsite(business.website);
+      return {
+        ...business,
+        phone: business.phone ?? contacts.phone,
+        whatsapp: business.whatsapp ?? contacts.whatsapp,
+        instagram: business.instagram ?? contacts.instagram,
+        website: business.website ?? contacts.website,
+        imageUrl: contacts.imageUrl
+      };
+    }));
+    enriched.push(...batch);
+  }
+  return enriched;
 }
 
 const defaultSearchService = createOsmSearchService();
