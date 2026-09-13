@@ -1,6 +1,9 @@
+import type { ActivityType, LeadStage } from '@prisma/client';
 import { prisma } from './db';
 
-export type MetricActivity = { actorId: string; createdAt: Date; note?: string };
+export type MetricActivity = { actorId: string; type: ActivityType; createdAt: Date; note?: string };
+export type MetricStageEvent = { actorId: string; toStage: LeadStage; createdAt: Date };
+export type MetricSaleEvent = { actorId: string; saleValue: MetricNumber; mrr: MetricNumber; occurredAt: Date };
 
 export type MetricFollowUp = {
   id?: string;
@@ -20,6 +23,8 @@ export type MetricLead = {
   wonAt?: Date | null;
   wonById?: string | null;
   activities: MetricActivity[];
+  stageHistory: MetricStageEvent[];
+  saleEvents: MetricSaleEvent[];
   followUps: MetricFollowUp[];
 };
 
@@ -68,8 +73,46 @@ function isSameDay(first: Date, second: Date) {
     && first.getDate() === second.getDate();
 }
 
-function stageEvent(activity: MetricActivity, stage: 'INTEREST' | 'FOLLOW_UP') {
-  return activity.note === `Etapa alterada para ${stage}.`;
+const emptyResults = (): MemberResults => ({ approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 });
+
+function resultsFor(leads: MetricLead[], range: DashboardRange) {
+  const personal: Record<string, MemberResults> = {};
+  const member = (id: string) => personal[id] ??= emptyResults();
+  let mrr = 0;
+  for (const lead of leads) {
+    for (const activity of lead.activities) {
+      if ((activity.type === 'CONTACT' || !activity.type) && inRange(activity.createdAt, range)) member(activity.actorId).approaches += 1;
+    }
+    const history = lead.stageHistory?.length ? lead.stageHistory : (lead.activities ?? []).flatMap((activity) => {
+      const match = activity.note?.match(/INTEREST|FOLLOW_UP/);
+      return match ? [{ actorId: activity.actorId, toStage: match[0] as LeadStage, createdAt: activity.createdAt }] : [];
+    });
+    for (const event of history) {
+      if (!inRange(event.createdAt, range)) continue;
+      if (event.toStage === 'INTEREST') member(event.actorId).interests += 1;
+      if (event.toStage === 'FOLLOW_UP') member(event.actorId).meetings += 1;
+    }
+    for (const sale of lead.saleEvents ?? []) {
+      if (!inRange(sale.occurredAt, range)) continue;
+      member(sale.actorId).sales += Number(sale.saleValue);
+      member(sale.actorId).won += 1;
+      mrr += Number(sale.mrr);
+    }
+    if (!(lead.saleEvents?.length) && lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range)) {
+      const owner = lead.wonById ?? 'unknown';
+      member(owner).sales += Number(lead.saleValue ?? 0);
+      member(owner).won += 1;
+      mrr += Number(lead.mrr ?? 0);
+    }
+  }
+  const team = Object.values(personal).reduce<MemberResults>((total, result) => ({
+    approaches: total.approaches + result.approaches,
+    interests: total.interests + result.interests,
+    meetings: total.meetings + result.meetings,
+    sales: total.sales + result.sales,
+    won: total.won + result.won
+  }), emptyResults());
+  return { personal, team, mrr };
 }
 
 function goalProgress(results: MemberResults, goal?: WeeklyGoalInput): GoalProgress {
@@ -83,55 +126,25 @@ function goalProgress(results: MemberResults, goal?: WeeklyGoalInput): GoalProgr
 }
 
 export function getDashboardMetrics(leads: MetricLead[], goals: WeeklyGoalInput[], range: DashboardRange): DashboardMetrics {
-  const won = leads.filter((lead) => lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range));
-  const sales = won.reduce((total, lead) => total + Number(lead.saleValue ?? 0), 0);
-  const mrr = won.reduce((total, lead) => total + Number(lead.mrr ?? 0), 0);
-  const activities = leads.flatMap((lead) => lead.activities.filter((activity) => inRange(activity.createdAt, range)));
-  const approaches = activities.length;
+  const { personal: personalResults, team: teamResults, mrr } = resultsFor(leads, range);
   const goalWeekStart = range.goalWeekStart ?? range.start;
+  const goalWeekEnd = new Date(goalWeekStart);
+  goalWeekEnd.setDate(goalWeekEnd.getDate() + 7);
+  const weekly = resultsFor(leads, { start: goalWeekStart, end: goalWeekEnd });
   const teamGoal = goals.find((goal) => goal.ownerId === null && isSameDay(goal.weekStart, goalWeekStart));
   const now = range.now ?? new Date();
   const pendingFollowUps = leads.flatMap((lead) => lead.followUps.filter((followUp) => followUp.state === 'PENDING'));
-  const personalResults: DashboardMetrics['personalResults'] = {};
-
-  for (const activity of activities) {
-    personalResults[activity.actorId] ??= { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 };
-    personalResults[activity.actorId].approaches += 1;
-  }
-
-  for (const lead of leads) {
-    for (const activity of lead.activities.filter((entry) => inRange(entry.createdAt, range))) {
-      personalResults[activity.actorId] ??= { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 };
-      if (stageEvent(activity, 'INTEREST')) personalResults[activity.actorId].interests += 1;
-      if (stageEvent(activity, 'FOLLOW_UP')) personalResults[activity.actorId].meetings += 1;
-    }
-  }
-
-  for (const lead of won) {
-    const actorId = lead.wonById;
-    if (!actorId) continue;
-    personalResults[actorId] ??= { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 };
-    personalResults[actorId].sales += Number(lead.saleValue ?? 0);
-    personalResults[actorId].won += 1;
-  }
-
-  const teamResults = Object.values(personalResults).reduce<MemberResults>((total, result) => ({
-    approaches: total.approaches + result.approaches,
-    interests: total.interests + result.interests,
-    meetings: total.meetings + result.meetings,
-    sales: total.sales + result.sales,
-    won: total.won + result.won
-  }), { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 });
-  const personalGoalProgress = Object.fromEntries(Object.entries(personalResults).map(([ownerId, result]) => [ownerId, goalProgress(result, goals.find((goal) => goal.ownerId === ownerId && isSameDay(goal.weekStart, goalWeekStart)))]));
+  const owners = new Set([...Object.keys(weekly.personal), ...goals.flatMap((goal) => goal.ownerId ? [goal.ownerId] : [])]);
+  const personalGoalProgress = Object.fromEntries([...owners].map((ownerId) => [ownerId, goalProgress(weekly.personal[ownerId] ?? emptyResults(), goals.find((goal) => goal.ownerId === ownerId && isSameDay(goal.weekStart, goalWeekStart)))]));
 
   return {
-    sales,
+    sales: teamResults.sales,
     mrr,
-    approaches,
+    approaches: teamResults.approaches,
     interests: teamResults.interests,
     meetings: teamResults.meetings,
-    won: won.length,
-    goalProgress: goalProgress(teamResults, teamGoal),
+    won: teamResults.won,
+    goalProgress: goalProgress(weekly.team, teamGoal),
     dueToday: pendingFollowUps.filter((followUp) => isSameDay(followUp.dueDate, now)),
     overdue: pendingFollowUps.filter((followUp) => followUp.dueDate < now && !isSameDay(followUp.dueDate, now)),
     personalResults,
