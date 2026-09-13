@@ -16,7 +16,7 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
   const [phoneOnly, setPhoneOnly] = useState(false);
   const [digitalPresence, setDigitalPresence] = useState(false);
   const [minScore, setMinScore] = useState('0');
-  const [maxScore, setMaxScore] = useState('50');
+  const [maxScore, setMaxScore] = useState('70');
   const [includeWorked, setIncludeWorked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -111,6 +111,7 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
             <option value="15">15 pontos</option>
             <option value="35">35 pontos</option>
             <option value="50">50 pontos</option>
+            <option value="70">70 pontos</option>
           </select>
         </label>
         <label className="grid gap-1 text-xs text-white/75">
