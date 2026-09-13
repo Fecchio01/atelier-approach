@@ -206,9 +206,9 @@ export const searchBusinesses = defaultSearchService.searchBusinesses;
 function buildOverpassQuery(input: SearchBusinessesInput, coordinates: { latitude: number; longitude: number }) {
   const radiusMeters = Math.round(input.radiusKm * 1_000);
   const around = `(around:${radiusMeters},${coordinates.latitude},${coordinates.longitude})`;
-  const mappedTag = mappedOsmTag(input.niche);
-  const selector = mappedTag
-    ? `nwr["${mappedTag.key}"="${mappedTag.value}"]${around};`
+  const mappedTags = mappedOsmTags(input.niche);
+  const selector = mappedTags.length
+    ? mappedTags.map((tag) => `nwr["${tag.key}"="${tag.value}"]${around};`).join('\n  ')
     : buildTextSelectors(escapeOverpassRegex(input.niche.trim()), around);
 
   return `[out:json][timeout:10];\n(\n  ${selector}\n);\nout center meta ${MAX_RESULTS};`;
@@ -218,15 +218,15 @@ function buildTextSelectors(niche: string, around: string) {
   return `nwr["name"~"${niche}",i]${around};\n  nwr["shop"~"${niche}",i]${around};\n  nwr["craft"~"${niche}",i]${around};`;
 }
 
-function mappedOsmTag(niche: string) {
+function mappedOsmTags(niche: string) {
   const normalized = normalizeText(niche);
   if (['lavagem', 'lava rapido', 'lava jato', 'estetica automotiva'].some((term) => normalized.includes(term))) {
-    return { key: 'amenity', value: 'car_wash' };
+    return [{ key: 'amenity', value: 'car_wash' }, { key: 'shop', value: 'car_repair' }];
   }
   if (['oficina', 'mecanica automotiva', 'reparo automotivo', 'reparacao automotiva'].some((term) => normalized.includes(term))) {
-    return { key: 'shop', value: 'car_repair' };
+    return [{ key: 'shop', value: 'car_repair' }, { key: 'amenity', value: 'car_wash' }];
   }
-  return null;
+  return [];
 }
 
 function normalizeBusiness(element: OverpassElement): ExternalBusiness[] {

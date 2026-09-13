@@ -6,10 +6,11 @@ export type BusinessScore = {
 };
 
 export function approachabilityRank(business: ExternalBusiness) {
-  if (business.whatsapp) return 0;
-  if (business.phone) return 1;
+  if (business.whatsapp && business.instagram) return 0;
+  if (business.whatsapp) return 1;
   if (business.instagram || business.website) return 2;
-  return 3;
+  if (business.phone) return 3;
+  return 4;
 }
 
 export function scoreBusiness(business: ExternalBusiness): BusinessScore {

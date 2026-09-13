@@ -57,8 +57,8 @@ export function LeadCard({ business, result }: LeadCardProps) {
           <p className="text-xs uppercase tracking-[0.18em] text-white/55">Prospect OSM</p>
           <h2 className="mt-1 text-xl font-semibold text-white">{business.name}</h2>
         </div>
-        <span className="rounded-full bg-[var(--atelier-green)] px-3 py-1 text-sm font-bold text-black">
-          {result.score} pts
+        <span className="rounded-full border border-[var(--atelier-green)]/60 px-3 py-1 text-xs font-semibold text-[var(--atelier-green)]">
+          {business.whatsapp ? 'WhatsApp disponível' : business.instagram ? 'Instagram disponível' : business.website ? 'Site disponível' : business.phone ? 'Telefone disponível' : 'Sem canal direto'}
         </span>
       </div>
 
