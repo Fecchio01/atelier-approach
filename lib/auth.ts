@@ -5,6 +5,9 @@ import { authenticateInternalUser } from './internal-auth';
 import { ensureMemberProfile } from './member-profile';
 
 export const { auth, handlers, signIn } = NextAuth({
+  // The internal app is routinely exercised on localhost and 127.0.0.1
+  // during local development and end-to-end checks.
+  trustHost: true,
   session: { strategy: 'jwt' },
   providers: [
     Credentials({
