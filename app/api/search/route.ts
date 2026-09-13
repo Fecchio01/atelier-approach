@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const businesses = await searchBusinesses({ niche, region, radiusKm, national });
+    const businesses = await searchBusinesses({ niche, region: region ?? '', radiusKm, national });
     const filteredBusinesses = businesses.filter((business) => matchesResearchFilters(business, filters));
     const existingLeads = await prisma.lead.findMany({
       where: { osmId: { in: filteredBusinesses.map((business) => business.osmId) } },
