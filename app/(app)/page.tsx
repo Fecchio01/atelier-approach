@@ -27,7 +27,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const range = rangeFor(period);
   const user = await getCurrentUser();
   const [leads, goals, profiles] = await Promise.all([
-    prisma.lead.findMany({ include: { activities: { select: { actorId: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }, followUps: { include: { lead: { select: { id: true, name: true } } } } } }),
+    prisma.lead.findMany({ include: { activities: { select: { actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }, stageHistory: true, saleEvents: true, followUps: { include: { lead: { select: { id: true, name: true } } } } } }),
     prisma.goal.findMany({ where: { weekStart: range.goalWeekStart } }), getMemberProfiles()
   ]);
   const weeklyGoals: WeeklyGoalInput[] = goals.map((goal) => ({ ownerId: goal.ownerId === '__team__' ? null : goal.ownerId, weekStart: goal.weekStart, approachesTarget: goal.approachesTarget, interestsTarget: goal.interestsTarget, meetingsTarget: goal.meetingsTarget, salesTarget: goal.salesTarget, revenueTarget: goal.revenueTarget }));

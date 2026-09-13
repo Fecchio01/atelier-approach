@@ -1,7 +1,7 @@
 import type { ActivityType, LeadStage } from '@prisma/client';
 import { prisma } from './db';
 
-export type MetricActivity = { actorId: string; type: ActivityType; createdAt: Date; note?: string };
+export type MetricActivity = { actorId: string; type?: ActivityType; createdAt: Date; note?: string };
 export type MetricStageEvent = { actorId: string; toStage: LeadStage; createdAt: Date };
 export type MetricSaleEvent = { actorId: string; saleValue: MetricNumber; mrr: MetricNumber; occurredAt: Date };
 
@@ -23,8 +23,8 @@ export type MetricLead = {
   wonAt?: Date | null;
   wonById?: string | null;
   activities: MetricActivity[];
-  stageHistory: MetricStageEvent[];
-  saleEvents: MetricSaleEvent[];
+  stageHistory?: MetricStageEvent[];
+  saleEvents?: MetricSaleEvent[];
   followUps: MetricFollowUp[];
 };
 
