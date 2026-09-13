@@ -153,9 +153,31 @@ describe('searchBusinesses', () => {
     const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
     await service.searchBusinesses({ niche: 'estética automotiva', region: 'Campinas, SP', radiusKm: 5 });
 
-    const overpassQuery = String(fetchMock.mock.calls[1]?.[1]?.body);
+    const overpassQuery = String(
+      fetchMock.mock.calls.find(([url]) => String(url).includes('/api/interpreter'))?.[1]?.body
+    );
     expect(overpassQuery).toContain('nwr["amenity"="car_wash"]');
     expect(overpassQuery).not.toContain('nwr["shop"="car_repair"]');
+  });
+
+  test('searches the whole selected state instead of a radius around its center', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ lat: '-22.9', lon: '-43.2' }]), { status: 200 })
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+
+    const overpassQuery = String(
+      fetchMock.mock.calls.find(([url]) => String(url).includes('/api/interpreter'))?.[1]?.body
+    );
+    expect(overpassQuery).toContain('area["name"="Rio de Janeiro"]["boundary"="administrative"]["admin_level"="4"]->.region;');
+    expect(overpassQuery).toContain('(area.region)');
+    expect(overpassQuery).not.toContain('around:');
   });
 
   test('shares a one-request-per-second slot across OSM services', async () => {

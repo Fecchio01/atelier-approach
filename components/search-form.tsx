@@ -12,7 +12,6 @@ type SearchFormProps = {
 export function SearchForm({ onResults, onFailure }: SearchFormProps) {
   const [niche, setNiche] = useState('');
   const [region, setRegion] = useState('');
-  const [radiusKm, setRadiusKm] = useState('5');
   const [phoneOnly, setPhoneOnly] = useState(false);
   const [digitalPresence, setDigitalPresence] = useState(false);
   const [minScore, setMinScore] = useState('0');
@@ -31,7 +30,6 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
       const params = new URLSearchParams({
         niche,
         region: isNational ? '' : region,
-        radiusKm,
         phoneOnly: String(phoneOnly),
         digitalPresence: String(digitalPresence),
         minScore,
@@ -56,7 +54,7 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
   }
 
   return (
-    <form aria-busy={isLoading} className="grid gap-4 rounded-2xl border border-white/15 bg-white/5 p-5 md:grid-cols-[1fr_1fr_8rem_auto] md:items-end" onSubmit={handleSubmit}>
+    <form aria-busy={isLoading} className="grid gap-4 rounded-2xl border border-white/15 bg-white/5 p-5 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleSubmit}>
       <label className="grid gap-2 text-sm font-medium">
         Nicho
         <input
@@ -82,20 +80,6 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
           <option value="Brasil">Brasil inteiro</option>
         </select>
       </label>
-      {!isNational ? (
-        <label className="grid gap-2 text-sm font-medium">
-          Raio (km)
-          <input
-            required
-            min="1"
-            max="50"
-            type="number"
-            value={radiusKm}
-            onChange={(event) => setRadiusKm(event.target.value)}
-            className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none focus:border-[var(--atelier-green)]"
-          />
-        </label>
-      ) : null}
       <button
         type="submit"
         disabled={isLoading}

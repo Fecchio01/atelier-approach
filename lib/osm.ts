@@ -8,6 +8,11 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
 const MAX_RESULTS = 50;
 const CACHE_TTL_MS = 5 * 60_000;
+const STATE_AREA_NAMES: Record<string, string> = {
+  'Rio de Janeiro, RJ': 'Rio de Janeiro',
+  'Bahia, BA': 'Bahia',
+  'São Paulo, SP': 'São Paulo'
+};
 
 export type ExternalBusiness = {
   osmId: string;
@@ -99,12 +104,13 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
   const geocodeCache = new Map<string, CachedValue<{ latitude: number; longitude: number }>>();
 
   async function searchBusinesses(input: SearchBusinessesInput): Promise<ExternalBusiness[]> {
-    const cacheKey = `${normalizeText(input.niche)}|${normalizeText(input.region)}|${input.radiusKm}`;
+    const cacheKey = `${normalizeText(input.niche)}|${normalizeText(input.region)}|${input.national ? 'national' : input.radiusKm}`;
     const cached = getCached(searchCache, cacheKey);
     if (cached) return cached;
 
-    const coordinates = input.national ? null : await geocodeRegion(input.region);
-    const payload = await fetchOverpass(buildOverpassQuery(input, coordinates));
+    const stateAreaName = input.national ? null : STATE_AREA_NAMES[input.region] ?? null;
+    const coordinates = input.national || stateAreaName ? null : await geocodeRegion(input.region);
+    const payload = await fetchOverpass(buildOverpassQuery(input, coordinates, stateAreaName));
     if (!Array.isArray(payload.elements)) throw new OsmUnavailableError();
 
     const businesses = await enrichBusinesses(payload.elements.flatMap(normalizeBusiness));
@@ -204,14 +210,24 @@ const defaultSearchService = createOsmSearchService();
 
 export const searchBusinesses = defaultSearchService.searchBusinesses;
 
-function buildOverpassQuery(input: SearchBusinessesInput, coordinates: { latitude: number; longitude: number } | null) {
+function buildOverpassQuery(
+  input: SearchBusinessesInput,
+  coordinates: { latitude: number; longitude: number } | null,
+  stateAreaName: string | null
+) {
   const radiusMeters = Math.round(input.radiusKm * 1_000);
-  const around = coordinates ? `(around:${radiusMeters},${coordinates.latitude},${coordinates.longitude})` : '(area.br)';
+  const around = coordinates
+    ? `(around:${radiusMeters},${coordinates.latitude},${coordinates.longitude})`
+    : stateAreaName ? '(area.region)' : '(area.br)';
   const mappedTags = mappedOsmTags(input.niche);
   const selector = mappedTags.length
     ? mappedTags.map((tag) => `nwr["${tag.key}"="${tag.value}"]${around};`).join('\n  ')
     : buildTextSelectors(escapeOverpassRegex(input.niche.trim()), around);
-  const area = input.national ? 'area["ISO3166-1"="BR"][admin_level=2]->.br;\n' : '';
+  const area = input.national
+    ? 'area["ISO3166-1"="BR"][admin_level=2]->.br;\n'
+    : stateAreaName
+      ? `area["name"="${stateAreaName}"]["boundary"="administrative"]["admin_level"="4"]->.region;\n`
+      : '';
   return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center meta ${MAX_RESULTS};`;
 }
 
