@@ -141,6 +141,23 @@ describe('searchBusinesses', () => {
     );
   });
 
+  test('does not mix vehicle repair businesses into an automotive aesthetics search', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ lat: '-22.9', lon: '-47.06' }]), { status: 200 })
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await service.searchBusinesses({ niche: 'estética automotiva', region: 'Campinas, SP', radiusKm: 5 });
+
+    const overpassQuery = String(fetchMock.mock.calls[1]?.[1]?.body);
+    expect(overpassQuery).toContain('nwr["amenity"="car_wash"]');
+    expect(overpassQuery).not.toContain('nwr["shop"="car_repair"]');
+  });
+
   test('shares a one-request-per-second slot across OSM services', async () => {
     let now = 0;
     const waits: number[] = [];

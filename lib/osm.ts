@@ -222,10 +222,10 @@ function buildTextSelectors(niche: string, around: string) {
 function mappedOsmTags(niche: string) {
   const normalized = normalizeText(niche);
   if (['lavagem', 'lava rapido', 'lava jato', 'estetica automotiva'].some((term) => normalized.includes(term))) {
-    return [{ key: 'amenity', value: 'car_wash' }, { key: 'shop', value: 'car_repair' }];
+    return [{ key: 'amenity', value: 'car_wash' }];
   }
   if (['oficina', 'mecanica automotiva', 'reparo automotivo', 'reparacao automotiva'].some((term) => normalized.includes(term))) {
-    return [{ key: 'shop', value: 'car_repair' }, { key: 'amenity', value: 'car_wash' }];
+    return [{ key: 'shop', value: 'car_repair' }];
   }
   return [];
 }
