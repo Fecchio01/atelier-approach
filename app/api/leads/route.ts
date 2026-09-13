@@ -9,6 +9,11 @@ type BusinessInput = {
   phone?: unknown;
   website?: unknown;
   instagram?: unknown;
+  whatsapp?: unknown;
+  address?: unknown;
+  category?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
 };
 
 function optionalText(value: unknown) {
@@ -47,6 +52,12 @@ export async function POST(request: Request) {
           phone: optionalText(business?.phone),
           website: optionalText(business?.website),
           instagram: optionalText(business?.instagram),
+          whatsapp: optionalText(business?.whatsapp),
+          address: optionalText(business?.address),
+          category: optionalText(business?.category),
+          latitude: typeof business?.latitude === 'number' ? business.latitude : null,
+          longitude: typeof business?.longitude === 'number' ? business.longitude : null,
+          syncedAt: new Date(),
           stage: 'CONTACTED'
         }
       });

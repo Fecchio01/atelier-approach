@@ -50,6 +50,12 @@ model Lead {
   phone     String?
   website   String?
   instagram String?
+  whatsapp  String?
+  address   String?
+  category  String?
+  latitude  Float?
+  longitude Float?
+  syncedAt  DateTime?
   stage     LeadStage  @default(NEW)
   saleValue Decimal?
   mrr       Decimal?

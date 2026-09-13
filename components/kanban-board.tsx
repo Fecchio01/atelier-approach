@@ -11,6 +11,12 @@ type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
 export type CrmLead = {
   id: string;
   name: string | null;
+  phone: string | null;
+  website: string | null;
+  instagram: string | null;
+  whatsapp: string | null;
+  address: string | null;
+  category: string | null;
   osmId: string;
   stage: Stage;
   saleValue: string | null;
@@ -135,6 +141,7 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
         <div>
           <h2 className="font-semibold">{lead.name ?? lead.osmId}</h2>
           <p className="break-all text-xs text-white/45">{lead.osmId}</p>
+          <dl className="mt-2 grid gap-1 text-xs text-white/60"><div>Telefone: {lead.phone ?? 'Não informado'}</div><div>WhatsApp: {lead.whatsapp ?? 'Não informado'}</div><div>Site: {lead.website ?? 'Não informado'}</div><div>Instagram: {lead.instagram ?? 'Não informado'}</div><div>{lead.category ?? 'Categoria não informada'} · {lead.address ?? 'Endereço não informado'}</div></dl>
         </div>
         {lead.activities.length ? (
           <ol className="grid gap-2 text-sm text-white/70" aria-label="Histórico de atividades">
