@@ -95,6 +95,30 @@ describe('searchBusinesses', () => {
     );
   });
 
+  test('retries a failed Overpass request on the fallback endpoint', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ lat: '-22.9', lon: '-47.06' }]), { status: 200 })
+      )
+      .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            elements: [{ type: 'node', id: 201, lat: -22.9, lon: -47.06, tags: { name: 'Oficina alternativa' } }]
+          }),
+          { status: 200 }
+        )
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    await expect(service.searchBusinesses({ niche: 'oficina', region: 'Campinas', radiusKm: 5 })).resolves.toEqual([
+      expect.objectContaining({ osmId: 'node/201', name: 'Oficina alternativa' })
+    ]);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('https://overpass.kumi.systems/api/interpreter');
+  });
+
   test('maps Portuguese automotive niches to their canonical OSM tags', async () => {
     const fetchMock = vi
       .fn()

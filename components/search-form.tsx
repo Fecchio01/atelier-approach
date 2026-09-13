@@ -120,6 +120,7 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
             <option value="15">15 pontos</option>
             <option value="35">35 pontos</option>
             <option value="50">50 pontos</option>
+            <option value="70">70 pontos</option>
           </select>
         </label>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">

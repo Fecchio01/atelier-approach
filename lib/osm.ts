@@ -1,4 +1,7 @@
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
 const MAX_RESULTS = 50;
@@ -97,30 +100,33 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     if (cached) return cached;
 
     const coordinates = await geocodeRegion(input.region);
-    let response: Response;
-    try {
-      response = await scheduler.schedule(() => fetch(OVERPASS_URL, {
-        method: 'POST',
-        body: buildOverpassQuery(input, coordinates),
-        signal: AbortSignal.timeout(12_000),
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'User-Agent': USER_AGENT }
-      }));
-    } catch {
-      throw new OsmUnavailableError();
-    }
-    if (!response.ok) throw new OsmUnavailableError();
-
-    let payload: OverpassResponse;
-    try {
-      payload = (await response.json()) as OverpassResponse;
-    } catch {
-      throw new OsmUnavailableError();
-    }
+    const payload = await fetchOverpass(buildOverpassQuery(input, coordinates));
     if (!Array.isArray(payload.elements)) throw new OsmUnavailableError();
 
     const businesses = payload.elements.flatMap(normalizeBusiness);
     setCached(searchCache, cacheKey, businesses);
     return businesses;
+  }
+
+  async function fetchOverpass(query: string): Promise<OverpassResponse> {
+    for (const url of OVERPASS_URLS) {
+      try {
+        const response = await scheduler.schedule(() => fetch(url, {
+          method: 'POST',
+          body: query,
+          signal: AbortSignal.timeout(12_000),
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'User-Agent': USER_AGENT }
+        }));
+        if (!response.ok) continue;
+
+        const payload = (await response.json()) as OverpassResponse;
+        if (Array.isArray(payload.elements)) return payload;
+      } catch {
+        // Try the alternate public Overpass endpoint before surfacing an error.
+      }
+    }
+
+    throw new OsmUnavailableError();
   }
 
   async function geocodeRegion(region: string) {
