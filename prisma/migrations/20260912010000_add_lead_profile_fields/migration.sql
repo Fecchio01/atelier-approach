@@ -1,0 +1,6 @@
+ALTER TABLE "Lead" ADD COLUMN "whatsapp" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "address" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "category" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "latitude" REAL;
+ALTER TABLE "Lead" ADD COLUMN "longitude" REAL;
+ALTER TABLE "Lead" ADD COLUMN "syncedAt" DATETIME;
