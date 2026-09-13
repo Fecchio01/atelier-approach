@@ -27,9 +27,10 @@ export async function GET(request: Request) {
   const niche = searchParams.get('niche')?.trim();
   const region = searchParams.get('region')?.trim();
   const radiusKm = Number(searchParams.get('radiusKm'));
+  const national = searchParams.get('national') === 'true';
   const filters = parseResearchFilters(searchParams);
 
-  if (!niche || !region || !Number.isFinite(radiusKm) || radiusKm < 1 || radiusKm > 50 || !filters) {
+  if (!niche || (!national && !region) || !Number.isFinite(radiusKm) || radiusKm < 1 || radiusKm > 50 || !filters) {
     return Response.json(
       { error: 'Informe nicho, região e um raio entre 1 e 50 km.' },
       { status: 400 }
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const businesses = await searchBusinesses({ niche, region, radiusKm });
+    const businesses = await searchBusinesses({ niche, region, radiusKm, national });
     const filteredBusinesses = businesses.filter((business) => matchesResearchFilters(business, filters));
     const existingLeads = await prisma.lead.findMany({
       where: { osmId: { in: filteredBusinesses.map((business) => business.osmId) } },

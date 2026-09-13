@@ -18,6 +18,7 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
   const [minScore, setMinScore] = useState('0');
   const [maxScore, setMaxScore] = useState('70');
   const [includeWorked, setIncludeWorked] = useState(false);
+  const [national, setNational] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -36,6 +37,7 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
         minScore,
         maxScore,
         includeWorked: String(includeWorked)
+        ,national: String(national)
       });
       const response = await fetch(`/api/search?${params}`);
       const payload = (await response.json()) as { businesses?: ExternalBusiness[]; error?: string };
@@ -99,6 +101,10 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
           <input checked={phoneOnly} onChange={(event) => setPhoneOnly(event.target.checked)} type="checkbox" />
           Somente com telefone
+        </label>
+        <label className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/50 px-3 text-[var(--atelier-green)]">
+          <input checked={national} onChange={(event) => setNational(event.target.checked)} type="checkbox" />
+          Brasil inteiro
         </label>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
           <input checked={digitalPresence} onChange={(event) => setDigitalPresence(event.target.checked)} type="checkbox" />

@@ -30,6 +30,7 @@ export type SearchBusinessesInput = {
   niche: string;
   region: string;
   radiusKm: number;
+  national?: boolean;
 };
 
 type OverpassElement = {
@@ -102,7 +103,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     const cached = getCached(searchCache, cacheKey);
     if (cached) return cached;
 
-    const coordinates = await geocodeRegion(input.region);
+    const coordinates = input.national ? null : await geocodeRegion(input.region);
     const payload = await fetchOverpass(buildOverpassQuery(input, coordinates));
     if (!Array.isArray(payload.elements)) throw new OsmUnavailableError();
 
@@ -203,15 +204,15 @@ const defaultSearchService = createOsmSearchService();
 
 export const searchBusinesses = defaultSearchService.searchBusinesses;
 
-function buildOverpassQuery(input: SearchBusinessesInput, coordinates: { latitude: number; longitude: number }) {
+function buildOverpassQuery(input: SearchBusinessesInput, coordinates: { latitude: number; longitude: number } | null) {
   const radiusMeters = Math.round(input.radiusKm * 1_000);
-  const around = `(around:${radiusMeters},${coordinates.latitude},${coordinates.longitude})`;
+  const around = coordinates ? `(around:${radiusMeters},${coordinates.latitude},${coordinates.longitude})` : '(area.br)';
   const mappedTags = mappedOsmTags(input.niche);
   const selector = mappedTags.length
     ? mappedTags.map((tag) => `nwr["${tag.key}"="${tag.value}"]${around};`).join('\n  ')
     : buildTextSelectors(escapeOverpassRegex(input.niche.trim()), around);
-
-  return `[out:json][timeout:10];\n(\n  ${selector}\n);\nout center meta ${MAX_RESULTS};`;
+  const area = input.national ? 'area["ISO3166-1"="BR"][admin_level=2]->.br;\n' : '';
+  return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center meta ${MAX_RESULTS};`;
 }
 
 function buildTextSelectors(niche: string, around: string) {
