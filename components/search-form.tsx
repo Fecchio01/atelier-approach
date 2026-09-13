@@ -18,9 +18,9 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
   const [minScore, setMinScore] = useState('0');
   const [maxScore, setMaxScore] = useState('70');
   const [includeWorked, setIncludeWorked] = useState(false);
-  const [national, setNational] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const isNational = region === 'Brasil';
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,14 +30,14 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
     try {
       const params = new URLSearchParams({
         niche,
-        region,
+        region: isNational ? '' : region,
         radiusKm,
         phoneOnly: String(phoneOnly),
         digitalPresence: String(digitalPresence),
         minScore,
         maxScore,
-        includeWorked: String(includeWorked)
-        ,national: String(national)
+        includeWorked: String(includeWorked),
+        national: String(isNational)
       });
       const response = await fetch(`/api/search?${params}`);
       const payload = (await response.json()) as { businesses?: ExternalBusiness[]; error?: string };
@@ -69,26 +69,33 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
       </label>
       <label className="grid gap-2 text-sm font-medium">
         Região
-        <input
+        <select
           required
           value={region}
           onChange={(event) => setRegion(event.target.value)}
-          placeholder="Ex.: Campinas, SP"
           className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none placeholder:text-white/40 focus:border-[var(--atelier-green)]"
-        />
+        >
+          <option value="">Selecione uma região</option>
+          <option value="Rio de Janeiro, RJ">Rio de Janeiro</option>
+          <option value="Bahia, BA">Bahia</option>
+          <option value="São Paulo, SP">São Paulo</option>
+          <option value="Brasil">Brasil inteiro</option>
+        </select>
       </label>
-      <label className="grid gap-2 text-sm font-medium">
-        Raio (km)
-        <input
-          required
-          min="1"
-          max="50"
-          type="number"
-          value={radiusKm}
-          onChange={(event) => setRadiusKm(event.target.value)}
-          className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none focus:border-[var(--atelier-green)]"
-        />
-      </label>
+      {!isNational ? (
+        <label className="grid gap-2 text-sm font-medium">
+          Raio (km)
+          <input
+            required
+            min="1"
+            max="50"
+            type="number"
+            value={radiusKm}
+            onChange={(event) => setRadiusKm(event.target.value)}
+            className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none focus:border-[var(--atelier-green)]"
+          />
+        </label>
+      ) : null}
       <button
         type="submit"
         disabled={isLoading}
@@ -101,10 +108,6 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
           <input checked={phoneOnly} onChange={(event) => setPhoneOnly(event.target.checked)} type="checkbox" />
           Somente com telefone
-        </label>
-        <label className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/50 px-3 text-[var(--atelier-green)]">
-          <input checked={national} onChange={(event) => setNational(event.target.checked)} type="checkbox" />
-          Brasil inteiro
         </label>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
           <input checked={digitalPresence} onChange={(event) => setDigitalPresence(event.target.checked)} type="checkbox" />
