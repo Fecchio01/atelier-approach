@@ -26,7 +26,8 @@ describe('searchBusinesses', () => {
                   name: 'Auto Brilho',
                   'contact:phone': '+55 19 99999-9999',
                   'contact:website': 'https://autobrilho.example',
-                  'contact:instagram': '@autobrilho'
+                  'contact:instagram': '@autobrilho',
+                  image: 'https://autobrilho.example/fachada.jpg'
                 }
               },
               {
@@ -59,7 +60,7 @@ describe('searchBusinesses', () => {
     });
 
     expect(businesses).toContainEqual(expect.objectContaining({
-      osmId: 'node/100', name: 'Auto Brilho', phone: '+55 19 99999-9999', website: 'https://autobrilho.example', instagram: '@autobrilho'
+      osmId: 'node/100', name: 'Auto Brilho', phone: '+55 19 99999-9999', website: 'https://autobrilho.example', instagram: '@autobrilho', imageUrl: 'https://autobrilho.example/fachada.jpg'
     }));
     expect(businesses).toContainEqual(expect.objectContaining({
       osmId: 'way/101', name: 'Brilho Express', phone: '+55 19 98888-8888', website: 'https://brilhoexpress.example', instagram: '@brilhoexpress'
@@ -176,6 +177,26 @@ describe('searchBusinesses', () => {
       fetchMock.mock.calls.find(([url]) => String(url).includes('/api/interpreter'))?.[1]?.body
     );
     expect(overpassQuery).toContain('area["name"="Rio de Janeiro"]["boundary"="administrative"]["admin_level"="4"]->.region;');
+    expect(overpassQuery).toContain('(area.region)');
+    expect(overpassQuery).not.toContain('around:');
+  });
+
+  test('narrows a state search to the whole selected city when requested', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await service.searchBusinesses({
+      niche: 'estética automotiva',
+      region: 'Rio de Janeiro, RJ',
+      city: 'Niterói, RJ',
+      radiusKm: 5
+    });
+
+    const overpassQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(overpassQuery).toContain('area["name"="Niterói"]["boundary"="administrative"]["admin_level"="8"]->.region;');
     expect(overpassQuery).toContain('(area.region)');
     expect(overpassQuery).not.toContain('around:');
   });

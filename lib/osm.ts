@@ -6,7 +6,7 @@ const OVERPASS_URLS = [
 ];
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
-const MAX_RESULTS = 50;
+const MAX_RESULTS = 500;
 const CACHE_TTL_MS = 5 * 60_000;
 const STATE_AREA_NAMES: Record<string, string> = {
   'Rio de Janeiro, RJ': 'Rio de Janeiro',
@@ -34,6 +34,7 @@ export type ExternalBusiness = {
 export type SearchBusinessesInput = {
   niche: string;
   region: string;
+  city?: string;
   radiusKm: number;
   national?: boolean;
 };
@@ -104,13 +105,14 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
   const geocodeCache = new Map<string, CachedValue<{ latitude: number; longitude: number }>>();
 
   async function searchBusinesses(input: SearchBusinessesInput): Promise<ExternalBusiness[]> {
-    const cacheKey = `${normalizeText(input.niche)}|${normalizeText(input.region)}|${input.national ? 'national' : input.radiusKm}`;
+    const cacheKey = `${normalizeText(input.niche)}|${normalizeText(input.region)}|${normalizeText(input.city ?? '')}|${input.national ? 'national' : input.radiusKm}`;
     const cached = getCached(searchCache, cacheKey);
     if (cached) return cached;
 
-    const stateAreaName = input.national ? null : STATE_AREA_NAMES[input.region] ?? null;
-    const coordinates = input.national || stateAreaName ? null : await geocodeRegion(input.region);
-    const payload = await fetchOverpass(buildOverpassQuery(input, coordinates, stateAreaName));
+    const areaName = input.national ? null : input.city ? stripPlaceSuffix(input.city) : STATE_AREA_NAMES[input.region] ?? null;
+    const areaLevel = input.city ? '8' : '4';
+    const coordinates = input.national || areaName ? null : await geocodeRegion(input.region);
+    const payload = await fetchOverpass(buildOverpassQuery(input, coordinates, areaName, areaLevel));
     if (!Array.isArray(payload.elements)) throw new OsmUnavailableError();
 
     const businesses = await enrichBusinesses(payload.elements.flatMap(normalizeBusiness));
@@ -198,7 +200,7 @@ async function enrichBusinesses(businesses: ExternalBusiness[]) {
         whatsapp: business.whatsapp ?? contacts.whatsapp,
         instagram: business.instagram ?? contacts.instagram,
         website: business.website ?? contacts.website,
-        imageUrl: contacts.imageUrl
+        imageUrl: contacts.imageUrl ?? business.imageUrl
       };
     }));
     enriched.push(...batch);
@@ -213,22 +215,27 @@ export const searchBusinesses = defaultSearchService.searchBusinesses;
 function buildOverpassQuery(
   input: SearchBusinessesInput,
   coordinates: { latitude: number; longitude: number } | null,
-  stateAreaName: string | null
+  areaName: string | null,
+  areaLevel: string
 ) {
   const radiusMeters = Math.round(input.radiusKm * 1_000);
   const around = coordinates
     ? `(around:${radiusMeters},${coordinates.latitude},${coordinates.longitude})`
-    : stateAreaName ? '(area.region)' : '(area.br)';
+    : areaName ? '(area.region)' : '(area.br)';
   const mappedTags = mappedOsmTags(input.niche);
   const selector = mappedTags.length
     ? mappedTags.map((tag) => `nwr["${tag.key}"="${tag.value}"]${around};`).join('\n  ')
     : buildTextSelectors(escapeOverpassRegex(input.niche.trim()), around);
   const area = input.national
     ? 'area["ISO3166-1"="BR"][admin_level=2]->.br;\n'
-    : stateAreaName
-      ? `area["name"="${stateAreaName}"]["boundary"="administrative"]["admin_level"="4"]->.region;\n`
+    : areaName
+      ? `area["name"="${escapeOverpassRegex(areaName)}"]["boundary"="administrative"]["admin_level"="${areaLevel}"]->.region;\n`
       : '';
   return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center meta ${MAX_RESULTS};`;
+}
+
+function stripPlaceSuffix(place: string) {
+  return place.replace(/,\s*[A-Z]{2}$/u, '').trim();
 }
 
 function buildTextSelectors(niche: string, around: string) {
@@ -256,6 +263,7 @@ function normalizeBusiness(element: OverpassElement): ExternalBusiness[] {
     website: contactValue(element.tags, 'website'),
     instagram: contactValue(element.tags, 'instagram'),
     whatsapp: contactValue(element.tags, 'whatsapp'),
+    imageUrl: element.tags?.image?.trim() || null,
     address: addressValue(element.tags),
     category: categoryValue(element.tags),
     latitude: coordinateValue(element.lat ?? element.center?.lat),
