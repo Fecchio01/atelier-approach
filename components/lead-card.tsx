@@ -17,8 +17,9 @@ export function LeadCard({ business, result }: LeadCardProps) {
   const [note, setNote] = useState('Abordagem iniciada a partir da pesquisa.');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const whatsappHref = toWhatsAppHref(business.whatsapp);
+  const whatsappHref = toWhatsAppHref(business.whatsapp ?? business.phone);
   const instagramHref = toInstagramHref(business.instagram);
+  const websiteHref = toWebsiteHref(business.website);
 
   async function saveApproach() {
     setError(null);
@@ -62,12 +63,12 @@ export function LeadCard({ business, result }: LeadCardProps) {
         </span>
       </div>
 
-      {whatsappHref || business.phone || instagramHref || business.website ? (
+      {whatsappHref || business.phone || instagramHref || websiteHref ? (
         <div className="flex flex-wrap gap-2">
           {whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label={`Abrir WhatsApp de ${business.name}`} className="rounded-lg bg-[var(--atelier-green)] px-3 py-2 text-sm font-semibold text-black">WhatsApp</a> : null}
           {business.phone ? <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} aria-label={`Ligar para ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Ligar</a> : null}
           {instagramHref ? <a href={instagramHref} target="_blank" rel="noreferrer" aria-label={`Abrir Instagram de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Instagram</a> : null}
-          {business.website ? <a href={business.website} target="_blank" rel="noreferrer" aria-label={`Abrir site de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Site</a> : null}
+          {websiteHref ? <a href={websiteHref} target="_blank" rel="noreferrer" aria-label={`Abrir site de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Site</a> : null}
         </div>
       ) : null}
 
@@ -76,19 +77,19 @@ export function LeadCard({ business, result }: LeadCardProps) {
         {business.category ? <div><dt className="text-white/45">Categoria OSM</dt><dd>{business.category}</dd></div> : null}
         <div>
           <dt className="text-white/45">Telefone</dt>
-          <dd>{business.phone ?? 'Não informado'}</dd>
+          <dd>{business.phone ? <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} className="underline underline-offset-2 hover:text-white">{business.phone}</a> : 'Não informado'}</dd>
         </div>
         <div>
           <dt className="text-white/45">Site</dt>
-          <dd>{business.website ?? 'Não informado'}</dd>
+          <dd>{websiteHref ? <a href={websiteHref} target="_blank" rel="noreferrer" className="break-all underline underline-offset-2 hover:text-white">{business.website}</a> : 'Não informado'}</dd>
         </div>
         <div>
           <dt className="text-white/45">Instagram</dt>
-          <dd>{business.instagram ?? 'Não informado'}</dd>
+          <dd>{instagramHref ? <a href={instagramHref} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">{business.instagram}</a> : 'Não informado'}</dd>
         </div>
         <div>
           <dt className="text-white/45">WhatsApp</dt>
-          <dd>{business.whatsapp ?? 'Não informado'}</dd>
+          <dd>{whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">{business.whatsapp ?? business.phone}</a> : 'Não informado'}</dd>
         </div>
         {business.latitude !== undefined && business.longitude !== undefined && business.latitude !== null && business.longitude !== null ? <div><dt className="text-white/45">Coordenadas</dt><dd>{business.latitude}, {business.longitude}</dd></div> : null}
         {business.lastSyncedAt ? <div><dt className="text-white/45">Última atualização OSM</dt><dd>{new Date(business.lastSyncedAt).toLocaleString('pt-BR')}</dd></div> : null}
@@ -152,6 +153,17 @@ function toWhatsAppHref(value: string | null | undefined) {
 function toInstagramHref(value: string | null | undefined) {
   if (!value) return null;
   if (/^https?:\/\/(www\.)?instagram\.com\//i.test(value)) return value;
+  if (/^(www\.)?instagram\.com\//i.test(value)) return `https://${value}`;
   const handle = value.replace(/^@/, '').trim();
   return handle ? `https://instagram.com/${handle}` : null;
+}
+
+function toWebsiteHref(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }

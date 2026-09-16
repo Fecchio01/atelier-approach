@@ -115,7 +115,14 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     const payload = await fetchOverpass(buildOverpassQuery(input, coordinates, areaName, areaLevel));
     if (!Array.isArray(payload.elements)) throw new OsmUnavailableError();
 
-    const businesses = await enrichBusinesses(payload.elements.flatMap(normalizeBusiness));
+    const supplementalBusinesses = areaName || input.national
+      ? await fetchDetailingRepairBusinesses(input, coordinates, areaName, areaLevel)
+      : [];
+    const normalizedBusinesses = [...payload.elements.flatMap(normalizeBusiness), ...supplementalBusinesses];
+    const relevantBusinesses = isAutomotiveAestheticsNiche(input.niche)
+      ? normalizedBusinesses.filter((business) => !isAutomotiveNoise(business.name))
+      : normalizedBusinesses;
+    const businesses = await enrichBusinesses(dedupeBusinesses(relevantBusinesses));
     setCached(searchCache, cacheKey, businesses);
     return businesses;
   }
@@ -139,6 +146,28 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     }
 
     throw new OsmUnavailableError();
+  }
+
+  async function fetchDetailingRepairBusinesses(
+    input: SearchBusinessesInput,
+    coordinates: { latitude: number; longitude: number } | null,
+    areaName: string | null,
+    areaLevel: string
+  ) {
+    try {
+      const payload = await fetchOverpass(buildOverpassQuery(
+        input,
+        coordinates,
+        areaName,
+        areaLevel,
+        'nwr["shop"="car_repair"]'
+      ));
+      return (payload.elements ?? [])
+        .flatMap(normalizeBusiness)
+        .filter((business) => business.category === 'car_repair' && isDetailingCandidate(business.name));
+    } catch {
+      return [];
+    }
   }
 
   async function geocodeRegion(region: string) {
@@ -216,14 +245,19 @@ function buildOverpassQuery(
   input: SearchBusinessesInput,
   coordinates: { latitude: number; longitude: number } | null,
   areaName: string | null,
-  areaLevel: string
+  areaLevel: string,
+  selectorOverride?: string
 ) {
   const radiusMeters = Math.round(input.radiusKm * 1_000);
   const around = coordinates
     ? `(around:${radiusMeters},${coordinates.latitude},${coordinates.longitude})`
     : areaName ? '(area.region)' : '(area.br)';
   const mappedTags = mappedOsmTags(input.niche);
-  const selector = mappedTags.length
+  const selector = selectorOverride
+    ? `${selectorOverride}${around};`
+    : isAutomotiveAestheticsNiche(input.niche)
+    ? buildAutomotiveAestheticsSelectors(around)
+    : mappedTags.length
     ? mappedTags.map((tag) => `nwr["${tag.key}"="${tag.value}"]${around};`).join('\n  ')
     : buildTextSelectors(escapeOverpassRegex(input.niche.trim()), around);
   const area = input.national
@@ -234,8 +268,32 @@ function buildOverpassQuery(
   return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center tags ${MAX_RESULTS};`;
 }
 
+function buildAutomotiveAestheticsSelectors(around: string) {
+  return [
+    `nwr["amenity"="car_wash"]${around};`,
+    `nwr["service:vehicle:car_wash"="yes"]${around};`
+  ].join('\n  ');
+}
+
 function stripPlaceSuffix(place: string) {
   return place.replace(/,\s*[A-Z]{2}$/u, '').trim();
+}
+
+function dedupeBusinesses(businesses: ExternalBusiness[]) {
+  return [...new Map(businesses.map((business) => [business.osmId, business])).values()];
+}
+
+function isAutomotiveAestheticsNiche(niche: string) {
+  const normalized = normalizeText(niche);
+  return normalized.includes('estetica automotiva') || normalized.includes('lavagem') || normalized.includes('lava jato');
+}
+
+function isAutomotiveNoise(name: string) {
+  return /rastre|monitoramento|moto\s*-?\s*taxi|\btaxi\b|\bgps\b/i.test(normalizeText(name));
+}
+
+function isDetailingCandidate(name: string) {
+  return /lavagem|lava\s*-?\s*jato|estetica|detailing|poliment|brilho|car\s*-?\s*wash|higieniz/.test(normalizeText(name));
 }
 
 function buildTextSelectors(niche: string, around: string) {

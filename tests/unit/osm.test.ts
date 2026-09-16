@@ -193,6 +193,33 @@ describe('searchBusinesses', () => {
     expect(overpassQuery).not.toContain('out center meta');
   });
 
+  test('includes service tags used by unmapped automotive detailers', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+
+    const overpassQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(overpassQuery).toContain('nwr["service:vehicle:car_wash"="yes"]');
+  });
+
+  test('supplements state results with repair-tagged businesses that clearly advertise detailing', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [{ type: 'node', id: 990, tags: { name: 'Lava Jato Brilho', shop: 'car_repair' } }]
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 }))
+      .resolves.toEqual([expect.objectContaining({ osmId: 'node/990', name: 'Lava Jato Brilho' })]);
+
+    const supplementalQuery = String(fetchMock.mock.calls[1]?.[1]?.body);
+    expect(supplementalQuery).toContain('nwr["shop"="car_repair"]');
+  });
+
   test('narrows a state search to the whole selected city when requested', async () => {
     const fetchMock = vi
       .fn()
