@@ -7,12 +7,20 @@ const OVERPASS_URLS = [
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
 const MAX_RESULTS = 500;
+const NATIONAL_SEARCH_BUDGET_MS = 45_000;
+const NATIONAL_REQUEST_TIMEOUT_MS = 8_000;
 const CACHE_TTL_MS = 5 * 60_000;
 const STATE_AREA_NAMES: Record<string, string> = {
   'Rio de Janeiro, RJ': 'Rio de Janeiro',
   'Bahia, BA': 'Bahia',
   'São Paulo, SP': 'São Paulo'
 };
+const NATIONAL_STATE_NAMES = [
+  'São Paulo', 'Rio de Janeiro', 'Minas Gerais', 'Bahia', 'Paraná', 'Rio Grande do Sul', 'Santa Catarina',
+  'Pernambuco', 'Ceará', 'Goiás', 'Pará', 'Maranhão', 'Espírito Santo', 'Paraíba', 'Amazonas', 'Mato Grosso',
+  'Rio Grande do Norte', 'Alagoas', 'Piauí', 'Distrito Federal', 'Mato Grosso do Sul', 'Sergipe', 'Rondônia',
+  'Tocantins', 'Acre', 'Amapá', 'Roraima'
+] as const;
 
 export type ExternalBusiness = {
   osmId: string;
@@ -109,6 +117,12 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     const cached = getCached(searchCache, cacheKey);
     if (cached) return cached;
 
+    if (input.national) {
+      const businesses = await searchNationalBusinesses(input);
+      setCached(searchCache, cacheKey, businesses);
+      return businesses;
+    }
+
     const areaName = input.national ? null : input.city ? stripPlaceSuffix(input.city) : STATE_AREA_NAMES[input.region] ?? null;
     const areaLevel = input.city ? '8' : '4';
     const coordinates = input.national || areaName ? null : await geocodeRegion(input.region);
@@ -127,13 +141,45 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     return businesses;
   }
 
-  async function fetchOverpass(query: string): Promise<OverpassResponse> {
+  async function searchNationalBusinesses(input: SearchBusinessesInput) {
+    const candidates: ExternalBusiness[] = [];
+    let successfulAreas = 0;
+    const deadline = Date.now() + NATIONAL_SEARCH_BUDGET_MS;
+
+    for (const stateName of NATIONAL_STATE_NAMES) {
+      if (Date.now() >= deadline) break;
+      try {
+        const payload = await fetchOverpass(buildOverpassQuery(
+          input,
+          null,
+          stateName,
+          '4',
+          buildAutomotiveAestheticsSelectors(true)
+        ), NATIONAL_REQUEST_TIMEOUT_MS);
+        successfulAreas += 1;
+        candidates.push(...(payload.elements ?? []).flatMap(normalizeBusiness));
+      } catch {
+        // A single state's area can fail or time out without invalidating the national search.
+      }
+
+      if (candidates.length >= MAX_RESULTS) break;
+    }
+
+    if (!successfulAreas) throw new OsmUnavailableError();
+
+    const relevantBusinesses = candidates
+      .filter((business) => !isAutomotiveNoise(business.name))
+      .filter((business) => business.category !== 'car_repair' || isDetailingCandidate(business.name));
+    return enrichBusinesses(dedupeBusinesses(relevantBusinesses).slice(0, MAX_RESULTS));
+  }
+
+  async function fetchOverpass(query: string, timeoutMs = 12_000): Promise<OverpassResponse> {
     for (const url of OVERPASS_URLS) {
       try {
         const response = await scheduler.schedule(() => fetch(url, {
           method: 'POST',
           body: query,
-          signal: AbortSignal.timeout(12_000),
+          signal: AbortSignal.timeout(timeoutMs),
           headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'User-Agent': USER_AGENT }
         }));
         if (!response.ok) continue;
@@ -254,13 +300,13 @@ function buildOverpassQuery(
     : areaName ? '(area.region)' : '(area.br)';
   const mappedTags = mappedOsmTags(input.niche);
   const selector = selectorOverride
-    ? `${selectorOverride}${around};`
+    ? appendAround(selectorOverride, around)
     : isAutomotiveAestheticsNiche(input.niche)
-    ? buildAutomotiveAestheticsSelectors(around)
+    ? appendAround(buildAutomotiveAestheticsSelectors(), around)
     : mappedTags.length
     ? mappedTags.map((tag) => `nwr["${tag.key}"="${tag.value}"]${around};`).join('\n  ')
     : buildTextSelectors(escapeOverpassRegex(input.niche.trim()), around);
-  const area = input.national
+  const area = input.national && !areaName
     ? 'area["ISO3166-1"="BR"][admin_level=2]->.br;\n'
     : areaName
       ? `area["name"="${escapeOverpassRegex(areaName)}"]["boundary"="administrative"]["admin_level"="${areaLevel}"]->.region;\n`
@@ -268,11 +314,17 @@ function buildOverpassQuery(
   return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center tags ${MAX_RESULTS};`;
 }
 
-function buildAutomotiveAestheticsSelectors(around: string) {
-  return [
-    `nwr["amenity"="car_wash"]${around};`,
-    `nwr["service:vehicle:car_wash"="yes"]${around};`
-  ].join('\n  ');
+function buildAutomotiveAestheticsSelectors(includeRepair = false) {
+  const selectors = [
+    'nwr["amenity"="car_wash"]',
+    'nwr["service:vehicle:car_wash"="yes"]'
+  ];
+  if (includeRepair) selectors.push('nwr["shop"="car_repair"]');
+  return selectors.join('\n  ');
+}
+
+function appendAround(selectors: string, around: string) {
+  return selectors.split('\n').map((selector) => `${selector.trim()}${around};`).join('\n  ');
 }
 
 function stripPlaceSuffix(place: string) {

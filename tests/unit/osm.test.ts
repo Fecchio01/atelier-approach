@@ -220,6 +220,25 @@ describe('searchBusinesses', () => {
     expect(supplementalQuery).toContain('nwr["shop"="car_repair"]');
   });
 
+  test('partitions a national search by state areas instead of querying the whole country', async () => {
+    const elements = Array.from({ length: 500 }, (_, index) => ({
+      type: 'node' as const,
+      id: index + 1,
+      tags: { name: `Lava Jato ${index + 1}`, amenity: 'car_wash' }
+    }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ elements }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: '', radiusKm: 50, national: true }))
+      .resolves.toHaveLength(500);
+
+    const nationalQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(nationalQuery).toContain('area["name"="São Paulo"]');
+    expect(nationalQuery).not.toContain('area["ISO3166-1"="BR"][admin_level=2]');
+    expect(nationalQuery).not.toContain(';(area.region);');
+  });
+
   test('narrows a state search to the whole selected city when requested', async () => {
     const fetchMock = vi
       .fn()
