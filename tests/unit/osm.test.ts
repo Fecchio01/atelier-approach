@@ -181,6 +181,18 @@ describe('searchBusinesses', () => {
     expect(overpassQuery).not.toContain('around:');
   });
 
+  test('requests only tags and coordinates so broad state searches stay responsive', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+
+    const overpassQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(overpassQuery).toContain('out center tags 500;');
+    expect(overpassQuery).not.toContain('out center meta');
+  });
+
   test('narrows a state search to the whole selected city when requested', async () => {
     const fetchMock = vi
       .fn()

@@ -61,18 +61,18 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
   }
 
   return (
-    <form aria-busy={isLoading} className="grid gap-4 rounded-2xl border border-white/15 bg-white/5 p-5 md:grid-cols-[10rem_1fr_1fr_auto] md:items-end" onSubmit={handleSubmit}>
-      <label className="grid gap-2 text-sm font-medium">
+    <form aria-busy={isLoading} className="grid gap-4 rounded-2xl border border-white/15 bg-white/5 p-5 md:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto] md:items-end" onSubmit={handleSubmit}>
+      <label className="grid min-w-0 gap-2 text-sm font-medium">
         Nicho
         <input readOnly value={FIXED_NICHE} className="min-h-11 rounded-lg border border-[var(--atelier-green)]/50 bg-black/30 px-3 text-white outline-none" />
       </label>
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="grid min-w-0 gap-2 text-sm font-medium">
         País
         <select required value={country} onChange={(event) => setCountry(event.target.value)} className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none focus:border-[var(--atelier-green)]">
           <option value="BR">Brasil</option>
         </select>
       </label>
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="grid min-w-0 gap-2 text-sm font-medium">
         Região / estado
         <select
           value={region}
@@ -83,7 +83,7 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
           {REGIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
       </label>
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="grid min-w-0 gap-2 text-sm font-medium">
         Cidade (opcional)
         <select disabled={!region} value={city} onChange={(event) => setCity(event.target.value)} className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none disabled:cursor-not-allowed disabled:opacity-40 focus:border-[var(--atelier-green)]">
           <option value="">Todas as cidades</option>
@@ -97,14 +97,14 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
       >
         {isLoading ? 'Pesquisando…' : 'Pesquisar'}
       </button>
-      <div className="grid gap-3 border-t border-white/10 pt-4 text-sm md:col-span-4 md:grid-cols-[1fr_auto] md:items-center">
+      <div className="grid gap-3 border-t border-white/10 pt-4 text-sm md:col-span-5 md:grid-cols-[1fr_auto] md:items-center">
         <p className="text-white/55">Todos os estabelecimentos encontrados serão exibidos; os canais disponíveis ficam no topo.</p>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
           <input checked={includeWorked} onChange={(event) => setIncludeWorked(event.target.checked)} type="checkbox" />
           Mostrar empresas já trabalhadas
         </label>
       </div>
-      {error ? <p role="alert" className="text-sm text-red-200 md:col-span-4">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm text-red-200 md:col-span-5">{error}</p> : null}
     </form>
   );
 }

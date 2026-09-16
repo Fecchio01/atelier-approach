@@ -231,7 +231,7 @@ function buildOverpassQuery(
     : areaName
       ? `area["name"="${escapeOverpassRegex(areaName)}"]["boundary"="administrative"]["admin_level"="${areaLevel}"]->.region;\n`
       : '';
-  return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center meta ${MAX_RESULTS};`;
+  return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center tags ${MAX_RESULTS};`;
 }
 
 function stripPlaceSuffix(place: string) {

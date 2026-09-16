@@ -20,3 +20,10 @@ test('keeps automotive aesthetics fixed and does not expose narrowing filters', 
   expect(formSource).not.toContain('Prioridade máxima');
   expect(formSource).not.toContain('Prioridade mínima');
 });
+
+test('keeps the country field from overlapping the fixed niche field', () => {
+  const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
+
+  expect(formSource).toContain('md:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto]');
+  expect(formSource).toContain('grid min-w-0 gap-2 text-sm font-medium');
+});
