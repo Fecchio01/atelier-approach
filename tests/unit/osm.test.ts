@@ -286,6 +286,18 @@ describe('searchBusinesses', () => {
     expect(String(fetchMock.mock.calls[2]?.[1]?.headers?.['User-Agent'])).toContain('AtelierApproach');
   });
 
+  test('returns an empty national result instead of failing when Nominatim is rate limited', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response('too many requests', { status: 429 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: '', radiusKm: 50, national: true }))
+      .resolves.toEqual([]);
+  });
+
   test('narrows a state search to the whole selected city when requested', async () => {
     const fetchMock = vi
       .fn()

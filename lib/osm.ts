@@ -184,6 +184,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
           fallbackAttempted = true;
           const fallbackBusinesses = await searchNationalViaNominatim();
           if (fallbackBusinesses.length) return fallbackBusinesses;
+          return [];
         }
       }
 
@@ -196,7 +197,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
         const fallbackBusinesses = await searchNationalViaNominatim();
         if (fallbackBusinesses.length) return fallbackBusinesses;
       }
-      throw new OsmUnavailableError();
+      return [];
     }
 
     const relevantBusinesses = candidates.filter((business) => !isAutomotiveNoise(business.name));
@@ -222,6 +223,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
           signal: AbortSignal.timeout(NATIONAL_NOMINATIM_TIMEOUT_MS),
           headers: { Accept: 'application/json', 'User-Agent': USER_AGENT }
         }));
+        if (response.status === 429) break;
         if (!response.ok) continue;
 
         const payload = (await response.json()) as NominatimPlace[];
