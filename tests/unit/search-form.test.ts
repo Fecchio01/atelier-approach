@@ -27,3 +27,12 @@ test('keeps the country field from overlapping the fixed niche field', () => {
   expect(formSource).toContain('md:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto]');
   expect(formSource).toContain('grid min-w-0 gap-2 text-sm font-medium');
 });
+
+test('supports loading additional result pages from the research screen', () => {
+  const pageSource = readFileSync(resolve(process.cwd(), 'app/(app)/pesquisa/page.tsx'), 'utf8');
+
+  expect(pageSource).toContain('RESULTS_PER_PAGE');
+  expect(pageSource).toContain('currentPage');
+  expect(pageSource).toContain('Próxima página');
+  expect(pageSource).toContain('Página anterior');
+});

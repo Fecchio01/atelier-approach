@@ -7,6 +7,7 @@ const OVERPASS_URLS = [
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
 const MAX_RESULTS = 500;
+const NATIONAL_MAX_RESULTS = 2_000;
 const NATIONAL_SEARCH_BUDGET_MS = 45_000;
 const NATIONAL_REQUEST_TIMEOUT_MS = 8_000;
 const NATIONAL_NOMINATIM_TIMEOUT_MS = 8_000;
@@ -186,7 +187,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
         }
       }
 
-      if (candidates.length >= MAX_RESULTS) break;
+      if (candidates.length >= NATIONAL_MAX_RESULTS) break;
     }
 
     if (!successfulAreas) {
@@ -199,7 +200,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     }
 
     const relevantBusinesses = candidates.filter((business) => !isAutomotiveNoise(business.name));
-    return enrichBusinesses(dedupeBusinesses(relevantBusinesses).slice(0, MAX_RESULTS));
+    return enrichBusinesses(dedupeBusinesses(relevantBusinesses).slice(0, NATIONAL_MAX_RESULTS));
   }
 
   async function searchNationalViaNominatim() {

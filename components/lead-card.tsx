@@ -20,6 +20,8 @@ export function LeadCard({ business, result }: LeadCardProps) {
   const whatsappHref = toWhatsAppHref(business.whatsapp ?? business.phone);
   const instagramHref = toInstagramHref(business.instagram);
   const websiteHref = toWebsiteHref(business.website);
+  const googleMapsHref = toGoogleMapsHref(business.name, business.address);
+  const hasDirectLink = Boolean(whatsappHref || instagramHref || websiteHref);
 
   async function saveApproach() {
     setError(null);
@@ -63,12 +65,13 @@ export function LeadCard({ business, result }: LeadCardProps) {
         </span>
       </div>
 
-      {whatsappHref || business.phone || instagramHref || websiteHref ? (
+      {whatsappHref || business.phone || instagramHref || websiteHref || googleMapsHref ? (
         <div className="flex flex-wrap gap-2">
           {whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label={`Abrir WhatsApp de ${business.name}`} className="rounded-lg bg-[var(--atelier-green)] px-3 py-2 text-sm font-semibold text-black">WhatsApp</a> : null}
           {business.phone ? <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} aria-label={`Ligar para ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Ligar</a> : null}
           {instagramHref ? <a href={instagramHref} target="_blank" rel="noreferrer" aria-label={`Abrir Instagram de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Instagram</a> : null}
           {websiteHref ? <a href={websiteHref} target="_blank" rel="noreferrer" aria-label={`Abrir site de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Site</a> : null}
+          {googleMapsHref && !hasDirectLink ? <a href={googleMapsHref} target="_blank" rel="noreferrer" aria-label={`Abrir ${business.name} no Google Maps`} className="rounded-lg border border-[var(--atelier-green)]/60 px-3 py-2 text-sm font-semibold text-[var(--atelier-green)]">Abrir no Google Maps</a> : null}
         </div>
       ) : null}
 
@@ -165,4 +168,9 @@ function toWebsiteHref(value: string | null | undefined) {
   } catch {
     return null;
   }
+}
+
+function toGoogleMapsHref(name: string, address: string | null | undefined) {
+  const query = [name, address].filter(Boolean).join(', ');
+  return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : null;
 }

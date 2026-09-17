@@ -240,6 +240,24 @@ describe('searchBusinesses', () => {
     expect(nationalQuery).not.toContain(';(area.region);');
   });
 
+  test('continues collecting national pages after the first 500 results', async () => {
+    const firstPage = Array.from({ length: 500 }, (_, index) => ({
+      type: 'node' as const,
+      id: index + 1,
+      tags: { name: `Lava Jato ${index + 1}`, amenity: 'car_wash' }
+    }));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ elements: firstPage }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ elements: [
+        { type: 'node', id: 9001, tags: { name: 'Lava Jato extra', amenity: 'car_wash' } }
+      ] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: '', radiusKm: 50, national: true }))
+      .resolves.toContainEqual(expect.objectContaining({ osmId: 'node/9001', name: 'Lava Jato extra' }));
+  });
+
   test('falls back to Nominatim when all national Overpass areas fail', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
