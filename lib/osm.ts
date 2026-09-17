@@ -10,7 +10,16 @@ const MAX_RESULTS = 500;
 const NATIONAL_SEARCH_BUDGET_MS = 45_000;
 const NATIONAL_REQUEST_TIMEOUT_MS = 8_000;
 const NATIONAL_NOMINATIM_TIMEOUT_MS = 8_000;
-const NATIONAL_NOMINATIM_TERMS = ['car wash', 'auto repair', 'car detailing', 'auto body shop'];
+const NATIONAL_NOMINATIM_TERMS = [
+  'car wash',
+  'auto repair',
+  'car detailing',
+  'auto body shop',
+  'lavagem automotiva',
+  'estética automotiva',
+  'oficina mecânica',
+  'polimento automotivo'
+];
 const CACHE_TTL_MS = 5 * 60_000;
 const STATE_AREA_NAMES: Record<string, string> = {
   'Rio de Janeiro, RJ': 'Rio de Janeiro',
