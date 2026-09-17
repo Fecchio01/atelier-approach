@@ -129,10 +129,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     const payload = await fetchOverpass(buildOverpassQuery(input, coordinates, areaName, areaLevel));
     if (!Array.isArray(payload.elements)) throw new OsmUnavailableError();
 
-    const supplementalBusinesses = areaName || input.national
-      ? await fetchDetailingRepairBusinesses(input, coordinates, areaName, areaLevel)
-      : [];
-    const normalizedBusinesses = [...payload.elements.flatMap(normalizeBusiness), ...supplementalBusinesses];
+    const normalizedBusinesses = payload.elements.flatMap(normalizeBusiness);
     const relevantBusinesses = isAutomotiveAestheticsNiche(input.niche)
       ? normalizedBusinesses.filter((business) => !isAutomotiveNoise(business.name))
       : normalizedBusinesses;
@@ -154,7 +151,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
           null,
           stateName,
           '4',
-          buildAutomotiveAestheticsSelectors(true)
+          buildNationalAutomotiveSelectors()
         ), NATIONAL_REQUEST_TIMEOUT_MS);
         successfulAreas += 1;
         candidates.push(...(payload.elements ?? []).flatMap(normalizeBusiness));
@@ -167,9 +164,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
 
     if (!successfulAreas) throw new OsmUnavailableError();
 
-    const relevantBusinesses = candidates
-      .filter((business) => !isAutomotiveNoise(business.name))
-      .filter((business) => business.category !== 'car_repair' || isDetailingCandidate(business.name));
+    const relevantBusinesses = candidates.filter((business) => !isAutomotiveNoise(business.name));
     return enrichBusinesses(dedupeBusinesses(relevantBusinesses).slice(0, MAX_RESULTS));
   }
 
@@ -192,28 +187,6 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     }
 
     throw new OsmUnavailableError();
-  }
-
-  async function fetchDetailingRepairBusinesses(
-    input: SearchBusinessesInput,
-    coordinates: { latitude: number; longitude: number } | null,
-    areaName: string | null,
-    areaLevel: string
-  ) {
-    try {
-      const payload = await fetchOverpass(buildOverpassQuery(
-        input,
-        coordinates,
-        areaName,
-        areaLevel,
-        'nwr["shop"="car_repair"]'
-      ));
-      return (payload.elements ?? [])
-        .flatMap(normalizeBusiness)
-        .filter((business) => business.category === 'car_repair' && isDetailingCandidate(business.name));
-    } catch {
-      return [];
-    }
   }
 
   async function geocodeRegion(region: string) {
@@ -302,7 +275,7 @@ function buildOverpassQuery(
   const selector = selectorOverride
     ? appendAround(selectorOverride, around)
     : isAutomotiveAestheticsNiche(input.niche)
-    ? appendAround(buildAutomotiveAestheticsSelectors(), around)
+    ? appendAround(buildAutomotiveAestheticsSelectors(true), around)
     : mappedTags.length
     ? mappedTags.map((tag) => `nwr["${tag.key}"="${tag.value}"]${around};`).join('\n  ')
     : buildTextSelectors(escapeOverpassRegex(input.niche.trim()), around);
@@ -317,10 +290,36 @@ function buildOverpassQuery(
 function buildAutomotiveAestheticsSelectors(includeRepair = false) {
   const selectors = [
     'nwr["amenity"="car_wash"]',
-    'nwr["service:vehicle:car_wash"="yes"]'
+    'nwr["service:vehicle:car_wash"="yes"]',
+    'nwr["shop"="car_repair"]',
+    'nwr["shop"="vehicle_repair"]',
+    'nwr["shop"="car"]',
+    'nwr["shop"="car_parts"]',
+    'nwr["shop"="tyres"]',
+    'nwr["shop"="vehicle"]',
+    'nwr["craft"="car_painter"]',
+    'nwr["craft"="car_repair"]',
+    'nwr["craft"="vehicle_repair"]',
+    'nwr["craft"="car_detailing"]',
+    'nwr["service:vehicle:repair"="yes"]',
+    'nwr["service:vehicle:body_repair"="yes"]',
+    'nwr["service:vehicle:tyres"="yes"]',
+    'nwr["service:vehicle:oil_change"="yes"]'
   ];
-  if (includeRepair) selectors.push('nwr["shop"="car_repair"]');
+  if (!includeRepair) return selectors.slice(0, 2).join('\n  ');
   return selectors.join('\n  ');
+}
+
+function buildNationalAutomotiveSelectors() {
+  return [
+    'nwr["amenity"="car_wash"]',
+    'nwr["service:vehicle:car_wash"="yes"]',
+    'nwr["shop"="car_repair"]',
+    'nwr["shop"="tyres"]',
+    'nwr["craft"="car_painter"]',
+    'nwr["craft"="car_repair"]',
+    'nwr["craft"="car_detailing"]'
+  ].join('\n  ');
 }
 
 function appendAround(selectors: string, around: string) {
@@ -342,10 +341,6 @@ function isAutomotiveAestheticsNiche(niche: string) {
 
 function isAutomotiveNoise(name: string) {
   return /rastre|monitoramento|moto\s*-?\s*taxi|\btaxi\b|\bgps\b/i.test(normalizeText(name));
-}
-
-function isDetailingCandidate(name: string) {
-  return /lavagem|lava\s*-?\s*jato|estetica|detailing|poliment|brilho|car\s*-?\s*wash|higieniz/.test(normalizeText(name));
 }
 
 function buildTextSelectors(niche: string, around: string) {

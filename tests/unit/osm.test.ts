@@ -142,7 +142,7 @@ describe('searchBusinesses', () => {
     );
   });
 
-  test('does not mix vehicle repair businesses into an automotive aesthetics search', async () => {
+  test('includes vehicle repair businesses in an automotive aesthetics search', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -158,7 +158,7 @@ describe('searchBusinesses', () => {
       fetchMock.mock.calls.find(([url]) => String(url).includes('/api/interpreter'))?.[1]?.body
     );
     expect(overpassQuery).toContain('nwr["amenity"="car_wash"]');
-    expect(overpassQuery).not.toContain('nwr["shop"="car_repair"]');
+    expect(overpassQuery).toContain('nwr["shop"="car_repair"]');
   });
 
   test('searches the whole selected state instead of a radius around its center', async () => {
@@ -204,20 +204,18 @@ describe('searchBusinesses', () => {
     expect(overpassQuery).toContain('nwr["service:vehicle:car_wash"="yes"]');
   });
 
-  test('supplements state results with repair-tagged businesses that clearly advertise detailing', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        elements: [{ type: 'node', id: 990, tags: { name: 'Lava Jato Brilho', shop: 'car_repair' } }]
-      }), { status: 200 }));
+  test('includes repair-tagged automotive businesses in the main state search', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      elements: [{ type: 'node', id: 990, tags: { name: 'Oficina Brilho', shop: 'car_repair' } }]
+    }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
     await expect(service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 }))
-      .resolves.toEqual([expect.objectContaining({ osmId: 'node/990', name: 'Lava Jato Brilho' })]);
+      .resolves.toEqual([expect.objectContaining({ osmId: 'node/990', name: 'Oficina Brilho' })]);
 
-    const supplementalQuery = String(fetchMock.mock.calls[1]?.[1]?.body);
-    expect(supplementalQuery).toContain('nwr["shop"="car_repair"]');
+    const stateQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(stateQuery).toContain('nwr["shop"="car_repair"]');
   });
 
   test('partitions a national search by state areas instead of querying the whole country', async () => {
@@ -235,6 +233,9 @@ describe('searchBusinesses', () => {
 
     const nationalQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
     expect(nationalQuery).toContain('area["name"="São Paulo"]');
+    expect(nationalQuery).toContain('nwr["shop"="car_repair"]');
+    expect(nationalQuery).toContain('nwr["craft"="car_painter"]');
+    expect(nationalQuery).toContain('nwr["shop"="tyres"]');
     expect(nationalQuery).not.toContain('area["ISO3166-1"="BR"][admin_level=2]');
     expect(nationalQuery).not.toContain(';(area.region);');
   });

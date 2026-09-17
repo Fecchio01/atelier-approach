@@ -74,7 +74,6 @@ export function LeadCard({ business, result }: LeadCardProps) {
 
       <dl className="grid gap-3 text-sm text-white/75">
         {business.address ? <div><dt className="text-white/45">Endereço</dt><dd>{business.address}</dd></div> : null}
-        {business.category ? <div><dt className="text-white/45">Categoria OSM</dt><dd>{business.category}</dd></div> : null}
         <div>
           <dt className="text-white/45">Telefone</dt>
           <dd>{business.phone ? <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} className="underline underline-offset-2 hover:text-white">{business.phone}</a> : 'Não informado'}</dd>
