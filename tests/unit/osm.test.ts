@@ -240,6 +240,34 @@ describe('searchBusinesses', () => {
     expect(nationalQuery).not.toContain(';(area.region);');
   });
 
+  test('falls back to Nominatim when all national Overpass areas fail', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        {
+          osm_type: 'way',
+          osm_id: 701,
+          lat: '-23.55',
+          lon: '-46.63',
+          name: 'Auto Brilho',
+          type: 'car_wash',
+          display_name: 'Auto Brilho, São Paulo, Brasil',
+          extratags: { phone: '+55 11 99999-9999', website: 'https://autobrilho.example' }
+        }
+      ]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: '', radiusKm: 50, national: true }))
+      .resolves.toEqual([
+        expect.objectContaining({ osmId: 'way/701', name: 'Auto Brilho', phone: '+55 11 99999-9999', website: 'https://autobrilho.example' })
+      ]);
+
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('nominatim.openstreetmap.org/search');
+    expect(String(fetchMock.mock.calls[2]?.[1]?.headers?.['User-Agent'])).toContain('AtelierApproach');
+  });
+
   test('narrows a state search to the whole selected city when requested', async () => {
     const fetchMock = vi
       .fn()

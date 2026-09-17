@@ -9,6 +9,8 @@ const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
 const MAX_RESULTS = 500;
 const NATIONAL_SEARCH_BUDGET_MS = 45_000;
 const NATIONAL_REQUEST_TIMEOUT_MS = 8_000;
+const NATIONAL_NOMINATIM_TIMEOUT_MS = 8_000;
+const NATIONAL_NOMINATIM_TERMS = ['car wash', 'auto repair', 'car detailing', 'auto body shop'];
 const CACHE_TTL_MS = 5 * 60_000;
 const STATE_AREA_NAMES: Record<string, string> = {
   'Rio de Janeiro, RJ': 'Rio de Janeiro',
@@ -58,6 +60,16 @@ type OverpassElement = {
 };
 
 type OverpassResponse = { elements?: OverpassElement[] };
+
+type NominatimPlace = {
+  osm_type?: string;
+  osm_id?: number | string;
+  name?: string;
+  display_name?: string;
+  lat?: string;
+  lon?: string;
+  extratags?: Record<string, string | undefined>;
+};
 
 type SchedulerOptions = {
   minIntervalMs?: number;
@@ -141,6 +153,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
   async function searchNationalBusinesses(input: SearchBusinessesInput) {
     const candidates: ExternalBusiness[] = [];
     let successfulAreas = 0;
+    let fallbackAttempted = false;
     const deadline = Date.now() + NATIONAL_SEARCH_BUDGET_MS;
 
     for (const stateName of NATIONAL_STATE_NAMES) {
@@ -157,15 +170,58 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
         candidates.push(...(payload.elements ?? []).flatMap(normalizeBusiness));
       } catch {
         // A single state's area can fail or time out without invalidating the national search.
+        if (!fallbackAttempted && candidates.length === 0) {
+          fallbackAttempted = true;
+          const fallbackBusinesses = await searchNationalViaNominatim();
+          if (fallbackBusinesses.length) return fallbackBusinesses;
+        }
       }
 
       if (candidates.length >= MAX_RESULTS) break;
     }
 
-    if (!successfulAreas) throw new OsmUnavailableError();
+    if (!successfulAreas) {
+      if (!fallbackAttempted) {
+        fallbackAttempted = true;
+        const fallbackBusinesses = await searchNationalViaNominatim();
+        if (fallbackBusinesses.length) return fallbackBusinesses;
+      }
+      throw new OsmUnavailableError();
+    }
 
     const relevantBusinesses = candidates.filter((business) => !isAutomotiveNoise(business.name));
     return enrichBusinesses(dedupeBusinesses(relevantBusinesses).slice(0, MAX_RESULTS));
+  }
+
+  async function searchNationalViaNominatim() {
+    const candidates: ExternalBusiness[] = [];
+
+    for (const term of NATIONAL_NOMINATIM_TERMS) {
+      if (candidates.length >= MAX_RESULTS) break;
+
+      try {
+        const params = new URLSearchParams({
+          format: 'jsonv2',
+          limit: '50',
+          countrycodes: 'br',
+          addressdetails: '1',
+          extratags: '1',
+          q: `${term}, Brazil`
+        });
+        const response = await scheduler.schedule(() => fetch(`${NOMINATIM_URL}?${params}`, {
+          signal: AbortSignal.timeout(NATIONAL_NOMINATIM_TIMEOUT_MS),
+          headers: { Accept: 'application/json', 'User-Agent': USER_AGENT }
+        }));
+        if (!response.ok) continue;
+
+        const payload = (await response.json()) as NominatimPlace[];
+        if (Array.isArray(payload)) candidates.push(...payload.flatMap(normalizeNominatimBusiness));
+      } catch {
+        // Continue with the next automotive term; Nominatim is only a fallback.
+      }
+    }
+
+    return dedupeBusinesses(candidates.filter((business) => !isAutomotiveNoise(business.name))).slice(0, MAX_RESULTS);
   }
 
   async function fetchOverpass(query: string, timeoutMs = 12_000): Promise<OverpassResponse> {
@@ -374,6 +430,28 @@ function normalizeBusiness(element: OverpassElement): ExternalBusiness[] {
     latitude: coordinateValue(element.lat ?? element.center?.lat),
     longitude: coordinateValue(element.lon ?? element.center?.lon),
     lastSyncedAt: element.timestamp ?? null
+  }];
+}
+
+function normalizeNominatimBusiness(place: NominatimPlace): ExternalBusiness[] {
+  const name = place.name?.trim() || place.display_name?.split(',')[0]?.trim();
+  const osmType = place.osm_type?.trim();
+  const osmId = place.osm_id === undefined ? null : String(place.osm_id);
+  if (!name || !osmType || !osmId) return [];
+
+  const tags = place.extratags;
+  return [{
+    osmId: `${osmType}/${osmId}`,
+    name,
+    phone: contactValue(tags, 'phone'),
+    website: contactValue(tags, 'website'),
+    instagram: contactValue(tags, 'instagram'),
+    whatsapp: contactValue(tags, 'whatsapp'),
+    address: place.display_name?.trim() || null,
+    category: place.extratags?.amenity || place.extratags?.shop || place.extratags?.craft || null,
+    latitude: coordinateValue(Number(place.lat)),
+    longitude: coordinateValue(Number(place.lon)),
+    lastSyncedAt: null
   }];
 }
 
