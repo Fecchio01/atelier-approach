@@ -21,7 +21,6 @@ export function LeadCard({ business, result }: LeadCardProps) {
   const instagramHref = toInstagramHref(business.instagram);
   const websiteHref = toWebsiteHref(business.website);
   const googleMapsHref = toGoogleMapsHref(business.name, business.address);
-  const businessSearchHref = toBusinessSearchHref(business.name, business.address);
 
   async function saveApproach() {
     setError(null);
@@ -71,7 +70,6 @@ export function LeadCard({ business, result }: LeadCardProps) {
           {business.phone ? <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} aria-label={`Ligar para ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Ligar</a> : null}
           {instagramHref ? <a href={instagramHref} target="_blank" rel="noreferrer" aria-label={`Abrir Instagram de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Instagram</a> : null}
           {websiteHref ? <a href={websiteHref} target="_blank" rel="noreferrer" aria-label={`Abrir site de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Site</a> : null}
-          {!websiteHref && businessSearchHref ? <a href={businessSearchHref} target="_blank" rel="noreferrer" aria-label={`Buscar site de ${business.name} na web`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Buscar site na web</a> : null}
           {googleMapsHref ? <a href={googleMapsHref} target="_blank" rel="noreferrer" aria-label={`Abrir ${business.name} no Google Maps`} className="rounded-lg border border-[var(--atelier-green)]/60 px-3 py-2 text-sm font-semibold text-[var(--atelier-green)]">Abrir no Google Maps</a> : null}
         </div>
       ) : null}
@@ -174,9 +172,4 @@ function toWebsiteHref(value: string | null | undefined) {
 function toGoogleMapsHref(name: string, address: string | null | undefined) {
   const query = [name, address].filter(Boolean).join(', ');
   return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : null;
-}
-
-function toBusinessSearchHref(name: string, address: string | null | undefined) {
-  const query = [name, address].filter(Boolean).join(', ');
-  return query ? `https://www.google.com/search?q=${encodeURIComponent(`${query} site oficial`)}` : null;
 }
