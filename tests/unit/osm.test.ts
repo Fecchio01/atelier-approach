@@ -96,6 +96,27 @@ describe('searchBusinesses', () => {
     );
   });
 
+  test('merges duplicate OSM records without dropping populated contact fields', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ lat: '-22.9', lon: '-47.06' }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [
+          { type: 'node', id: 202, tags: { name: 'Oficina Duplicada', website: 'https://duplicada.example' } },
+          { type: 'node', id: 202, tags: { name: 'Oficina Duplicada', phone: '+55 19 99999-9999', 'addr:city': 'Campinas' } }
+        ]
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: 'Campinas, SP', radiusKm: 5 }))
+      .resolves.toEqual([expect.objectContaining({
+        osmId: 'node/202',
+        website: 'https://duplicada.example',
+        phone: '+55 19 99999-9999',
+        address: 'Campinas'
+      })]);
+  });
+
   test('retries a failed Overpass request on the fallback endpoint', async () => {
     const fetchMock = vi
       .fn()
@@ -218,6 +239,25 @@ describe('searchBusinesses', () => {
     expect(stateQuery).toContain('nwr["shop"="car_repair"]');
   });
 
+  test('recognizes alternate OSM website tags when the standard website tag is absent', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      elements: [{
+        type: 'node',
+        id: 991,
+        tags: {
+          name: 'Oficina URL',
+          shop: 'car_repair',
+          url: 'www.oficina-url.example'
+        }
+      }]
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 }))
+      .resolves.toEqual([expect.objectContaining({ osmId: 'node/991', website: 'www.oficina-url.example' })]);
+  });
+
   test('partitions a national search by state areas instead of querying the whole country', async () => {
     const elements = Array.from({ length: 500 }, (_, index) => ({
       type: 'node' as const,
@@ -236,6 +276,11 @@ describe('searchBusinesses', () => {
     expect(nationalQuery).toContain('nwr["shop"="car_repair"]');
     expect(nationalQuery).toContain('nwr["craft"="car_painter"]');
     expect(nationalQuery).toContain('nwr["shop"="tyres"]');
+    expect(nationalQuery).toContain('nwr["shop"="car"]');
+    expect(nationalQuery).toContain('nwr["service:vehicle:repair"="yes"]');
+    expect(nationalQuery).toContain('nwr["name"~"');
+    expect(nationalQuery).toContain('garage');
+    expect(nationalQuery).toContain('out center tags 1000');
     expect(nationalQuery).not.toContain('area["ISO3166-1"="BR"][admin_level=2]');
     expect(nationalQuery).not.toContain(';(area.region);');
   });
@@ -256,6 +301,28 @@ describe('searchBusinesses', () => {
     const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
     await expect(service.searchBusinesses({ niche: 'estética automotiva', region: '', radiusKm: 50, national: true }))
       .resolves.toContainEqual(expect.objectContaining({ osmId: 'node/9001', name: 'Lava Jato extra' }));
+  });
+
+  test('supplements a sparse national Overpass result with Nominatim records', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return new Response(JSON.stringify({ elements: [{ type: 'node', id: 910, tags: { name: 'Oficina OSM', shop: 'car_repair' } }] }), { status: 200 });
+      }
+      if (input.includes('nominatim.openstreetmap.org/search')) {
+        return new Response(JSON.stringify([
+          { osm_type: 'way', osm_id: 911, name: 'Oficina Nominatim', display_name: 'Oficina Nominatim, São Paulo, Brasil' }
+        ]), { status: 200 });
+      }
+      return new Response('not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: '', radiusKm: 50, national: true }))
+      .resolves.toEqual(expect.arrayContaining([
+        expect.objectContaining({ osmId: 'node/910', name: 'Oficina OSM' }),
+        expect.objectContaining({ osmId: 'way/911', name: 'Oficina Nominatim' })
+      ]));
   });
 
   test('falls back to Nominatim when all national Overpass areas fail', async () => {

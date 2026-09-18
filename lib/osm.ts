@@ -7,8 +7,9 @@ const OVERPASS_URLS = [
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
 const MAX_RESULTS = 500;
-const NATIONAL_MAX_RESULTS = 2_000;
-const NATIONAL_SEARCH_BUDGET_MS = 45_000;
+const NATIONAL_MAX_RESULTS = 5_000;
+const NATIONAL_SUPPLEMENT_THRESHOLD = 500;
+const NATIONAL_SEARCH_BUDGET_MS = 60_000;
 const NATIONAL_REQUEST_TIMEOUT_MS = 8_000;
 const NATIONAL_NOMINATIM_TIMEOUT_MS = 8_000;
 const NATIONAL_NOMINATIM_LOCATIONS = ['São Paulo', 'Rio de Janeiro', 'Minas Gerais', 'Bahia'] as const;
@@ -172,7 +173,8 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
           null,
           stateName,
           '4',
-          buildNationalAutomotiveSelectors()
+          buildNationalAutomotiveSelectors(),
+          1_000
         ), NATIONAL_REQUEST_TIMEOUT_MS);
         successfulAreas += 1;
         candidates.push(...(payload.elements ?? []).flatMap(normalizeBusiness));
@@ -198,8 +200,12 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
       return [];
     }
 
-    const relevantBusinesses = candidates.filter((business) => !isAutomotiveNoise(business.name));
-    return enrichBusinesses(dedupeBusinesses(relevantBusinesses).slice(0, NATIONAL_MAX_RESULTS));
+    let relevantBusinesses = dedupeBusinesses(candidates.filter((business) => !isAutomotiveNoise(business.name)));
+    if (relevantBusinesses.length < NATIONAL_SUPPLEMENT_THRESHOLD) {
+      const supplementalBusinesses = await searchNationalViaNominatim();
+      relevantBusinesses = dedupeBusinesses([...relevantBusinesses, ...supplementalBusinesses]);
+    }
+    return enrichBusinesses(relevantBusinesses.slice(0, NATIONAL_MAX_RESULTS));
   }
 
   async function searchNationalViaNominatim() {
@@ -333,7 +339,8 @@ function buildOverpassQuery(
   coordinates: { latitude: number; longitude: number } | null,
   areaName: string | null,
   areaLevel: string,
-  selectorOverride?: string
+  selectorOverride?: string,
+  resultLimit = MAX_RESULTS
 ) {
   const radiusMeters = Math.round(input.radiusKm * 1_000);
   const around = coordinates
@@ -352,7 +359,7 @@ function buildOverpassQuery(
     : areaName
       ? `area["name"="${escapeOverpassRegex(areaName)}"]["boundary"="administrative"]["admin_level"="${areaLevel}"]->.region;\n`
       : '';
-  return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center tags ${MAX_RESULTS};`;
+  return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center tags ${resultLimit};`;
 }
 
 function buildAutomotiveAestheticsSelectors(includeRepair = false) {
@@ -380,13 +387,8 @@ function buildAutomotiveAestheticsSelectors(includeRepair = false) {
 
 function buildNationalAutomotiveSelectors() {
   return [
-    'nwr["amenity"="car_wash"]',
-    'nwr["service:vehicle:car_wash"="yes"]',
-    'nwr["shop"="car_repair"]',
-    'nwr["shop"="tyres"]',
-    'nwr["craft"="car_painter"]',
-    'nwr["craft"="car_repair"]',
-    'nwr["craft"="car_detailing"]'
+    buildAutomotiveAestheticsSelectors(true),
+    'nwr["name"~"est[eé]tica|lavagem|lava.?jato|car.?wash|oficina|mec[aâ]nica|polimento|detailing|funilaria|auto.?center|auto.?pecas|auto.?mecanica|garage|garagem|lava",i]'
   ].join('\n  ');
 }
 
@@ -399,7 +401,29 @@ function stripPlaceSuffix(place: string) {
 }
 
 function dedupeBusinesses(businesses: ExternalBusiness[]) {
-  return [...new Map(businesses.map((business) => [business.osmId, business])).values()];
+  const merged = new Map<string, ExternalBusiness>();
+  for (const business of businesses) {
+    const previous = merged.get(business.osmId);
+    if (!previous) {
+      merged.set(business.osmId, business);
+      continue;
+    }
+    merged.set(business.osmId, {
+      ...previous,
+      ...business,
+      phone: business.phone ?? previous.phone,
+      website: business.website ?? previous.website,
+      instagram: business.instagram ?? previous.instagram,
+      whatsapp: business.whatsapp ?? previous.whatsapp,
+      address: business.address ?? previous.address,
+      category: business.category ?? previous.category,
+      latitude: business.latitude ?? previous.latitude,
+      longitude: business.longitude ?? previous.longitude,
+      lastSyncedAt: business.lastSyncedAt ?? previous.lastSyncedAt,
+      imageUrl: business.imageUrl ?? previous.imageUrl
+    });
+  }
+  return [...merged.values()];
 }
 
 function isAutomotiveAestheticsNiche(niche: string) {
@@ -433,7 +457,7 @@ function normalizeBusiness(element: OverpassElement): ExternalBusiness[] {
     osmId: `${element.type}/${element.id}`,
     name,
     phone: contactValue(element.tags, 'phone'),
-    website: contactValue(element.tags, 'website'),
+    website: websiteValue(element.tags),
     instagram: contactValue(element.tags, 'instagram'),
     whatsapp: contactValue(element.tags, 'whatsapp'),
     imageUrl: element.tags?.image?.trim() || null,
@@ -456,7 +480,7 @@ function normalizeNominatimBusiness(place: NominatimPlace): ExternalBusiness[] {
     osmId: `${osmType}/${osmId}`,
     name,
     phone: contactValue(tags, 'phone'),
-    website: contactValue(tags, 'website'),
+    website: websiteValue(tags),
     instagram: contactValue(tags, 'instagram'),
     whatsapp: contactValue(tags, 'whatsapp'),
     address: place.display_name?.trim() || null,
@@ -484,6 +508,11 @@ function categoryValue(tags: Record<string, string | undefined> | undefined) {
 
 function contactValue(tags: Record<string, string | undefined> | undefined, key: string) {
   return tags?.[key]?.trim() || tags?.[`contact:${key}`]?.trim() || null;
+}
+
+function websiteValue(tags: Record<string, string | undefined> | undefined) {
+  const keys = ['website', 'contact:website', 'url', 'contact:url', 'homepage', 'contact:homepage'];
+  return keys.map((key) => tags?.[key]?.trim()).find((value): value is string => Boolean(value)) ?? null;
 }
 
 function normalizeText(value: string) {

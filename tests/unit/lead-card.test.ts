@@ -14,5 +14,7 @@ test('renders contact values as actionable links', () => {
   expect(cardSource).toContain('toGoogleMapsHref');
   expect(cardSource).toContain('{googleMapsHref ? <a');
   expect(cardSource).not.toContain('!hasDirectLink');
+  expect(cardSource).toContain('Buscar site na web');
+  expect(cardSource).toContain('toBusinessSearchHref');
   expect(cardSource).not.toContain('Categoria OSM');
 });
