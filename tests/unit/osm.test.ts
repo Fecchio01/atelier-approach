@@ -286,6 +286,23 @@ describe('searchBusinesses', () => {
     expect(String(fetchMock.mock.calls[2]?.[1]?.headers?.['User-Agent'])).toContain('AtelierApproach');
   });
 
+  test('searches national fallback batches by state to expand coverage', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        { osm_type: 'way', osm_id: 702, name: 'Auto Brilho SP', display_name: 'Auto Brilho SP, São Paulo, Brasil' }
+      ]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: '', radiusKm: 50, national: true }))
+      .resolves.toContainEqual(expect.objectContaining({ osmId: 'way/702', name: 'Auto Brilho SP' }));
+
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('nominatim.openstreetmap.org/search');
+    expect(String(fetchMock.mock.calls[2]?.[1]?.body ?? fetchMock.mock.calls[2]?.[0])).toContain('S%C3%A3o+Paulo');
+  });
+
   test('returns an empty national result instead of failing when Nominatim is rate limited', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))

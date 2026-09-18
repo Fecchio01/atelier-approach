@@ -12,5 +12,7 @@ test('renders contact values as actionable links', () => {
   expect(cardSource).toContain('<dd>{whatsappHref ? <a');
   expect(cardSource).toContain('Abrir no Google Maps');
   expect(cardSource).toContain('toGoogleMapsHref');
+  expect(cardSource).toContain('{googleMapsHref ? <a');
+  expect(cardSource).not.toContain('!hasDirectLink');
   expect(cardSource).not.toContain('Categoria OSM');
 });

@@ -11,16 +11,14 @@ const NATIONAL_MAX_RESULTS = 2_000;
 const NATIONAL_SEARCH_BUDGET_MS = 45_000;
 const NATIONAL_REQUEST_TIMEOUT_MS = 8_000;
 const NATIONAL_NOMINATIM_TIMEOUT_MS = 8_000;
+const NATIONAL_NOMINATIM_LOCATIONS = ['São Paulo', 'Rio de Janeiro', 'Minas Gerais', 'Bahia'] as const;
 const NATIONAL_NOMINATIM_TERMS = [
   'car wash',
   'auto repair',
-  'car detailing',
-  'auto body shop',
-  'lavagem automotiva',
-  'estética automotiva',
   'oficina mecânica',
-  'polimento automotivo'
-];
+  'estética automotiva',
+  'car detailing'
+] as const;
 const CACHE_TTL_MS = 5 * 60_000;
 const STATE_AREA_NAMES: Record<string, string> = {
   'Rio de Janeiro, RJ': 'Rio de Janeiro',
@@ -207,33 +205,35 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
   async function searchNationalViaNominatim() {
     const candidates: ExternalBusiness[] = [];
 
-    for (const term of NATIONAL_NOMINATIM_TERMS) {
-      if (candidates.length >= MAX_RESULTS) break;
+    for (const location of NATIONAL_NOMINATIM_LOCATIONS) {
+      for (const term of NATIONAL_NOMINATIM_TERMS) {
+        if (candidates.length >= NATIONAL_MAX_RESULTS) break;
 
-      try {
-        const params = new URLSearchParams({
-          format: 'jsonv2',
-          limit: '50',
-          countrycodes: 'br',
-          addressdetails: '1',
-          extratags: '1',
-          q: `${term}, Brazil`
-        });
-        const response = await scheduler.schedule(() => fetch(`${NOMINATIM_URL}?${params}`, {
-          signal: AbortSignal.timeout(NATIONAL_NOMINATIM_TIMEOUT_MS),
-          headers: { Accept: 'application/json', 'User-Agent': USER_AGENT }
-        }));
-        if (response.status === 429) break;
-        if (!response.ok) continue;
+        try {
+          const params = new URLSearchParams({
+            format: 'jsonv2',
+            limit: '50',
+            countrycodes: 'br',
+            addressdetails: '1',
+            extratags: '1',
+            q: `${term}, ${location}, Brazil`
+          });
+          const response = await scheduler.schedule(() => fetch(`${NOMINATIM_URL}?${params}`, {
+            signal: AbortSignal.timeout(NATIONAL_NOMINATIM_TIMEOUT_MS),
+            headers: { Accept: 'application/json', 'User-Agent': USER_AGENT }
+          }));
+          if (response.status === 429) return [];
+          if (!response.ok) continue;
 
-        const payload = (await response.json()) as NominatimPlace[];
-        if (Array.isArray(payload)) candidates.push(...payload.flatMap(normalizeNominatimBusiness));
-      } catch {
-        // Continue with the next automotive term; Nominatim is only a fallback.
+          const payload = (await response.json()) as NominatimPlace[];
+          if (Array.isArray(payload)) candidates.push(...payload.flatMap(normalizeNominatimBusiness));
+        } catch {
+          // Continue with the next automotive term; Nominatim is only a fallback.
+        }
       }
     }
 
-    return dedupeBusinesses(candidates.filter((business) => !isAutomotiveNoise(business.name))).slice(0, MAX_RESULTS);
+    return dedupeBusinesses(candidates.filter((business) => !isAutomotiveNoise(business.name))).slice(0, NATIONAL_MAX_RESULTS);
   }
 
   async function fetchOverpass(query: string, timeoutMs = 12_000): Promise<OverpassResponse> {
