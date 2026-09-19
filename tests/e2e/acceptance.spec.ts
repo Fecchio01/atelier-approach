@@ -12,6 +12,78 @@ async function signIn(page: import('@playwright/test').Page, credentials: Pick<t
   await expect(page).toHaveURL('http://127.0.0.1:3001/');
 }
 
+test('accumulates, deduplicates and reorders progressive search batches', async ({ page }) => {
+  const searchId = 'batch / 1?';
+  let continuationUrl = '';
+  await page.route('**/api/search**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has('searchId')) {
+      continuationUrl = route.request().url();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          businesses: [
+            { osmId: 'node/first', name: 'Primeira empresa atualizada', phone: null, website: null, instagram: null, whatsapp: '+55 11 99999-0000' },
+            { osmId: 'node/second', name: 'Segunda empresa', phone: null, website: null, instagram: '@segunda', whatsapp: '+55 11 98888-0000' }
+          ],
+          searchId,
+          hasMore: false
+        })
+      });
+      return;
+    }
+
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        businesses: [{ osmId: 'node/first', name: 'Primeira empresa', phone: null, website: null, instagram: null }],
+        searchId,
+        hasMore: true
+      })
+    });
+  });
+
+  await signIn(page);
+  await page.goto('/pesquisa');
+  await page.getByLabel('Região / estado').selectOption('São Paulo, SP');
+  await page.getByRole('button', { name: 'Pesquisar' }).click();
+  await expect(page.getByText('1 prospect novo, em ordem de prioridade.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Carregar mais empresas' }).click();
+  await expect(page.getByRole('button', { name: 'Buscando mais empresas…' })).toBeVisible();
+  await expect(page.getByText('2 prospects novos, em ordem de prioridade.')).toBeVisible();
+
+  expect(continuationUrl).toContain('searchId=batch%20%2F%201%3F');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText(['Segunda empresa', 'Primeira empresa atualizada']);
+  await expect(page.getByRole('button', { name: 'Marcar como abordada' })).toHaveCount(2);
+  await expect(page.getByRole('link', { name: 'Abrir WhatsApp de Segunda empresa' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Abrir Instagram de Segunda empresa' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Abrir Segunda empresa no Google Maps' })).toBeVisible();
+});
+
+test('asks for a new search when the progressive search session expires', async ({ page }) => {
+  await page.route('**/api/search**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has('searchId')) {
+      await route.fulfill({ status: 410, contentType: 'application/json', body: JSON.stringify({ error: 'Sessão expirada.' }) });
+      return;
+    }
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ businesses: [], searchId: 'expired-batch', hasMore: true })
+    });
+  });
+
+  await signIn(page);
+  await page.goto('/pesquisa');
+  await page.getByRole('button', { name: 'Pesquisar' }).click();
+  await page.getByRole('button', { name: 'Carregar mais empresas' }).click();
+
+  await expect(page.locator('p[role="alert"]')).toHaveText('Esta pesquisa expirou. Faça uma nova pesquisa para continuar.');
+  await expect(page.getByRole('button', { name: 'Carregar mais empresas' })).not.toBeVisible();
+});
+
 test('communicates an unavailable OpenStreetMap search accessibly', async ({ page }) => {
   await page.route('**/api/search**', async (route) => {
     await route.fulfill({
@@ -35,7 +107,7 @@ test('renders missing external contact data and helpful empty-search guidance', 
   await page.route('**/api/search**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ businesses: [{ osmId: 'node/missing-contacts', name: 'Sem contatos', phone: null, website: null, instagram: null }] })
+      body: JSON.stringify({ businesses: [{ osmId: 'node/missing-contacts', name: 'Sem contatos', phone: null, website: null, instagram: null }], searchId: 'missing-contacts', hasMore: false })
     });
   });
 
@@ -49,7 +121,7 @@ test('renders missing external contact data and helpful empty-search guidance', 
 
 test('suggests refinements when a successful search returns no companies', async ({ page }) => {
   await page.route('**/api/search**', async (route) => {
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ businesses: [] }) });
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ businesses: [], searchId: 'empty-search', hasMore: false }) });
   });
 
   await signIn(page);
@@ -65,7 +137,7 @@ test('clears successful-empty guidance when a retry fails', async ({ page }) => 
   await page.route('**/api/search**', async (route) => {
     attempts += 1;
     if (attempts === 1) {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ businesses: [] }) });
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ businesses: [], searchId: 'empty-retry', hasMore: false }) });
       return;
     }
     await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'A pesquisa está indisponível no momento.' }) });
@@ -89,7 +161,7 @@ test('lets two members share an overdue follow-up and close it with revenue valu
   await page.route('**/api/search**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ businesses: [{ osmId: `node/acceptance-${suffix}`, name: businessName, phone: null, website: null, instagram: null }] })
+      body: JSON.stringify({ businesses: [{ osmId: `node/acceptance-${suffix}`, name: businessName, phone: null, website: null, instagram: null }], searchId: `shared-${suffix}`, hasMore: false })
     });
   });
 
@@ -136,7 +208,9 @@ test('takes a duplicate approach to its existing CRM record with a clear notice'
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
-        businesses: [{ osmId: 'node/acceptance-duplicate', name: 'Empresa duplicada', phone: null, website: null, instagram: null }]
+        businesses: [{ osmId: 'node/acceptance-duplicate', name: 'Empresa duplicada', phone: null, website: null, instagram: null }],
+        searchId: 'duplicate-search',
+        hasMore: false
       })
     });
   });
@@ -203,7 +277,9 @@ test('sends the agreed research filters and shows retained OSM company fields', 
           lastSyncedAt: '2026-09-12T10:00:00Z',
           alreadyWorked: true,
           crmHref: '/crm?lead=worked'
-        }]
+        }],
+        searchId: 'filtered-search',
+        hasMore: false
       })
     });
   });

@@ -28,11 +28,19 @@ test('keeps the country field from overlapping the fixed niche field', () => {
   expect(formSource).toContain('grid min-w-0 gap-2 text-sm font-medium');
 });
 
-test('supports loading additional result pages from the research screen', () => {
+test('loads and accumulates progressive search batches instead of paginating a local slice', () => {
+  const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
   const pageSource = readFileSync(resolve(process.cwd(), 'app/(app)/pesquisa/page.tsx'), 'utf8');
 
-  expect(pageSource).toContain('RESULTS_PER_PAGE');
-  expect(pageSource).toContain('currentPage');
-  expect(pageSource).toContain('Próxima página');
-  expect(pageSource).toContain('Página anterior');
+  expect(formSource).toContain('export type SearchResultBatch');
+  expect(formSource).toContain('onResults: (batch: SearchResultBatch) => void');
+  expect(formSource).toContain('onSearchStart();');
+  expect(pageSource).not.toContain('.slice(');
+  expect(pageSource).not.toContain('currentPage');
+  expect(pageSource).toContain('function handleSearchStart()');
+  expect(pageSource).toContain('setSearchId(null);');
+  expect(pageSource).toContain('fetch(`/api/search?searchId=${encodeURIComponent(searchId)}`)');
+  expect(pageSource).toContain('new Map(previous.map((business) => [business.osmId, business]))');
+  expect(pageSource).toContain('Carregar mais empresas');
+  expect(pageSource).toContain('Buscando mais empresas…');
 });

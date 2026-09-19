@@ -4,8 +4,15 @@ import { FormEvent, useState } from 'react';
 
 import type { ExternalBusiness } from '@/lib/osm';
 
+export type SearchResultBatch = {
+  businesses: ExternalBusiness[];
+  searchId: string;
+  hasMore: boolean;
+};
+
 type SearchFormProps = {
-  onResults: (businesses: ExternalBusiness[]) => void;
+  onResults: (batch: SearchResultBatch) => void;
+  onSearchStart: () => void;
   onFailure: () => void;
 };
 
@@ -21,7 +28,7 @@ const CITIES_BY_REGION: Record<string, readonly string[]> = {
   'São Paulo, SP': ['São Paulo, SP', 'Campinas, SP', 'Guarulhos, SP', 'Santos, SP', 'São José dos Campos, SP', 'Sorocaba, SP', 'Ribeirão Preto, SP']
 };
 
-export function SearchForm({ onResults, onFailure }: SearchFormProps) {
+export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormProps) {
   const [country, setCountry] = useState('BR');
   const [region, setRegion] = useState('');
   const [city, setCity] = useState('');
@@ -32,6 +39,7 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    onSearchStart();
     setError(null);
     setIsLoading(true);
 
@@ -45,13 +53,13 @@ export function SearchForm({ onResults, onFailure }: SearchFormProps) {
         national: String(isNational)
       });
       const response = await fetch(`/api/search?${params}`);
-      const payload = (await response.json()) as { businesses?: ExternalBusiness[]; error?: string };
+      const payload = (await response.json()) as Partial<SearchResultBatch> & { error?: string };
 
-      if (!response.ok || !payload.businesses) {
+      if (!response.ok || !payload.businesses || typeof payload.searchId !== 'string' || typeof payload.hasMore !== 'boolean') {
         throw new Error(payload.error ?? 'Não foi possível concluir a pesquisa.');
       }
 
-      onResults(payload.businesses);
+      onResults({ businesses: payload.businesses, searchId: payload.searchId, hasMore: payload.hasMore });
     } catch (requestError) {
       onFailure();
       setError(requestError instanceof Error ? requestError.message : 'Não foi possível concluir a pesquisa.');
