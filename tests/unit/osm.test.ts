@@ -566,6 +566,25 @@ describe('searchBusinesses', () => {
     await expect(service.continueSearch(started.searchId)).rejects.toBeInstanceOf(OsmSearchSessionExpiredError);
   });
 
+  test('removes abandoned expired sessions when a later search starts', async () => {
+    let currentTime = 0;
+    const searchSessions = new Map();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ elements: [] }), { status: 200 })));
+    const service = createOsmSearchService({
+      scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }),
+      now: () => currentTime,
+      searchSessions
+    });
+
+    await service.startSearch({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+    expect(searchSessions.size).toBe(1);
+
+    currentTime = 15 * 60_000;
+    await service.startSearch({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+
+    expect(searchSessions.size).toBe(1);
+  });
+
   test('keeps a progressive national search available after one unit fails', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))

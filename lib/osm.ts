@@ -89,6 +89,7 @@ type SearchServiceOptions = {
   scheduler?: OsmRequestScheduler;
   now?: () => number;
   cacheTtlMs?: number;
+  searchSessions?: Map<string, OsmSearchSession>;
 };
 
 type CachedValue<T> = { expiresAt: number; value: T };
@@ -147,9 +148,10 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
   const cacheTtlMs = options.cacheTtlMs ?? CACHE_TTL_MS;
   const searchCache = new Map<string, CachedValue<ExternalBusiness[]>>();
   const geocodeCache = new Map<string, CachedValue<{ latitude: number; longitude: number }>>();
-  const searchSessions = new Map<string, OsmSearchSession>();
+  const searchSessions = options.searchSessions ?? new Map<string, OsmSearchSession>();
 
   async function startSearch(input: SearchBusinessesInput): Promise<SearchBatch & { searchId: string }> {
+    removeExpiredSearchSessions();
     const timestamp = now();
     const searchId = createSearchId();
     const session: OsmSearchSession = {
@@ -165,12 +167,17 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
   }
 
   async function continueSearch(searchId: string): Promise<SearchBatch> {
+    removeExpiredSearchSessions();
     const session = searchSessions.get(searchId);
-    if (!session || now() - session.lastAccessAt >= SEARCH_SESSION_TTL_MS) {
-      searchSessions.delete(searchId);
-      throw new OsmSearchSessionExpiredError();
-    }
+    if (!session) throw new OsmSearchSessionExpiredError();
     return consumeNextUnit(session);
+  }
+
+  function removeExpiredSearchSessions() {
+    const timestamp = now();
+    for (const [searchId, session] of searchSessions) {
+      if (timestamp - session.lastAccessAt >= SEARCH_SESSION_TTL_MS) searchSessions.delete(searchId);
+    }
   }
 
   async function buildSearchUnits(input: SearchBusinessesInput): Promise<SearchUnit[]> {
