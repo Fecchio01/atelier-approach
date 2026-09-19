@@ -40,6 +40,7 @@ export async function GET(request: Request) {
 
     try {
       const batch = await osmSearchService.continueSearch(searchId);
+      savedSearch.expiresAt = Date.now() + SEARCH_FILTER_TTL_MS;
       return Response.json({
         businesses: await filterBusinessesForResponse(batch.businesses, savedSearch.filters),
         searchId,

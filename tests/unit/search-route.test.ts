@@ -211,4 +211,27 @@ describe('GET /api/search', () => {
       error: 'Sua busca expirou. Inicie uma nova pesquisa para continuar.'
     });
   });
+
+  test('keeps route filters active when successful continuations span more than fifteen minutes', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-18T12:00:00Z'));
+    try {
+      mocks.getCurrentUser.mockResolvedValue({ id: 'sliding-expiration-user' });
+      mocks.startSearch.mockResolvedValue({
+        businesses: [],
+        searchId: 'sliding-expiration-search',
+        hasMore: true
+      });
+      mocks.continueSearch.mockResolvedValue({ businesses: [], hasMore: true });
+
+      await GET(new Request('http://localhost/api/search?niche=oficina&region=Campinas'));
+      await vi.advanceTimersByTimeAsync(14 * 60_000);
+      expect((await GET(new Request('http://localhost/api/search?searchId=sliding-expiration-search'))).status).toBe(200);
+
+      await vi.advanceTimersByTimeAsync(14 * 60_000);
+      expect((await GET(new Request('http://localhost/api/search?searchId=sliding-expiration-search'))).status).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
