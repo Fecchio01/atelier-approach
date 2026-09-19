@@ -1,12 +1,10 @@
-import { enrichFromOfficialWebsite } from './prospect-enrichment';
-
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter'
 ];
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
-const MAX_RESULTS = 500;
+const MAX_RESULTS = 1_000;
 const NATIONAL_MAX_RESULTS = 5_000;
 const NATIONAL_SUPPLEMENT_THRESHOLD = 500;
 const NATIONAL_SEARCH_BUDGET_MS = 60_000;
@@ -311,23 +309,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
 }
 
 async function enrichBusinesses(businesses: ExternalBusiness[]) {
-  const enriched: ExternalBusiness[] = [];
-  for (let index = 0; index < businesses.length; index += 3) {
-    const batch = await Promise.all(businesses.slice(index, index + 3).map(async (business) => {
-      if (!business.website) return business;
-      const contacts = await enrichFromOfficialWebsite(business.website);
-      return {
-        ...business,
-        phone: business.phone ?? contacts.phone,
-        whatsapp: business.whatsapp ?? contacts.whatsapp,
-        instagram: business.instagram ?? contacts.instagram,
-        website: business.website ?? contacts.website,
-        imageUrl: contacts.imageUrl ?? business.imageUrl
-      };
-    }));
-    enriched.push(...batch);
-  }
-  return enriched;
+  return businesses;
 }
 
 const defaultSearchService = createOsmSearchService();
@@ -350,7 +332,7 @@ function buildOverpassQuery(
   const selector = selectorOverride
     ? appendAround(selectorOverride, around)
     : isAutomotiveAestheticsNiche(input.niche)
-    ? appendAround(buildAutomotiveAestheticsSelectors(true), around)
+    ? appendAround([buildAutomotiveAestheticsSelectors(true), buildAutomotiveNameSelectors()].join('\n'), around)
     : mappedTags.length
     ? mappedTags.map((tag) => `nwr["${tag.key}"="${tag.value}"]${around};`).join('\n  ')
     : buildTextSelectors(escapeOverpassRegex(input.niche.trim()), around);
@@ -388,8 +370,12 @@ function buildAutomotiveAestheticsSelectors(includeRepair = false) {
 function buildNationalAutomotiveSelectors() {
   return [
     buildAutomotiveAestheticsSelectors(true),
-    'nwr["name"~"est[eé]tica|lavagem|lava.?jato|car.?wash|oficina|mec[aâ]nica|polimento|detailing|funilaria|auto.?center|auto.?pecas|auto.?mecanica|garage|garagem|lava",i]'
+    buildAutomotiveNameSelectors()
   ].join('\n  ');
+}
+
+function buildAutomotiveNameSelectors() {
+  return 'nwr["name"~"est[eé]tica|detalhamento|lavagem|lava.?jato|car.?wash|oficina|mec[aâ]nica|polimento|detailing|higieniza[cç][aã]o|funilaria|martelinho|auto.?center|auto.?pecas|auto.?mecanica|garage|garagem|lava",i]';
 }
 
 function appendAround(selectors: string, around: string) {

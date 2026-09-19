@@ -210,7 +210,7 @@ describe('searchBusinesses', () => {
     await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
 
     const overpassQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
-    expect(overpassQuery).toContain('out center tags 500;');
+    expect(overpassQuery).toContain('out center tags 1000;');
     expect(overpassQuery).not.toContain('out center meta');
   });
 
@@ -237,6 +237,33 @@ describe('searchBusinesses', () => {
 
     const stateQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
     expect(stateQuery).toContain('nwr["shop"="car_repair"]');
+  });
+
+  test('broadens automotive searches with business-name variations and a higher state result ceiling', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+
+    const stateQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(stateQuery).toContain('detalhamento');
+    expect(stateQuery).toContain('higieniza');
+    expect(stateQuery).toContain('funilaria');
+    expect(stateQuery).toContain('auto.?pecas');
+    expect(stateQuery).toContain('out center tags 1000;');
+  });
+
+  test('does not crawl company websites while collecting free OSM prospects', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      elements: [{ type: 'node', id: 992, tags: { name: 'Estética Direta', website: 'https://example.test' } }]
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   test('recognizes alternate OSM website tags when the standard website tag is absent', async () => {
@@ -460,7 +487,7 @@ describe('searchBusinesses', () => {
     const first = await service.searchBusinesses(input);
     const second = await service.searchBusinesses(input);
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(second).toEqual(first);
     expect(first).toEqual([
       expect.objectContaining({
