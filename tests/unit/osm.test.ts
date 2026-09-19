@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { OsmRequestScheduler, OsmUnavailableError, createOsmSearchService } from '../../lib/osm';
+import {
+  OsmRequestScheduler,
+  OsmSearchSessionExpiredError,
+  OsmUnavailableError,
+  createOsmSearchService
+} from '../../lib/osm';
 
 describe('searchBusinesses', () => {
   afterEach(() => {
@@ -508,5 +513,78 @@ describe('searchBusinesses', () => {
     await expect(
       service.searchBusinesses({ niche: 'estética automotiva', region: 'Campinas, SP', radiusKm: 5 })
     ).rejects.toBeInstanceOf(OsmUnavailableError);
+  });
+
+  test('returns distinct progressive batches for a search session', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [{ type: 'node', id: 1, tags: { name: 'Oficina Tags', shop: 'car_repair' } }]
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [
+          { type: 'node', id: 1, tags: { name: 'Oficina Tags repetida' } },
+          { type: 'node', id: 2, tags: { name: 'Oficina Nome' } }
+        ]
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    const started = await service.startSearch({
+      niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5
+    });
+    const continued = await service.continueSearch(started.searchId);
+
+    expect(started).toMatchObject({
+      searchId: expect.any(String),
+      businesses: [expect.objectContaining({ osmId: 'node/1', name: 'Oficina Tags' })],
+      hasMore: true
+    });
+    expect(continued).toEqual({
+      businesses: [expect.objectContaining({ osmId: 'node/2', name: 'Oficina Nome' })],
+      hasMore: false
+    });
+  });
+
+  test('rejects an unknown progressive-search session', async () => {
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    await expect(service.continueSearch('missing-session')).rejects.toBeInstanceOf(OsmSearchSessionExpiredError);
+  });
+
+  test('expires an inactive progressive-search session after fifteen minutes', async () => {
+    let currentTime = 0;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ elements: [] }), { status: 200 })));
+    const service = createOsmSearchService({
+      scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }),
+      now: () => currentTime
+    });
+    const started = await service.startSearch({
+      niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5
+    });
+    currentTime = 15 * 60_000;
+
+    await expect(service.continueSearch(started.searchId)).rejects.toBeInstanceOf(OsmSearchSessionExpiredError);
+  });
+
+  test('keeps a progressive national search available after one unit fails', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [{ type: 'node', id: 3, tags: { name: 'Oficina Próxima', shop: 'car_repair' } }]
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    const started = await service.startSearch({
+      niche: 'estética automotiva', region: '', radiusKm: 50, national: true
+    });
+    const continued = await service.continueSearch(started.searchId);
+
+    expect(started).toMatchObject({ businesses: [], hasMore: true });
+    expect(continued).toMatchObject({
+      businesses: [expect.objectContaining({ osmId: 'node/3', name: 'Oficina Próxima' })],
+      hasMore: true
+    });
   });
 });

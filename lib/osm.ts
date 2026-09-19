@@ -19,6 +19,7 @@ const NATIONAL_NOMINATIM_TERMS = [
   'car detailing'
 ] as const;
 const CACHE_TTL_MS = 5 * 60_000;
+const SEARCH_SESSION_TTL_MS = 15 * 60_000;
 const STATE_AREA_NAMES: Record<string, string> = {
   'Rio de Janeiro, RJ': 'Rio de Janeiro',
   'Bahia, BA': 'Bahia',
@@ -92,6 +93,22 @@ type SearchServiceOptions = {
 
 type CachedValue<T> = { expiresAt: number; value: T };
 
+type SearchUnit = {
+  family: 'structured-tags' | 'name-variants';
+  query: string;
+};
+
+type OsmSearchSession = {
+  input: SearchBusinessesInput;
+  units: SearchUnit[];
+  nextUnitIndex: number;
+  seenOsmIds: Set<string>;
+  createdAt: number;
+  lastAccessAt: number;
+};
+
+type SearchBatch = { businesses: ExternalBusiness[]; hasMore: boolean };
+
 export class OsmUnavailableError extends Error {
   constructor() {
     super('A busca no OpenStreetMap está indisponível no momento. Tente novamente em alguns instantes.');
@@ -130,6 +147,71 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
   const cacheTtlMs = options.cacheTtlMs ?? CACHE_TTL_MS;
   const searchCache = new Map<string, CachedValue<ExternalBusiness[]>>();
   const geocodeCache = new Map<string, CachedValue<{ latitude: number; longitude: number }>>();
+  const searchSessions = new Map<string, OsmSearchSession>();
+
+  async function startSearch(input: SearchBusinessesInput): Promise<SearchBatch & { searchId: string }> {
+    const timestamp = now();
+    const searchId = createSearchId();
+    const session: OsmSearchSession = {
+      input,
+      units: await buildSearchUnits(input),
+      nextUnitIndex: 0,
+      seenOsmIds: new Set(),
+      createdAt: timestamp,
+      lastAccessAt: timestamp
+    };
+    searchSessions.set(searchId, session);
+    return { searchId, ...(await consumeNextUnit(session)) };
+  }
+
+  async function continueSearch(searchId: string): Promise<SearchBatch> {
+    const session = searchSessions.get(searchId);
+    if (!session || now() - session.lastAccessAt >= SEARCH_SESSION_TTL_MS) {
+      searchSessions.delete(searchId);
+      throw new OsmSearchSessionExpiredError();
+    }
+    return consumeNextUnit(session);
+  }
+
+  async function buildSearchUnits(input: SearchBusinessesInput): Promise<SearchUnit[]> {
+    const selectors = searchUnitSelectors(input);
+    if (input.national) {
+      return NATIONAL_STATE_NAMES.flatMap((stateName) => selectors.map(({ family, selector }) => ({
+        family,
+        query: buildOverpassQuery(input, null, stateName, '4', selector, 1_000)
+      })));
+    }
+
+    const areaName = input.city ? stripPlaceSuffix(input.city) : STATE_AREA_NAMES[input.region] ?? null;
+    const areaLevel = input.city ? '8' : '4';
+    const coordinates = areaName ? null : await geocodeRegion(input.region);
+    return selectors.map(({ family, selector }) => ({
+      family,
+      query: buildOverpassQuery(input, coordinates, areaName, areaLevel, selector)
+    }));
+  }
+
+  async function consumeNextUnit(session: OsmSearchSession): Promise<SearchBatch> {
+    const unit = session.units[session.nextUnitIndex++];
+    session.lastAccessAt = now();
+    if (!unit) return { businesses: [], hasMore: false };
+
+    try {
+      const payload = await fetchOverpass(unit.query);
+      const normalized = (payload.elements ?? []).flatMap(normalizeBusiness);
+      const relevant = isAutomotiveAestheticsNiche(session.input.niche)
+        ? normalized.filter((business) => !isAutomotiveNoise(business.name))
+        : normalized;
+      const unseen = dedupeBusinesses(relevant).filter((business) => {
+        if (session.seenOsmIds.has(business.osmId)) return false;
+        session.seenOsmIds.add(business.osmId);
+        return true;
+      });
+      return { businesses: await enrichBusinesses(unseen), hasMore: session.nextUnitIndex < session.units.length };
+    } catch {
+      return { businesses: [], hasMore: session.nextUnitIndex < session.units.length };
+    }
+  }
 
   async function searchBusinesses(input: SearchBusinessesInput): Promise<ExternalBusiness[]> {
     const cacheKey = `${normalizeText(input.niche)}|${normalizeText(input.region)}|${normalizeText(input.city ?? '')}|${input.national ? 'national' : input.radiusKm}`;
@@ -305,7 +387,14 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     cache.set(key, { expiresAt: now() + cacheTtlMs, value });
   }
 
-  return { searchBusinesses };
+  return { searchBusinesses, startSearch, continueSearch };
+}
+
+export class OsmSearchSessionExpiredError extends Error {
+  constructor() {
+    super('Esta sessão de busca expirou. Inicie uma nova busca para continuar.');
+    this.name = 'OsmSearchSessionExpiredError';
+  }
 }
 
 async function enrichBusinesses(businesses: ExternalBusiness[]) {
@@ -372,6 +461,28 @@ function buildNationalAutomotiveSelectors() {
     buildAutomotiveAestheticsSelectors(true),
     buildAutomotiveNameSelectors()
   ].join('\n  ');
+}
+
+function searchUnitSelectors(input: SearchBusinessesInput) {
+  const structuredSelector = isAutomotiveAestheticsNiche(input.niche)
+    ? buildAutomotiveAestheticsSelectors(true)
+    : mappedOsmTags(input.niche).length
+      ? mappedOsmTags(input.niche).map((tag) => `nwr["${tag.key}"="${tag.value}"]`).join('\n')
+      : [
+          `nwr["shop"~"${escapeOverpassRegex(input.niche.trim())}",i]`,
+          `nwr["craft"~"${escapeOverpassRegex(input.niche.trim())}",i]`
+        ].join('\n');
+  const nameSelector = isAutomotiveAestheticsNiche(input.niche)
+    ? buildAutomotiveNameSelectors()
+    : `nwr["name"~"${escapeOverpassRegex(input.niche.trim())}",i]`;
+  return [
+    { family: 'structured-tags' as const, selector: structuredSelector },
+    { family: 'name-variants' as const, selector: nameSelector }
+  ];
+}
+
+function createSearchId() {
+  return globalThis.crypto?.randomUUID?.() ?? `osm-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function buildAutomotiveNameSelectors() {
