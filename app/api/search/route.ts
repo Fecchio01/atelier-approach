@@ -1,13 +1,21 @@
 import { getCurrentUser } from '../../../lib/auth';
 import { prisma } from '../../../lib/db';
 import { scoreBusiness } from '../../../lib/lead-score';
-import { OsmUnavailableError, searchBusinesses } from '../../../lib/osm';
+import {
+  createOsmSearchService,
+  ExternalBusiness,
+  OsmSearchSessionExpiredError,
+  OsmUnavailableError
+} from '../../../lib/osm';
 
 const UNAVAILABLE_MESSAGE = 'A pesquisa está indisponível no momento. Tente novamente em alguns instantes.';
 const RATE_LIMIT_MESSAGE = 'Muitas buscas em pouco tempo. Aguarde um minuto antes de tentar novamente.';
 const MAX_SEARCHES_PER_MINUTE = 5;
 const RATE_LIMIT_WINDOW_MS = 60_000;
+const SEARCH_FILTER_TTL_MS = 15 * 60_000;
 const searchAttemptsByUser = new Map<string, number[]>();
+const osmSearchService = createOsmSearchService();
+const filtersBySearchId = new Map<string, { filters: ResearchFilters; expiresAt: number }>();
 
 type ResearchFilters = {
   phoneOnly: boolean;
@@ -24,6 +32,29 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const searchId = searchParams.get('searchId')?.trim();
+
+  if (searchId) {
+    const savedSearch = getSavedSearch(searchId);
+    if (!savedSearch) return expiredSearchResponse();
+
+    try {
+      const batch = await osmSearchService.continueSearch(searchId);
+      return Response.json({
+        businesses: await filterBusinessesForResponse(batch.businesses, savedSearch.filters),
+        searchId,
+        hasMore: batch.hasMore
+      });
+    } catch (error) {
+      if (error instanceof OsmSearchSessionExpiredError) {
+        filtersBySearchId.delete(searchId);
+        return expiredSearchResponse();
+      }
+      if (error instanceof OsmUnavailableError) return unavailableResponse();
+      throw error;
+    }
+  }
+
   const niche = searchParams.get('niche')?.trim();
   const region = searchParams.get('region')?.trim();
   const city = searchParams.get('city')?.trim() || undefined;
@@ -45,35 +76,69 @@ export async function GET(request: Request) {
   }
 
   try {
-    const businesses = await searchBusinesses({ niche, region: region ?? '', city, radiusKm: 50, national });
-    const filteredBusinesses = businesses.filter((business) => matchesResearchFilters(business, filters));
-    const existingLeads = await prisma.lead.findMany({
-      where: { osmId: { in: filteredBusinesses.map((business) => business.osmId) } },
-      select: { id: true, osmId: true }
-    });
-    const leadsByOsmId = new Map(existingLeads.map((lead) => [lead.osmId, lead]));
-
-    const responseBusinesses = filteredBusinesses.flatMap((business) => {
-      const existingLead = leadsByOsmId.get(business.osmId);
-      if (existingLead && !filters.includeWorked) return [];
-      if (!filters.includeWorked) return [business];
-      return [{
-        ...business,
-        alreadyWorked: Boolean(existingLead),
-        crmHref: existingLead ? `/crm?lead=${existingLead.id}` : null
-      }];
-    });
+    const batch = await osmSearchService.startSearch({ niche, region: region ?? '', city, radiusKm: 50, national });
+    removeExpiredSavedSearches();
+    filtersBySearchId.set(batch.searchId, { filters, expiresAt: Date.now() + SEARCH_FILTER_TTL_MS });
 
     return Response.json({
-      businesses: responseBusinesses
+      businesses: await filterBusinessesForResponse(batch.businesses, filters),
+      searchId: batch.searchId,
+      hasMore: batch.hasMore
     });
   } catch (error) {
     if (error instanceof OsmUnavailableError) {
-      return Response.json({ error: UNAVAILABLE_MESSAGE }, { status: 503 });
+      return unavailableResponse();
     }
 
     throw error;
   }
+}
+
+function removeExpiredSavedSearches() {
+  const now = Date.now();
+  for (const [searchId, savedSearch] of filtersBySearchId) {
+    if (savedSearch.expiresAt <= now) filtersBySearchId.delete(searchId);
+  }
+}
+
+function getSavedSearch(searchId: string) {
+  const savedSearch = filtersBySearchId.get(searchId);
+  if (!savedSearch || savedSearch.expiresAt <= Date.now()) {
+    filtersBySearchId.delete(searchId);
+    return null;
+  }
+  return savedSearch;
+}
+
+function expiredSearchResponse() {
+  return Response.json(
+    { error: 'Sua busca expirou. Inicie uma nova pesquisa para continuar.' },
+    { status: 410 }
+  );
+}
+
+function unavailableResponse() {
+  return Response.json({ error: UNAVAILABLE_MESSAGE }, { status: 503 });
+}
+
+async function filterBusinessesForResponse(businesses: ExternalBusiness[], filters: ResearchFilters) {
+  const filteredBusinesses = businesses.filter((business) => matchesResearchFilters(business, filters));
+  const existingLeads = await prisma.lead.findMany({
+    where: { osmId: { in: filteredBusinesses.map((business) => business.osmId) } },
+    select: { id: true, osmId: true }
+  });
+  const leadsByOsmId = new Map(existingLeads.map((lead) => [lead.osmId, lead]));
+
+  return filteredBusinesses.flatMap((business) => {
+    const existingLead = leadsByOsmId.get(business.osmId);
+    if (existingLead && !filters.includeWorked) return [];
+    if (!filters.includeWorked) return [business];
+    return [{
+      ...business,
+      alreadyWorked: Boolean(existingLead),
+      crmHref: existingLead ? `/crm?lead=${existingLead.id}` : null
+    }];
+  });
 }
 
 function parseResearchFilters(searchParams: URLSearchParams): ResearchFilters | null {
@@ -98,7 +163,7 @@ function parseScore(value: string | null) {
 }
 
 function matchesResearchFilters(
-  business: Awaited<ReturnType<typeof searchBusinesses>>[number],
+  business: ExternalBusiness,
   filters: ResearchFilters
 ) {
   const { score } = scoreBusiness(business);
