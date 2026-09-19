@@ -9,6 +9,8 @@ async function signIn(page: import('@playwright/test').Page, credentials: Pick<t
   await page.getByLabel('E-mail').fill(credentials.email);
   await page.getByLabel('Senha').fill(credentials.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
+  await expect.poll(async () => (await page.context().cookies()).some((cookie) => cookie.name.endsWith('authjs.session-token'))).toBe(true);
+  await page.goto('/');
   await expect(page).toHaveURL('http://127.0.0.1:3001/');
 }
 
@@ -60,6 +62,66 @@ test('accumulates, deduplicates and reorders progressive search batches', async 
   await expect(page.getByRole('link', { name: 'Abrir WhatsApp de Segunda empresa' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Abrir Instagram de Segunda empresa' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Abrir Segunda empresa no Google Maps' })).toBeVisible();
+});
+
+test('ignores a delayed continuation after a newer search starts', async ({ page }) => {
+  let initialRequests = 0;
+  let releaseContinuation: () => void = () => undefined;
+  let markContinuationStarted: () => void = () => undefined;
+  let markContinuationFinished: () => void = () => undefined;
+  const continuationMayFinish = new Promise<void>((resolve) => { releaseContinuation = resolve; });
+  const continuationStarted = new Promise<void>((resolve) => { markContinuationStarted = resolve; });
+  const continuationFinished = new Promise<void>((resolve) => { markContinuationFinished = resolve; });
+
+  await page.route('**/api/search**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('searchId') === 'old-search') {
+      markContinuationStarted();
+      await continuationMayFinish;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          businesses: [{ osmId: 'node/stale', name: 'Empresa atrasada', phone: null, website: null, instagram: null }],
+          searchId: 'old-search',
+          hasMore: false
+        })
+      });
+      markContinuationFinished();
+      return;
+    }
+
+    initialRequests += 1;
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(initialRequests === 1
+        ? {
+            businesses: [{ osmId: 'node/old', name: 'Empresa da busca antiga', phone: null, website: null, instagram: null }],
+            searchId: 'old-search',
+            hasMore: true
+          }
+        : {
+            businesses: [{ osmId: 'node/new', name: 'Empresa da busca nova', phone: null, website: null, instagram: null }],
+            searchId: 'new-search',
+            hasMore: false
+          })
+    });
+  });
+
+  await signIn(page);
+  await page.goto('/pesquisa');
+  await page.getByRole('button', { name: 'Pesquisar' }).click();
+  await expect(page.getByText('Empresa da busca antiga')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Carregar mais empresas' }).click();
+  await continuationStarted;
+  await page.getByRole('button', { name: 'Pesquisar' }).click();
+  await expect(page.getByText('Empresa da busca nova')).toBeVisible();
+
+  releaseContinuation();
+  await continuationFinished;
+  await expect(page.getByText('Empresa atrasada')).not.toBeVisible();
+  await expect(page.getByText('Empresa da busca nova')).toBeVisible();
+  await expect(page.getByText('1 prospect novo, em ordem de prioridade.')).toBeVisible();
 });
 
 test('asks for a new search when the progressive search session expires', async ({ page }) => {

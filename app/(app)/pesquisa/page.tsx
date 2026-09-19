@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { LeadCard } from '@/components/lead-card';
 import { SearchForm, type SearchResultBatch } from '@/components/search-form';
@@ -22,12 +22,15 @@ export default function PesquisaPage() {
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [continuationError, setContinuationError] = useState<string | null>(null);
+  const searchGeneration = useRef(0);
 
   function handleSearchStart() {
+    searchGeneration.current += 1;
     setHasSearched(false);
     setBusinesses([]);
     setSearchId(null);
     setHasMore(false);
+    setIsLoadingMore(false);
     setContinuationError(null);
   }
 
@@ -48,11 +51,13 @@ export default function PesquisaPage() {
   async function loadMoreBusinesses() {
     if (!searchId || !hasMore || isLoadingMore) return;
 
+    const requestGeneration = searchGeneration.current;
     setIsLoadingMore(true);
     setContinuationError(null);
     try {
       const response = await fetch(`/api/search?searchId=${encodeURIComponent(searchId)}`);
       const payload = (await response.json()) as Partial<SearchResultBatch> & { error?: string };
+      if (requestGeneration !== searchGeneration.current) return;
 
       if (response.status === 410) {
         setSearchId(null);
@@ -73,9 +78,10 @@ export default function PesquisaPage() {
       setSearchId(payload.searchId);
       setHasMore(payload.hasMore);
     } catch (requestError) {
+      if (requestGeneration !== searchGeneration.current) return;
       setContinuationError(requestError instanceof Error ? requestError.message : 'Não foi possível buscar mais empresas.');
     } finally {
-      setIsLoadingMore(false);
+      if (requestGeneration === searchGeneration.current) setIsLoadingMore(false);
     }
   }
 

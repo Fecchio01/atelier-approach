@@ -44,3 +44,12 @@ test('loads and accumulates progressive search batches instead of paginating a l
   expect(pageSource).toContain('Carregar mais empresas');
   expect(pageSource).toContain('Buscando mais empresas…');
 });
+
+test('invalidates an in-flight continuation when a new search starts', () => {
+  const pageSource = readFileSync(resolve(process.cwd(), 'app/(app)/pesquisa/page.tsx'), 'utf8');
+
+  expect(pageSource).toContain('const searchGeneration = useRef(0);');
+  expect(pageSource).toContain('searchGeneration.current += 1;');
+  expect(pageSource).toContain('const requestGeneration = searchGeneration.current;');
+  expect(pageSource).toContain('if (requestGeneration !== searchGeneration.current) return;');
+});
