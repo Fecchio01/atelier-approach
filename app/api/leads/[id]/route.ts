@@ -179,3 +179,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (updatedLead === false) return Response.json({ error: 'Este follow-up já foi encerrado.' }, { status: 409 });
   return Response.json({ lead: updatedLead });
 }
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
+
+  const { id } = await params;
+  const deleted = await prisma.lead.deleteMany({ where: { id } });
+  if (deleted.count === 0) return Response.json({ error: 'Lead não encontrado.' }, { status: 404 });
+
+  return Response.json({ success: true });
+}

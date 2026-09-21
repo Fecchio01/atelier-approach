@@ -16,6 +16,7 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       ...process.env,
+      NEXT_DIST_DIR: '.next-e2e',
       AUTH_INTERNAL_EMAIL: e2eCredentials.email,
       AUTH_INTERNAL_PASSWORD: e2eCredentials.password,
       AUTH_INTERNAL_SECONDARY_EMAIL: e2eCredentials.secondary.email,

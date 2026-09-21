@@ -229,13 +229,14 @@ test('lets two members share an overdue follow-up and close it with revenue valu
 
   await signIn(page);
   await page.goto('/pesquisa');
-  await page.getByLabel('Nicho').fill('oficina');
-  await page.getByLabel('Região').fill('Campinas, SP');
+  await page.getByLabel('Região / estado').selectOption('São Paulo, SP');
   await page.getByRole('button', { name: 'Pesquisar' }).click();
   await page.getByRole('button', { name: 'Marcar como abordada' }).click();
   await page.getByRole('button', { name: 'Salvar abordagem' }).click();
 
-  const lead = page.locator('[data-lead-id]').filter({ hasText: businessName });
+  const card = page.getByRole('button', { name: `Abrir detalhes de ${businessName}` });
+  await card.click();
+  const lead = page.getByRole('dialog', { name: businessName });
   await lead.getByRole('button', { name: 'Fechar negócio' }).click();
   await expect(page.locator('p[role="alert"]')).toHaveText('Informe o valor da venda e o MRR para fechar o negócio.');
   await lead.getByLabel('Data do follow-up').fill(new Date(Date.now() - 86_400_000).toISOString().slice(0, 16));
@@ -243,7 +244,7 @@ test('lets two members share an overdue follow-up and close it with revenue valu
   await expect(lead.getByText('Retorno vencido')).toBeVisible();
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Follow-ups vencidos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Follow-ups', exact: true })).toBeVisible();
   await expect(page.getByText(businessName)).toBeVisible();
   const revenue = page.locator('article').filter({ has: page.getByText('Receita vendida') }).locator('p').nth(1);
   const mrr = page.locator('article').filter({ has: page.getByText('MRR') }).locator('p').nth(1);
@@ -257,9 +258,11 @@ test('lets two members share an overdue follow-up and close it with revenue valu
   await secondPage.close();
 
   await page.goto('/crm');
+  await card.click();
   await lead.getByLabel('Valor da venda').fill('1500');
   await lead.getByLabel('MRR').fill('300');
   await lead.getByRole('button', { name: 'Fechar negócio' }).click();
+  await expect(lead.getByLabel('Mover para')).toHaveValue('WON');
   await page.goto('/');
   await expect(revenue).not.toHaveText(revenueBeforeClosing);
   await expect(mrr).not.toHaveText(mrrBeforeClosing);

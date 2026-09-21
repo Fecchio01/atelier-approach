@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 
 vi.mock('../../lib/auth', () => ({ getCurrentUser: mocks.getCurrentUser }));
 
-import { PATCH } from '../../app/api/leads/[id]/route';
+import { DELETE, PATCH } from '../../app/api/leads/[id]/route';
 import { POST } from '../../app/api/leads/route';
 import { prisma } from '../../lib/db';
 
@@ -32,6 +32,37 @@ describe('lead routes', () => {
     const payload = await response.json();
     expect(payload.lead).toMatchObject({ osmId: 'node/auto-brilho', name: 'Auto Brilho', stage: 'CONTACTED' });
     await expect(prisma.activity.findMany({ where: { leadId: payload.lead.id } })).resolves.toHaveLength(1);
+  });
+
+  test('deletes a test approach and all of its CRM history so it can return to research', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/restore-to-research' } });
+    await prisma.activity.create({ data: { leadId: lead.id, actorId: 'internal-equipe', note: 'Abordagem de teste.' } });
+    await prisma.followUp.create({ data: { leadId: lead.id, ownerId: 'internal-equipe', dueDate: new Date('2026-09-20T12:00:00.000Z'), note: 'Teste.' } });
+    await prisma.stageHistory.create({ data: { leadId: lead.id, actorId: 'internal-equipe', toStage: 'CONTACTED' } });
+    await prisma.saleEvent.create({ data: { leadId: lead.id, actorId: 'internal-equipe', saleValue: 1, mrr: 1 } });
+
+    const response = await DELETE(
+      new Request(`http://localhost/api/leads/${lead.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: lead.id }) }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true });
+    await expect(prisma.lead.findUnique({ where: { id: lead.id } })).resolves.toBeNull();
+    await expect(prisma.activity.count({ where: { leadId: lead.id } })).resolves.toBe(0);
+    await expect(prisma.followUp.count({ where: { leadId: lead.id } })).resolves.toBe(0);
+    await expect(prisma.stageHistory.count({ where: { leadId: lead.id } })).resolves.toBe(0);
+    await expect(prisma.saleEvent.count({ where: { leadId: lead.id } })).resolves.toBe(0);
+  });
+
+  test('returns 404 when restoring a lead that is not in the CRM', async () => {
+    const response = await DELETE(
+      new Request('http://localhost/api/leads/missing-lead', { method: 'DELETE' }),
+      { params: Promise.resolve({ id: 'missing-lead' }) }
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: 'Lead não encontrado.' });
   });
 
   test('rejects a duplicate OSM record with a link to its existing CRM record', async () => {
