@@ -4,6 +4,23 @@ import { getDashboardMetrics, upsertWeeklyGoal } from '../../lib/metrics';
 import { prisma } from '../../lib/db';
 
 describe('getDashboardMetrics', () => {
+  test('counts the renamed conversation stage as an interest without counting later stages again', () => {
+    const metrics = getDashboardMetrics(
+      [{
+        id: 'conversation-lead', stage: 'PROPOSAL', saleValue: null, mrr: null, activities: [], followUps: [],
+        stageHistory: [
+          { actorId: 'ana', toStage: 'IN_CONVERSATION', createdAt: new Date('2026-09-08T10:00:00.000Z') },
+          { actorId: 'ana', toStage: 'QUALIFIED', createdAt: new Date('2026-09-09T10:00:00.000Z') },
+          { actorId: 'ana', toStage: 'PROPOSAL', createdAt: new Date('2026-09-10T10:00:00.000Z') }
+        ]
+      }],
+      [],
+      { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z') }
+    );
+
+    expect(metrics.personalResults.ana).toMatchObject({ interests: 1, meetings: 0 });
+  });
+
   test('sums won sales and MRR and calculates approach goal progress', () => {
     const metrics = getDashboardMetrics(
       [

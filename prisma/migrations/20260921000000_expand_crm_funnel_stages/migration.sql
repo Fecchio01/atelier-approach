@@ -1,0 +1,3 @@
+-- SQLite stores Prisma enum values as TEXT, so no table rewrite is needed.
+-- The corresponding schema migration expands LeadStage with IN_CONVERSATION,
+-- QUALIFIED and PROPOSAL while retaining INTEREST for legacy records.

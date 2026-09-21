@@ -1,5 +1,6 @@
 import type { ActivityType, LeadStage } from '@prisma/client';
 import { prisma } from './db';
+import { isInterestStage, isMeetingStage } from './funnel';
 
 export type MetricActivity = { actorId: string; type?: ActivityType; createdAt: Date; note?: string };
 export type MetricStageEvent = { actorId: string; toStage: LeadStage; createdAt: Date };
@@ -84,13 +85,13 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
       if ((activity.type === 'CONTACT' || !activity.type) && inRange(activity.createdAt, range)) member(activity.actorId).approaches += 1;
     }
     const history = lead.stageHistory?.length ? lead.stageHistory : (lead.activities ?? []).flatMap((activity) => {
-      const match = activity.note?.match(/INTEREST|FOLLOW_UP/);
+      const match = activity.note?.match(/INTEREST|IN_CONVERSATION|FOLLOW_UP/);
       return match ? [{ actorId: activity.actorId, toStage: match[0] as LeadStage, createdAt: activity.createdAt }] : [];
     });
     for (const event of history) {
       if (!inRange(event.createdAt, range)) continue;
-      if (event.toStage === 'INTEREST') member(event.actorId).interests += 1;
-      if (event.toStage === 'FOLLOW_UP') member(event.actorId).meetings += 1;
+      if (isInterestStage(event.toStage)) member(event.actorId).interests += 1;
+      if (isMeetingStage(event.toStage)) member(event.actorId).meetings += 1;
     }
     for (const sale of lead.saleEvents ?? []) {
       if (!inRange(sale.occurredAt, range)) continue;

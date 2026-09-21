@@ -5,11 +5,11 @@ import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { getDashboardMetrics, type DashboardRange, type WeeklyGoalInput } from '@/lib/metrics';
+import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels } from '@/lib/funnel';
 
 type Period = 'day' | 'week' | 'month';
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 const percent = (value: number) => `${Math.round(value * 100)}%`;
-const stageLabels: Record<string, string> = { NEW: 'Novos', CONTACTED: 'Abordados', INTEREST: 'Interesse', FOLLOW_UP: 'Follow-up', WON: 'Ganhos', NO_RESPONSE: 'Sem resposta', DISCARDED: 'Descartados' };
 
 function monday(reference: Date) { const start = new Date(reference); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); return start; }
 function rangeFor(period: Period, now = new Date()): DashboardRange {
@@ -37,7 +37,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const names = new Map(profiles.map((profile) => [profile.id, profile.name])); if (user) names.set(user.id, user.name || user.id);
   const nameFor = (id: string) => names.get(id) ?? id;
   const teamRows = Object.entries(metrics.personalResults).sort(([first], [second]) => nameFor(first).localeCompare(nameFor(second)));
-  const funnel = Object.entries(stageLabels).map(([stage, label]) => ({ label, leads: leads.filter((lead) => lead.stage === stage).length }));
+  const funnel = [...mainFunnelStages, ...auxiliaryFunnelStages].map((stage) => ({
+    label: stageLabels[stage],
+    leads: leads.filter((lead) => normalizeFunnelStage(lead.stage) === stage).length
+  }));
   const periodLabel = period === 'day' ? 'Hoje' : period === 'week' ? 'Esta semana' : 'Este mês';
   const FollowUps = ({ followUps, empty, overdue = false }: { followUps: typeof metrics.overdue; empty: string; overdue?: boolean }) => <ul className="mt-3 grid gap-3">{followUps.length ? followUps.map((followUp) => <li key={followUp.id} className={`rounded-lg border px-3 py-2 text-sm ${overdue ? 'border-red-300/25 bg-red-300/10' : 'border-white/15'}`}><strong>{followUp.lead?.name ?? 'Lead sem nome'}</strong> · {nameFor(followUp.ownerId)} · {overdue ? `vencido em ${followUp.dueDate.toLocaleDateString('pt-BR')}` : 'retorno hoje'}</li>) : <li className="text-sm text-white/55">{empty}</li>}</ul>;
   const progressRows = (progress: typeof metrics.goalProgress) => [['Abordagens', progress.approaches], ['Interesses', progress.interests], ['Reuniões', progress.meetings], ['Vendas', progress.sales], ['Receita', progress.revenue]].map(([label, value]) => <ProgressRow key={String(label)} label={String(label)} value={value as number} />);

@@ -1,6 +1,7 @@
 import { Channel, LeadStage } from '@prisma/client';
 
 import { prisma } from './db';
+import { auxiliaryFunnelStages, isInterestStage, isMeetingStage, mainFunnelStages, normalizeFunnelStage } from './funnel';
 
 export type ReportRange = { from: Date; to: Date; now?: Date };
 export type RecentReportPeriod = 'week' | 'month';
@@ -72,8 +73,8 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
     result.approaches += 1;
   }
   for (const event of stageHistory) {
-    if (event.toStage === 'INTEREST') member(event.actorId).interests += 1;
-    if (event.toStage === 'FOLLOW_UP') member(event.actorId).meetings += 1;
+    if (isInterestStage(event.toStage)) member(event.actorId).interests += 1;
+    if (isMeetingStage(event.toStage)) member(event.actorId).meetings += 1;
   }
   for (const sale of effectiveWins) {
     const result = member(sale.actorId);
@@ -91,7 +92,7 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
     },
     channels,
     members: [...memberResults.entries()].map(([memberId, result]) => ({ memberId, ...result })).sort((first, second) => first.memberId.localeCompare(second.memberId)),
-    funnel: Object.values(LeadStage).map((stage) => ({ stage, leads: leads.filter((lead) => lead.stage === stage).length })),
+    funnel: [...mainFunnelStages, ...auxiliaryFunnelStages].map((stage) => ({ stage, leads: leads.filter((lead) => normalizeFunnelStage(lead.stage) === stage).length })),
     followUps: {
       pending: followUps.filter((followUp) => followUp.state === 'PENDING' && inRange(followUp.dueDate, range)).length,
       completed: followUps.filter((followUp) => followUp.state === 'COMPLETED' && followUp.completedAt && inRange(followUp.completedAt, range)).length,

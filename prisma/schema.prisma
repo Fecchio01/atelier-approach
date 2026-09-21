@@ -10,6 +10,9 @@ datasource db {
 enum LeadStage {
   NEW
   CONTACTED
+  IN_CONVERSATION
+  QUALIFIED
+  PROPOSAL
   INTEREST
   FOLLOW_UP
   WON
