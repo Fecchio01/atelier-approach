@@ -5,6 +5,7 @@ import { mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage }
 import type { CrmLead } from './kanban-board';
 
 import { parseClosingValues } from '@/lib/crm-form';
+import { displayCompanyName } from '@/lib/display-name';
 
 type Stage = FunnelStage;
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
@@ -200,7 +201,7 @@ export function LeadDetailModal({ lead, onClose, onUpdated }: { lead: CrmLead; o
   return <dialog ref={dialogRef} aria-modal="true" aria-labelledby="lead-detail-title" data-testid="lead-modal-backdrop" onCancel={(event) => { event.preventDefault(); onClose(); }} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-center justify-center bg-transparent p-3 text-white backdrop:bg-black/70 backdrop:backdrop-blur-md open:flex sm:p-8">
     <div className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#111411] shadow-2xl">
       <header className="flex items-start justify-between gap-5 border-b border-white/10 px-6 py-5">
-        <div className="min-w-0"><p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--atelier-green)]">{stageLabels[normalizeFunnelStage(lead.stage)]}</p><h2 id="lead-detail-title" className="break-words text-xl font-semibold tracking-tight sm:text-2xl">{lead.name ?? 'Empresa sem nome'}</h2><p className="mt-1 text-xs text-white/40">Detalhes da empresa · CRM compartilhado</p></div>
+        <div className="min-w-0"><p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--atelier-green)]">{stageLabels[normalizeFunnelStage(lead.stage)]}</p><h2 id="lead-detail-title" className="break-words text-xl font-semibold tracking-tight sm:text-2xl">{displayCompanyName(lead.name)}</h2><p className="mt-1 text-xs text-white/40">Detalhes da empresa · CRM compartilhado</p></div>
         <button ref={closeRef} type="button" aria-label="Fechar detalhes" onClick={onClose} className="min-h-10 shrink-0 rounded-lg border border-white/15 px-4 text-sm text-white/70 hover:bg-white/5">Fechar <span aria-hidden="true">×</span></button>
       </header>
       {error ? <p role="alert" className="border-b border-red-300/15 bg-red-300/5 px-6 py-3 text-sm text-red-200">{error}</p> : null}
@@ -232,4 +233,3 @@ function contactLinks(lead: CrmLead) {
   if (query) links.push({ label: 'Google Maps', href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` });
   return links;
 }
-

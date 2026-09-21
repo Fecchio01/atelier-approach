@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import type { Channel } from '@prisma/client';
 import type { ExternalBusiness } from '@/lib/osm';
 import type { BusinessScore } from '@/lib/lead-score';
+import { displayCompanyName } from '@/lib/display-name';
 
 type LeadCardProps = {
   business: ExternalBusiness;
@@ -21,6 +22,7 @@ export function LeadCard({ business, result }: LeadCardProps) {
   const instagramHref = toInstagramHref(business.instagram);
   const websiteHref = toWebsiteHref(business.website);
   const googleMapsHref = toGoogleMapsHref(business.name, business.address);
+  const displayName = displayCompanyName(business.name);
 
   async function saveApproach() {
     setError(null);
@@ -48,16 +50,16 @@ export function LeadCard({ business, result }: LeadCardProps) {
   }
 
   return (
-    <article className="flex flex-col gap-5 rounded-2xl border border-white/15 bg-white/5 p-5">
+    <article className="group flex flex-col gap-5 rounded-2xl border border-white/[0.09] bg-[#111411] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)] transition hover:border-white/20">
       {business.imageUrl ? (
         // External Open Graph images are not part of a configured, trusted image host list.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={business.imageUrl} alt={`Foto pública de ${business.name}`} className="h-40 w-full rounded-xl object-cover" />
+        <img src={business.imageUrl} alt={`Foto pública de ${displayName}`} className="h-40 w-full rounded-xl object-cover" />
       ) : null}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-white/55">Prospect OSM</p>
-          <h2 className="mt-1 text-xl font-semibold text-white">{business.name}</h2>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">Prospect</p>
+          <h2 className="mt-2 text-lg font-semibold leading-snug text-white">{displayName}</h2>
         </div>
         <span className="rounded-full border border-[var(--atelier-green)]/60 px-3 py-1 text-xs font-semibold text-[var(--atelier-green)]">
           {business.whatsapp ? 'WhatsApp disponível' : business.instagram ? 'Instagram disponível' : business.website ? 'Site disponível' : business.phone ? 'Telefone disponível' : 'Sem canal direto'}
@@ -74,30 +76,17 @@ export function LeadCard({ business, result }: LeadCardProps) {
         </div>
       ) : null}
 
-      <dl className="grid gap-3 text-sm text-white/75">
-        {business.address ? <div><dt className="text-white/45">Endereço</dt><dd>{business.address}</dd></div> : null}
-        <div>
-          <dt className="text-white/45">Telefone</dt>
-          <dd>{business.phone ? <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} className="underline underline-offset-2 hover:text-white">{business.phone}</a> : 'Não informado'}</dd>
-        </div>
-        <div>
-          <dt className="text-white/45">Site</dt>
-          <dd>{websiteHref ? <a href={websiteHref} target="_blank" rel="noreferrer" className="break-all underline underline-offset-2 hover:text-white">{business.website}</a> : 'Não informado'}</dd>
-        </div>
-        <div>
-          <dt className="text-white/45">Instagram</dt>
-          <dd>{instagramHref ? <a href={instagramHref} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">{business.instagram}</a> : 'Não informado'}</dd>
-        </div>
-        <div>
-          <dt className="text-white/45">WhatsApp</dt>
-          <dd>{whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">{business.whatsapp ?? business.phone}</a> : 'Não informado'}</dd>
-        </div>
-        {business.latitude !== undefined && business.longitude !== undefined && business.latitude !== null && business.longitude !== null ? <div><dt className="text-white/45">Coordenadas</dt><dd>{business.latitude}, {business.longitude}</dd></div> : null}
-        {business.lastSyncedAt ? <div><dt className="text-white/45">Última atualização OSM</dt><dd>{new Date(business.lastSyncedAt).toLocaleString('pt-BR')}</dd></div> : null}
-      </dl>
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Por que esta prioridade</p>
+      <details className="rounded-xl border border-white/[0.08] bg-black/15 p-4 text-sm text-white/75">
+        <summary className="cursor-pointer font-medium text-white/70 marker:text-[var(--atelier-green)]">Ver dados e prioridade</summary>
+        <dl className="mt-4 grid gap-3">
+          {business.address ? <div><dt className="text-white/45">Endereço</dt><dd>{business.address}</dd></div> : null}
+          <div><dt className="text-white/45">Telefone</dt><dd>{business.phone ? <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} className="underline underline-offset-2 hover:text-white">{business.phone}</a> : 'Não informado'}</dd></div>
+          <div><dt className="text-white/45">Site</dt><dd>{websiteHref ? <a href={websiteHref} target="_blank" rel="noreferrer" className="break-all underline underline-offset-2 hover:text-white">{business.website}</a> : 'Não informado'}</dd></div>
+          <div><dt className="text-white/45">Instagram</dt><dd>{instagramHref ? <a href={instagramHref} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">{business.instagram}</a> : 'Não informado'}</dd></div>
+          <div><dt className="text-white/45">WhatsApp</dt><dd>{whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">{business.whatsapp ?? business.phone}</a> : 'Não informado'}</dd></div>
+          {business.latitude !== undefined && business.longitude !== undefined && business.latitude !== null && business.longitude !== null ? <div><dt className="text-white/45">Coordenadas</dt><dd>{business.latitude}, {business.longitude}</dd></div> : null}
+        </dl>
+        <p className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Por que esta prioridade</p>
         <ul className="mt-2 flex flex-wrap gap-2">
           {result.reasons.length ? (
             result.reasons.map((reason) => (
@@ -109,7 +98,7 @@ export function LeadCard({ business, result }: LeadCardProps) {
             <li className="text-sm text-white/60">Dados de contato já cadastrados.</li>
           )}
         </ul>
-      </div>
+      </details>
 
       {business.alreadyWorked && business.crmHref ? (
         <div className="grid gap-3 rounded-xl border border-[var(--atelier-green)]/50 bg-[var(--atelier-green)]/10 p-3"><p className="text-sm font-medium">Já trabalhada no CRM</p><button type="button" onClick={() => router.push(business.crmHref!)} className="min-h-10 rounded-lg border border-[var(--atelier-green)] px-4 font-semibold text-[var(--atelier-green)]">Abrir no CRM</button></div>

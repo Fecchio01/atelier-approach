@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { buildRecommendations, buildReport, getRecentReportRange } from '@/lib/reports';
 import { getMemberProfiles } from '@/lib/member-profile';
+import { PageHeading } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,10 +19,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const nameFor = (memberId: string) => profiles.find((profile) => profile.id === memberId)?.name ?? memberId;
 
   return <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--atelier-green)]">Relatórios comerciais</p><h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Leituras do CRM, sem previsões.</h1><p className="mt-2 text-white/65">Os números usam atividades, etapas e eventos de ganho registrados no CRM.</p></div>
-      <Link href="/" className="text-sm text-[var(--atelier-green)]">← Dashboard</Link>
-    </div>
+    <PageHeading eyebrow="Relatórios comerciais" title="Leituras do CRM, sem previsões." description="Os números usam atividades, etapas e eventos de ganho registrados no CRM." action={<Link href="/" className="text-sm text-[var(--atelier-green)]">← Painel</Link>} />
     <nav aria-label="Período do relatório" className="mt-8 flex gap-3">
       <Link href="/relatorios?period=week" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'week' ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Últimos 7 dias</Link>
       <Link href="/relatorios?period=month" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'month' ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Últimos 30 dias</Link>
@@ -50,7 +48,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 }
 
 function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <article className="rounded-2xl border border-white/15 bg-white/5 p-5"><p className="text-sm text-white/65">{label}</p><strong className="mt-2 block text-3xl">{value}</strong><p className="mt-2 text-xs text-white/50">{detail}</p></article>;
+  return <article className="rounded-2xl border border-white/[0.09] bg-[#111411] p-5"><p className="text-sm text-white/65">{label}</p><strong className="mt-2 block text-3xl">{value}</strong><p className="mt-2 text-xs text-white/50">{detail}</p></article>;
 }
 
 function ReportTable({ title, headers, rows, empty }: { title: string; headers: string[]; rows: (string | number)[][]; empty: string }) {

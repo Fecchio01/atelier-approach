@@ -69,7 +69,7 @@ export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormPr
   }
 
   return (
-    <form aria-busy={isLoading} className="grid gap-4 rounded-2xl border border-white/15 bg-white/5 p-5 md:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto] md:items-end" onSubmit={handleSubmit}>
+    <form aria-busy={isLoading} className="grid gap-5 rounded-2xl border border-white/[0.09] bg-[#111411] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)] md:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto] md:items-end" onSubmit={handleSubmit}>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         Nicho
         <input readOnly value={FIXED_NICHE} className="min-h-11 rounded-lg border border-[var(--atelier-green)]/50 bg-black/30 px-3 text-white outline-none" />
@@ -105,7 +105,7 @@ export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormPr
       >
         {isLoading ? 'Pesquisando…' : 'Pesquisar'}
       </button>
-      <div className="grid gap-3 border-t border-white/10 pt-4 text-sm md:col-span-5 md:grid-cols-[1fr_auto] md:items-center">
+      <div className="grid gap-3 border-t border-white/[0.08] pt-4 text-sm md:col-span-5 md:grid-cols-[1fr_auto] md:items-center">
         <p className="text-white/55">Todos os estabelecimentos encontrados serão exibidos; os canais disponíveis ficam no topo.</p>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
           <input checked={includeWorked} onChange={(event) => setIncludeWorked(event.target.checked)} type="checkbox" />

@@ -3,6 +3,8 @@
 :root {
   --atelier-black: #050505;
   --atelier-green: #B6FF00;
+  --atelier-surface: #111411;
+  --atelier-surface-raised: #171b17;
 }
 
 * {
@@ -11,7 +13,9 @@
 
 body {
   margin: 0;
-  background: var(--atelier-black);
+  min-width: 320px;
+  background: radial-gradient(circle at top, #121812 0, var(--atelier-black) 42rem);
+  color: #fff;
 }
 
 ::selection {
@@ -23,3 +27,6 @@ body {
   outline: 3px solid var(--atelier-green);
   outline-offset: 3px;
 }
+
+button, a, input, select, textarea { transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease; }
+input, select, textarea { color-scheme: dark; }

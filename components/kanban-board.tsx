@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { LeadStage } from '@prisma/client';
 import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage } from '@/lib/funnel';
 import { LeadDetailModal } from './lead-detail-modal';
+import { displayCompanyName } from '@/lib/display-name';
 
 export type CrmLead = {
   id: string;
@@ -41,8 +42,8 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
         {stageLeads.map((lead) => {
           const latest = lead.activities[0];
           const channels = [[lead.whatsapp, 'WhatsApp'], [lead.instagram, 'Instagram'], [lead.website, 'Site'], [lead.phone, 'Telefone']].filter(([value]) => Boolean(value));
-          return <button key={lead.id} id={`lead-${lead.id}`} data-lead-id={lead.id} type="button" aria-label={`Abrir detalhes de ${lead.name ?? 'Empresa sem nome'}`} onClick={() => setSelectedLeadId(lead.id)} className="group grid min-h-32 w-full gap-5 rounded-xl border border-white/10 bg-[#151715] p-4 text-left shadow-sm transition hover:border-white/25 hover:bg-[#1b1e1b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
-            <span className="break-words text-sm font-semibold leading-relaxed text-white/90">{lead.name ?? 'Empresa sem nome'}</span>
+          return <button key={lead.id} id={`lead-${lead.id}`} data-lead-id={lead.id} type="button" aria-label={`Abrir detalhes de ${displayCompanyName(lead.name)}`} onClick={() => setSelectedLeadId(lead.id)} className="group grid min-h-32 w-full gap-5 rounded-xl border border-white/10 bg-[#151715] p-4 text-left shadow-sm transition hover:border-white/25 hover:bg-[#1b1e1b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
+            <span className="break-words text-sm font-semibold leading-relaxed text-white/90">{displayCompanyName(lead.name)}</span>
             <span className="grid gap-3">
               <span className="flex flex-wrap gap-1.5" aria-label="Canais disponíveis">{channels.length ? channels.map(([, channel]) => <span key={channel} className="rounded-md border border-white/[0.07] px-1.5 py-1 text-[10px] text-white/50">{channel}</span>) : <span className="text-[11px] text-white/35">Sem canal direto</span>}</span>
               <span className="text-[11px] text-white/35">{latest ? <>Última atividade · <time dateTime={latest.createdAt}>{new Date(latest.createdAt).toLocaleDateString('pt-BR')}</time></> : 'Sem atividade registrada'}</span>
