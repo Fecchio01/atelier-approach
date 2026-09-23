@@ -25,14 +25,44 @@ function rangeFor(period: Period, now = new Date()): DashboardRange {
 export default async function Home({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const params = await searchParams;
   const period: Period = params.period === 'day' || params.period === 'month' ? params.period : 'week';
-  const range = rangeFor(period);
+  const now = new Date();
+  const goalWeekStart = monday(now);
+  const range = rangeFor(period, now);
   const user = await getCurrentUser();
-  const [leads, goals, profiles] = await Promise.all([
-    prisma.lead.findMany({ include: { activities: { select: { actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }, stageHistory: true, saleEvents: true, followUps: { include: { lead: { select: { id: true, name: true } } } } } }),
-    prisma.goal.findMany({ where: { weekStart: range.goalWeekStart } }), getMemberProfiles()
+  const weekEnd = new Date(goalWeekStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  const dataFrom = range.start < goalWeekStart ? range.start : goalWeekStart;
+  const dataTo = range.end > weekEnd ? range.end : weekEnd;
+  const tomorrow = new Date(now);
+  tomorrow.setHours(0, 0, 0, 0);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const [leads, goals, profiles, activities, stageHistory, saleEvents, followUps] = await Promise.all([
+    prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } }),
+    prisma.goal.findMany({ where: { weekStart: goalWeekStart } }),
+    getMemberProfiles(),
+    prisma.activity.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }),
+    prisma.stageHistory.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, toStage: true, createdAt: true } }),
+    prisma.saleEvent.findMany({ where: { occurredAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true } }),
+    prisma.followUp.findMany({ where: { state: 'PENDING', dueDate: { lt: tomorrow } }, select: { id: true, leadId: true, dueDate: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } } })
   ]);
+  const byLead = <T extends { leadId: string }>(rows: T[]) => {
+    const result = new Map<string, T[]>();
+    for (const row of rows) result.set(row.leadId, [...(result.get(row.leadId) ?? []), row]);
+    return result;
+  };
+  const activitiesByLead = byLead(activities);
+  const historyByLead = byLead(stageHistory);
+  const salesByLead = byLead(saleEvents);
+  const followUpsByLead = byLead(followUps);
+  const metricLeads = leads.map((lead) => ({
+    ...lead,
+    activities: (activitiesByLead.get(lead.id) ?? []).map(({ actorId, type, createdAt, note }) => ({ actorId, type, createdAt, note })),
+    stageHistory: historyByLead.get(lead.id) ?? [],
+    saleEvents: salesByLead.get(lead.id) ?? [],
+    followUps: followUpsByLead.get(lead.id) ?? []
+  }));
   const weeklyGoals: WeeklyGoalInput[] = goals.map((goal) => ({ ownerId: goal.ownerId === '__team__' ? null : goal.ownerId, weekStart: goal.weekStart, approachesTarget: goal.approachesTarget, interestsTarget: goal.interestsTarget, meetingsTarget: goal.meetingsTarget, salesTarget: goal.salesTarget, revenueTarget: goal.revenueTarget }));
-  const metrics = getDashboardMetrics(leads, weeklyGoals, range);
+  const metrics = getDashboardMetrics(metricLeads, weeklyGoals, range);
   const mine = user ? metrics.personalResults[user.id] ?? { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 } : { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 };
   const myProgress = user ? metrics.personalGoalProgress[user.id] : undefined;
   const names = new Map(profiles.map((profile) => [profile.id, profile.name])); if (user) names.set(user.id, user.name || user.id);
@@ -40,7 +70,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const teamRows = Object.entries(metrics.personalResults).sort(([first], [second]) => nameFor(first).localeCompare(nameFor(second)));
   const funnel = [...mainFunnelStages, ...auxiliaryFunnelStages].map((stage) => ({
     label: stageLabels[stage],
-    leads: leads.filter((lead) => normalizeFunnelStage(lead.stage) === stage).length
+    leads: metricLeads.filter((lead) => normalizeFunnelStage(lead.stage) === stage).length
   }));
   const periodLabel = period === 'day' ? 'Hoje' : period === 'week' ? 'Esta semana' : 'Este mês';
   const FollowUps = ({ followUps, empty, overdue = false }: { followUps: typeof metrics.overdue; empty: string; overdue?: boolean }) => <ul className="mt-3 grid gap-3">{followUps.length ? followUps.map((followUp) => <li key={followUp.id} className={`rounded-lg border px-3 py-2 text-sm ${overdue ? 'border-red-300/25 bg-red-300/10' : 'border-white/15'}`}><strong>{followUp.lead?.name ?? 'Lead sem nome'}</strong> · {nameFor(followUp.ownerId)} · {overdue ? `vencido em ${followUp.dueDate.toLocaleDateString('pt-BR')}` : 'retorno hoje'}</li>) : <li className="text-sm text-white/55">{empty}</li>}</ul>;

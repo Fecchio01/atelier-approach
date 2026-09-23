@@ -3,6 +3,7 @@ import Credentials from 'next-auth/providers/credentials';
 
 import { authenticateInternalUser } from './internal-auth';
 import { ensureMemberProfile } from './member-profile';
+import { prisma } from './db';
 
 export const { auth, handlers, signIn } = NextAuth({
   // The internal app is routinely exercised on localhost and 127.0.0.1
@@ -42,11 +43,12 @@ export async function getCurrentUser() {
     return null;
   }
 
-  const profile = await ensureMemberProfile({
-    id: session.user.id,
-    name: session.user.name?.trim() || session.user.email || session.user.id,
-    email: session.user.email || `${session.user.id}@atelier.local`
-  });
+  const profile = await prisma.memberProfile.findUnique({ where: { id: session.user.id } })
+    ?? await ensureMemberProfile({
+      id: session.user.id,
+      name: session.user.name?.trim() || session.user.email || session.user.id,
+      email: session.user.email || `${session.user.id}@atelier.local`
+    });
 
   return { ...session.user, name: profile.name, email: profile.email, image: profile.avatarUrl };
 }

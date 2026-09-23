@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --atelier-black: #050505;
-  --atelier-green: #B6FF00;
-  --atelier-surface: #111411;
-  --atelier-surface-raised: #171b17;
+  --atelier-black: #070a0d;
+  --atelier-green: #b6ff36;
+  --atelier-surface: #11161b;
+  --atelier-surface-raised: #171e24;
+  --atelier-line: rgba(255, 255, 255, 0.09);
 }
 
 * {
@@ -14,7 +15,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: radial-gradient(circle at top, #121812 0, var(--atelier-black) 42rem);
+  background: radial-gradient(circle at 55% -20%, #1c2923 0, transparent 38rem), var(--atelier-black);
   color: #fff;
 }
 
@@ -29,4 +30,8 @@ body {
 }
 
 button, a, input, select, textarea { transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease; }
+button:active, a:active { transform: translateY(1px); }
 input, select, textarea { color-scheme: dark; }
+
+.atelier-scrollbar::-webkit-scrollbar { height: 9px; width: 9px; }
+.atelier-scrollbar::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,255,255,.14); }

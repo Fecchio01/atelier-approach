@@ -177,6 +177,20 @@ describe('lead routes', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Informe o valor da venda e o MRR para fechar o negócio.' });
   });
 
+  test('discards a lead directly without requiring a written reason', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/direct-discard' } });
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH', body: JSON.stringify({ stage: 'DISCARDED' })
+      }), { params: Promise.resolve({ id: lead.id }) }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({ stage: 'DISCARDED' });
+    await expect(prisma.activity.findFirstOrThrow({ where: { leadId: lead.id, type: 'DISCARDED' } })).resolves.toMatchObject({ note: 'Lead descartado.' });
+  });
+
   test('records structured stage and immutable sale histories, then clears the active sale on reopen', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/reopen-history', stage: 'INTEREST' } });
 

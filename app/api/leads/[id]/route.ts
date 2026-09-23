@@ -13,7 +13,6 @@ type CrmUpdate = {
   saleValue?: unknown;
   mrr?: unknown;
   activity?: { channel?: unknown; note?: unknown };
-  discardReason?: unknown;
 };
 
 function optionalText(value: unknown) {
@@ -81,10 +80,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ error: 'Informe canal e nota da atividade.' }, { status: 400 });
   }
 
-  const discardReason = optionalText(body.discardReason);
-  if (stage === 'DISCARDED' && !discardReason) {
-    return Response.json({ error: 'Informe o motivo do descarte.' }, { status: 400 });
-  }
   if (!stage && !followUpAction && !body.activity) {
     return Response.json({ error: 'Informe uma atualização para o lead.' }, { status: 400 });
   }
@@ -127,7 +122,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             ? 'DISCARDED'
             : 'STAGE_CHANGE';
       const note = stage === 'DISCARDED'
-        ? `Lead descartado: ${discardReason}.`
+        ? 'Lead descartado.'
         : stage === 'WON'
           ? 'Negócio fechado.'
           : lead.stage === 'WON'

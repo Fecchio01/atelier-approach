@@ -1,21 +1,47 @@
 import { getCurrentUser } from '../../../lib/auth';
 import { prisma } from '../../../lib/db';
-import { scoreBusiness } from '../../../lib/lead-score';
+import { approachabilityRank, scoreBusiness } from '../../../lib/lead-score';
 import {
   createOsmSearchService,
   ExternalBusiness,
+  isGenericBusinessName,
   OsmSearchSessionExpiredError,
   OsmUnavailableError
 } from '../../../lib/osm';
+import {
+  OvertureSearchArea,
+  planOvertureSearchAreas,
+  searchOvertureArea,
+  splitOvertureSearchArea
+} from '../../../lib/overture';
+
+export const runtime = 'nodejs';
 
 const UNAVAILABLE_MESSAGE = 'A pesquisa está indisponível no momento. Tente novamente em alguns instantes.';
 const RATE_LIMIT_MESSAGE = 'Muitas buscas em pouco tempo. Aguarde um minuto antes de tentar novamente.';
 const MAX_SEARCHES_PER_MINUTE = 5;
+const MIN_INITIAL_SEARCH_RESULTS = 5;
+const MIN_PROGRESSIVE_SEARCH_RESULTS = 5;
+const MAX_PROGRESSIVE_FILL_CONTINUATIONS = 3;
+const MAX_INITIAL_FILL_CONTINUATIONS = 3;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const SEARCH_FILTER_TTL_MS = 15 * 60_000;
+const INITIAL_RESULTS_PER_PAGE = 60;
+const MAX_OVERTURE_AREAS_PER_REQUEST = 4;
 const searchAttemptsByUser = new Map<string, number[]>();
 const osmSearchService = createOsmSearchService();
-const filtersBySearchId = new Map<string, { filters: ResearchFilters; expiresAt: number }>();
+const filtersBySearchId = new Map<string, SavedSearch>();
+
+type SavedSearch = {
+  filters: ResearchFilters;
+  expiresAt: number;
+  overtureOnly: boolean;
+  overtureAreas: OvertureSearchArea[];
+  overtureQueue: ExternalBusiness[];
+  osmHasMore: boolean;
+  seenOsmIds: Set<string>;
+  seenBusinesses: ExternalBusiness[];
+};
 
 type ResearchFilters = {
   phoneOnly: boolean;
@@ -39,12 +65,46 @@ export async function GET(request: Request) {
     if (!savedSearch) return expiredSearchResponse();
 
     try {
-      const batch = await osmSearchService.continueSearch(searchId);
+      if (savedSearch.overtureOnly) {
+        const businesses = await consumeOverturePage(savedSearch);
+        savedSearch.expiresAt = Date.now() + SEARCH_FILTER_TTL_MS;
+        return Response.json({
+          businesses: sortForResearchPage(businesses),
+          searchId,
+          hasMore: hasMoreOvertureAreas(savedSearch)
+        });
+      }
+
+      const businesses: ExternalBusiness[] = [];
+      let continuationCount = 0;
+      while (
+        businesses.length < MIN_PROGRESSIVE_SEARCH_RESULTS
+        && continuationCount < MAX_PROGRESSIVE_FILL_CONTINUATIONS
+        && savedSearch.osmHasMore
+      ) {
+        let batch: { businesses: ExternalBusiness[]; hasMore: boolean };
+        try {
+          batch = await osmSearchService.continueSearch(searchId);
+          savedSearch.osmHasMore = batch.hasMore;
+        } catch (error) {
+          if (businesses.length) break;
+          throw error;
+        }
+
+        const unseenBusinesses = batch.businesses
+          .filter((business) => !savedSearch.seenOsmIds.has(business.osmId));
+        for (const business of batch.businesses) savedSearch.seenOsmIds.add(business.osmId);
+        const nextBusinesses = await filterBusinessesForResponse(unseenBusinesses, savedSearch.filters);
+        businesses.push(...nextBusinesses);
+        savedSearch.seenBusinesses.push(...nextBusinesses);
+        continuationCount += 1;
+      }
+
       savedSearch.expiresAt = Date.now() + SEARCH_FILTER_TTL_MS;
       return Response.json({
-        businesses: await filterBusinessesForResponse(batch.businesses, savedSearch.filters),
+        businesses: sortForResearchPage(businesses),
         searchId,
-        hasMore: batch.hasMore
+        hasMore: savedSearch.osmHasMore
       });
     } catch (error) {
       if (error instanceof OsmSearchSessionExpiredError) {
@@ -77,13 +137,77 @@ export async function GET(request: Request) {
   }
 
   try {
-    const batch = await osmSearchService.startSearch({ niche, region: region ?? '', city, radiusKm: 50, national });
+    const bounds = await osmSearchService.resolveSearchBounds(region ?? '', city, national).catch(() => null);
+    if (bounds) {
+      const overtureSearch: SavedSearch = {
+        filters,
+        expiresAt: Date.now() + SEARCH_FILTER_TTL_MS,
+        overtureOnly: true,
+        overtureAreas: planOvertureSearchAreas(bounds, national, region),
+        overtureQueue: [],
+        osmHasMore: false,
+        seenOsmIds: new Set(),
+        seenBusinesses: []
+      };
+      const overtureBusinesses = await consumeOverturePage(overtureSearch);
+      if (overtureBusinesses.length) {
+        const overtureSearchId = crypto.randomUUID();
+        removeExpiredSavedSearches();
+        filtersBySearchId.set(overtureSearchId, overtureSearch);
+        return Response.json({
+          businesses: sortForResearchPage(overtureBusinesses),
+          searchId: overtureSearchId,
+          hasMore: hasMoreOvertureAreas(overtureSearch)
+        });
+      }
+    }
+
+    const firstBatch = await osmSearchService.startSearch({ niche, region: region ?? '', city, radiusKm: 50, national });
+    const searchId = firstBatch.searchId;
+    let batch: { businesses: ExternalBusiness[]; hasMore: boolean } = firstBatch;
+    let allOsmBusinesses = [...firstBatch.businesses];
     removeExpiredSavedSearches();
-    filtersBySearchId.set(batch.searchId, { filters, expiresAt: Date.now() + SEARCH_FILTER_TTL_MS });
+    const savedSearch: SavedSearch = {
+      filters,
+      expiresAt: Date.now() + SEARCH_FILTER_TTL_MS,
+      overtureOnly: false,
+      overtureAreas: [],
+      overtureQueue: [],
+      osmHasMore: false,
+      seenOsmIds: new Set(),
+      seenBusinesses: []
+    };
+    filtersBySearchId.set(searchId, savedSearch);
+
+    let combined = sortForResearchPage(allOsmBusinesses);
+    let businesses = await filterBusinessesForResponse(combined.slice(0, INITIAL_RESULTS_PER_PAGE), filters);
+    let continuationCount = 0;
+    while (
+      businesses.length < MIN_INITIAL_SEARCH_RESULTS
+      && batch.hasMore
+      && continuationCount < MAX_INITIAL_FILL_CONTINUATIONS
+    ) {
+      let nextBatch: Awaited<ReturnType<typeof osmSearchService.continueSearch>>;
+      try {
+        nextBatch = await osmSearchService.continueSearch(searchId);
+      } catch (error) {
+        if (!businesses.length) throw error;
+        break;
+      }
+      batch = nextBatch;
+      allOsmBusinesses = allOsmBusinesses.concat(nextBatch.businesses);
+      combined = sortForResearchPage(allOsmBusinesses);
+      businesses = await filterBusinessesForResponse(combined.slice(0, INITIAL_RESULTS_PER_PAGE), filters);
+      continuationCount += 1;
+    }
+
+    savedSearch.osmHasMore = batch.hasMore;
+    savedSearch.seenOsmIds = new Set(combined.slice(0, INITIAL_RESULTS_PER_PAGE).map((business) => business.osmId));
+    savedSearch.seenBusinesses = businesses;
 
     return Response.json({
-      businesses: await filterBusinessesForResponse(batch.businesses, filters),
-      searchId: batch.searchId,
+      businesses,
+      searchId,
       hasMore: batch.hasMore
     });
   } catch (error) {
@@ -93,6 +217,73 @@ export async function GET(request: Request) {
 
     throw error;
   }
+}
+
+async function consumeOverturePage(savedSearch: SavedSearch) {
+  const businesses: ExternalBusiness[] = [];
+  let queriedAreas = 0;
+
+  while (
+    businesses.length < MIN_PROGRESSIVE_SEARCH_RESULTS
+    && businesses.length < INITIAL_RESULTS_PER_PAGE
+    && hasMoreOvertureAreas(savedSearch)
+  ) {
+    if (savedSearch.overtureQueue.length) {
+      const candidates = savedSearch.overtureQueue.splice(0, INITIAL_RESULTS_PER_PAGE - businesses.length);
+      businesses.push(...await filterBusinessesForResponse(candidates, savedSearch.filters));
+      continue;
+    }
+
+    if (queriedAreas >= MAX_OVERTURE_AREAS_PER_REQUEST) break;
+    const area = savedSearch.overtureAreas.shift();
+    if (!area) break;
+    queriedAreas += 1;
+
+    try {
+      const result = await searchOvertureArea(area);
+      const unseen = result.businesses.filter((business) => {
+        if (savedSearch.seenOsmIds.has(business.osmId)) return false;
+        savedSearch.seenOsmIds.add(business.osmId);
+        if (savedSearch.seenBusinesses.some((seen) => sameNamedLocation(seen, business))) return false;
+        savedSearch.seenBusinesses.push(business);
+        return true;
+      });
+      savedSearch.overtureQueue.push(...sortForResearchPage(unseen));
+      if (result.hitLimit) {
+        const children = splitOvertureSearchArea(area);
+        savedSearch.overtureAreas.splice(Math.min(8, savedSearch.overtureAreas.length), 0, ...children);
+      }
+    } catch {
+      savedSearch.overtureAreas.unshift(...splitOvertureSearchArea(area));
+    }
+  }
+
+  return businesses;
+}
+
+function hasMoreOvertureAreas(savedSearch: SavedSearch) {
+  return savedSearch.overtureQueue.length > 0 || savedSearch.overtureAreas.length > 0;
+}
+
+function sameNamedLocation(first: ExternalBusiness, second: ExternalBusiness) {
+  if (first.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    !== second.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()) return false;
+  return typeof first.latitude === 'number' && typeof first.longitude === 'number'
+    && typeof second.latitude === 'number' && typeof second.longitude === 'number'
+    && Math.abs(first.latitude - second.latitude) < 0.00025
+    && Math.abs(first.longitude - second.longitude) < 0.00025;
+}
+
+function sortForResearchPage(businesses: ExternalBusiness[]) {
+  return [...businesses].sort((first, second) => {
+    const firstScore = scoreBusiness(first);
+    const secondScore = scoreBusiness(second);
+    const sourcePriority = (business: ExternalBusiness) => business.source === 'Overture' || business.source === 'OpenStreetMap + Overture' ? 0 : 1;
+    return sourcePriority(first) - sourcePriority(second)
+      || approachabilityRank(first) - approachabilityRank(second)
+      || secondScore.score - firstScore.score
+      || first.name.localeCompare(second.name, 'pt-BR');
+  });
 }
 
 function removeExpiredSavedSearches() {
@@ -123,7 +314,8 @@ function unavailableResponse() {
 }
 
 async function filterBusinessesForResponse(businesses: ExternalBusiness[], filters: ResearchFilters) {
-  const filteredBusinesses = businesses.filter((business) => matchesResearchFilters(business, filters));
+  const filteredBusinesses = businesses.filter((business) => hasVerifiableName(business.name)
+    && matchesResearchFilters(business, filters));
   const existingLeads = await prisma.lead.findMany({
     where: { osmId: { in: filteredBusinesses.map((business) => business.osmId) } },
     select: { id: true, osmId: true }
@@ -140,6 +332,15 @@ async function filterBusinessesForResponse(businesses: ExternalBusiness[], filte
       crmHref: existingLead ? `/crm?lead=${existingLead.id}` : null
     }];
   });
+}
+
+function hasVerifiableName(name: string) {
+  const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  return Boolean(normalized)
+    && normalized !== 'nome comercial nao informado'
+    && normalized !== 'yes'
+    && normalized !== 'no'
+    && !isGenericBusinessName(name);
 }
 
 function parseResearchFilters(searchParams: URLSearchParams): ResearchFilters | null {

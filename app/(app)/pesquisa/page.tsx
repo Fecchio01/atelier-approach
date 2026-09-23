@@ -88,7 +88,7 @@ export default function PesquisaPage() {
 
   return (
     <section className="mx-auto max-w-6xl px-5 py-12 md:px-8">
-      <PageHeading eyebrow="Pesquisa de prospecção" title="Encontre novas empresas." description="Resultados do OpenStreetMap, priorizados pelos canais de contato disponíveis. Empresas já trabalhadas ficam fora da busca padrão." />
+      <PageHeading eyebrow="Pesquisa de prospecção" title="Encontre novas empresas." description="Resultados do OpenStreetMap e da Overture, combinados e priorizados pelos canais de contato disponíveis. Empresas já trabalhadas ficam fora da busca padrão." />
 
       <div className="mt-8">
         <SearchForm onResults={handleResults} onSearchStart={handleSearchStart} onFailure={handleFailure} />
@@ -117,7 +117,7 @@ export default function PesquisaPage() {
       </div>
 
       <p className="mt-10 text-xs text-white/45">
-        Dados © <a className="underline underline-offset-2 hover:text-white" href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>.
+        Dados: © <a className="underline underline-offset-2 hover:text-white" href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> · <a className="underline underline-offset-2 hover:text-white" href="https://overturemaps.org/">Overture Maps Foundation</a>.
       </p>
     </section>
   );

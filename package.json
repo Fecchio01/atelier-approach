@@ -12,6 +12,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@duckdb/node-api": "^1.5.5-r.5",
+    "@phosphor-icons/react": "^2.1.10",
     "@prisma/client": "^6.16.1",
     "next": "^15.5.25",
     "next-auth": "^5.0.0-beta.29",
@@ -19,13 +21,13 @@
     "react-dom": "19.1.1"
   },
   "devDependencies": {
-    "@playwright/test": "1.55.0",
     "@eslint/js": "^9.39.5",
-    "@typescript-eslint/parser": "^8.0.0",
+    "@playwright/test": "1.55.0",
     "@tailwindcss/postcss": "4.1.13",
     "@types/node": "22.18.0",
     "@types/react": "19.1.13",
     "@types/react-dom": "19.1.9",
+    "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.25",
     "postcss": "8.5.6",

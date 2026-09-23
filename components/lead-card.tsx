@@ -5,6 +5,7 @@ import type { Channel } from '@prisma/client';
 import type { ExternalBusiness } from '@/lib/osm';
 import type { BusinessScore } from '@/lib/lead-score';
 import { displayCompanyName } from '@/lib/display-name';
+import { googleMapsSearchUrl } from '@/lib/google-maps-url';
 
 type LeadCardProps = {
   business: ExternalBusiness;
@@ -18,11 +19,12 @@ export function LeadCard({ business, result }: LeadCardProps) {
   const [note, setNote] = useState('Abordagem iniciada a partir da pesquisa.');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const whatsappHref = toWhatsAppHref(business.whatsapp ?? business.phone);
+  const whatsappHref = toWhatsAppHref(business.whatsapp);
   const instagramHref = toInstagramHref(business.instagram);
   const websiteHref = toWebsiteHref(business.website);
-  const googleMapsHref = toGoogleMapsHref(business.name, business.address);
+  const googleMapsHref = googleMapsSearchUrl({ name: business.name, address: business.address, category: business.category, latitude: business.latitude, longitude: business.longitude });
   const displayName = displayCompanyName(business.name);
+  const displayCategory = business.category ? formatBusinessCategory(business.category) : null;
 
   async function saveApproach() {
     setError(null);
@@ -58,8 +60,12 @@ export function LeadCard({ business, result }: LeadCardProps) {
       ) : null}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">Prospect</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">Prospect</p>
+            {business.source ? <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/45">Fonte: {business.source}</span> : null}
+          </div>
           <h2 className="mt-2 text-lg font-semibold leading-snug text-white">{displayName}</h2>
+          {displayCategory ? <p className="mt-1 text-sm text-white/55">{displayCategory}</p> : null}
         </div>
         <span className="rounded-full border border-[var(--atelier-green)]/60 px-3 py-1 text-xs font-semibold text-[var(--atelier-green)]">
           {business.whatsapp ? 'WhatsApp disponível' : business.instagram ? 'Instagram disponível' : business.website ? 'Site disponível' : business.phone ? 'Telefone disponível' : 'Sem canal direto'}
@@ -158,7 +164,16 @@ function toWebsiteHref(value: string | null | undefined) {
   }
 }
 
-function toGoogleMapsHref(name: string, address: string | null | undefined) {
-  const query = [name, address].filter(Boolean).join(', ');
-  return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : null;
+function formatBusinessCategory(category: string) {
+  const labels: Record<string, string> = {
+    car_wash: 'Lavagem automotiva',
+    car_repair: 'Oficina mecânica',
+    vehicle_repair: 'Oficina mecânica',
+    car_parts: 'Autopeças',
+    tyres: 'Pneus e rodas',
+    car_painter: 'Funilaria e pintura automotiva',
+    car_detailing: 'Estética automotiva',
+    oil_change: 'Troca de óleo'
+  };
+  return labels[category] ?? category.replace(/_/g, ' ');
 }

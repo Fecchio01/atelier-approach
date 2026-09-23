@@ -18,40 +18,63 @@ type SearchFormProps = {
 
 const FIXED_NICHE = 'estética automotiva';
 const REGIONS = [
-  { value: 'Rio de Janeiro, RJ', label: 'Rio de Janeiro' },
+  { value: 'Acre, AC', label: 'Acre' },
+  { value: 'Alagoas, AL', label: 'Alagoas' },
+  { value: 'Amapá, AP', label: 'Amapá' },
+  { value: 'Amazonas, AM', label: 'Amazonas' },
   { value: 'Bahia, BA', label: 'Bahia' },
-  { value: 'São Paulo, SP', label: 'São Paulo' }
+  { value: 'Ceará, CE', label: 'Ceará' },
+  { value: 'Distrito Federal, DF', label: 'Distrito Federal' },
+  { value: 'Espírito Santo, ES', label: 'Espírito Santo' },
+  { value: 'Goiás, GO', label: 'Goiás' },
+  { value: 'Maranhão, MA', label: 'Maranhão' },
+  { value: 'Mato Grosso, MT', label: 'Mato Grosso' },
+  { value: 'Mato Grosso do Sul, MS', label: 'Mato Grosso do Sul' },
+  { value: 'Minas Gerais, MG', label: 'Minas Gerais' },
+  { value: 'Pará, PA', label: 'Pará' },
+  { value: 'Paraíba, PB', label: 'Paraíba' },
+  { value: 'Paraná, PR', label: 'Paraná' },
+  { value: 'Pernambuco, PE', label: 'Pernambuco' },
+  { value: 'Piauí, PI', label: 'Piauí' },
+  { value: 'Rio de Janeiro, RJ', label: 'Rio de Janeiro' },
+  { value: 'Rio Grande do Norte, RN', label: 'Rio Grande do Norte' },
+  { value: 'Rio Grande do Sul, RS', label: 'Rio Grande do Sul' },
+  { value: 'Rondônia, RO', label: 'Rondônia' },
+  { value: 'Roraima, RR', label: 'Roraima' },
+  { value: 'Santa Catarina, SC', label: 'Santa Catarina' },
+  { value: 'São Paulo, SP', label: 'São Paulo' },
+  { value: 'Sergipe, SE', label: 'Sergipe' },
+  { value: 'Tocantins, TO', label: 'Tocantins' }
 ] as const;
-const CITIES_BY_REGION: Record<string, readonly string[]> = {
-  'Rio de Janeiro, RJ': ['Rio de Janeiro, RJ', 'Niterói, RJ', 'Duque de Caxias, RJ', 'São Gonçalo, RJ', 'Nova Iguaçu, RJ', 'Petrópolis, RJ'],
-  'Bahia, BA': ['Salvador, BA', 'Feira de Santana, BA', 'Vitória da Conquista, BA', 'Camaçari, BA', 'Itabuna, BA'],
-  'São Paulo, SP': ['São Paulo, SP', 'Campinas, SP', 'Guarulhos, SP', 'Santos, SP', 'São José dos Campos, SP', 'Sorocaba, SP', 'Ribeirão Preto, SP']
-};
 
 export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormProps) {
   const [country, setCountry] = useState('BR');
   const [region, setRegion] = useState('');
   const [city, setCity] = useState('');
-  const [includeWorked, setIncludeWorked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const isNational = country === 'BR' && !region;
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const country = String(formData.get('country') ?? 'BR');
+    const region = String(formData.get('region') ?? '');
+    const city = String(formData.get('city') ?? '').trim();
+    const includeWorked = formData.get('includeWorked') === 'on';
+    const isNational = country === 'BR' && !region;
+    const params = new URLSearchParams({
+      niche: FIXED_NICHE,
+      country,
+      region,
+      city,
+      includeWorked: String(includeWorked),
+      national: String(isNational)
+    });
+
     onSearchStart();
     setError(null);
     setIsLoading(true);
 
     try {
-      const params = new URLSearchParams({
-        niche: FIXED_NICHE,
-        country,
-        region,
-        city,
-        includeWorked: String(includeWorked),
-        national: String(isNational)
-      });
       const response = await fetch(`/api/search?${params}`);
       const payload = (await response.json()) as Partial<SearchResultBatch> & { error?: string };
 
@@ -76,13 +99,14 @@ export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormPr
       </label>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         País
-        <select required value={country} onChange={(event) => setCountry(event.target.value)} className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none focus:border-[var(--atelier-green)]">
+        <select name="country" required value={country} onChange={(event) => setCountry(event.target.value)} className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none focus:border-[var(--atelier-green)]">
           <option value="BR">Brasil</option>
         </select>
       </label>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         Região / estado
         <select
+          name="region"
           value={region}
           onChange={(event) => { setRegion(event.target.value); setCity(''); }}
           className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none placeholder:text-white/40 focus:border-[var(--atelier-green)]"
@@ -93,10 +117,14 @@ export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormPr
       </label>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         Cidade (opcional)
-        <select disabled={!region} value={city} onChange={(event) => setCity(event.target.value)} className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none disabled:cursor-not-allowed disabled:opacity-40 focus:border-[var(--atelier-green)]">
-          <option value="">Todas as cidades</option>
-          {(CITIES_BY_REGION[region] ?? []).map((option) => <option key={option} value={option}>{option.replace(/, [A-Z]{2}$/, '')}</option>)}
-        </select>
+        <input
+          name="city"
+          disabled={!region}
+          value={city}
+          onChange={(event) => setCity(event.target.value)}
+          placeholder={region ? 'Ex.: Campinas' : 'Selecione um estado primeiro'}
+          className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:opacity-40 focus:border-[var(--atelier-green)]"
+        />
       </label>
       <button
         type="submit"
@@ -108,7 +136,7 @@ export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormPr
       <div className="grid gap-3 border-t border-white/[0.08] pt-4 text-sm md:col-span-5 md:grid-cols-[1fr_auto] md:items-center">
         <p className="text-white/55">Todos os estabelecimentos encontrados serão exibidos; os canais disponíveis ficam no topo.</p>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
-          <input checked={includeWorked} onChange={(event) => setIncludeWorked(event.target.checked)} type="checkbox" />
+          <input name="includeWorked" defaultChecked={false} type="checkbox" />
           Mostrar empresas já trabalhadas
         </label>
       </div>

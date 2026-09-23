@@ -37,20 +37,33 @@ export function getRecentReportRange(period: RecentReportPeriod, reference = new
 }
 
 export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyReport> {
-  const [leads, activities, followUps, wins, stageHistory, contacts] = await Promise.all([
+  const [leads, activities, followUps, wins, stageHistory] = await Promise.all([
     prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } }),
     prisma.activity.findMany({
       where: { createdAt: { gte: range.from, lt: range.to } },
       select: { leadId: true, actorId: true, type: true, channel: true, note: true, createdAt: true },
       orderBy: { createdAt: 'desc' }
     }),
-    prisma.followUp.findMany({ select: { dueDate: true, state: true, completedAt: true, cancelledAt: true } }),
+    prisma.followUp.findMany({
+      where: { OR: [
+        { dueDate: { gte: range.from, lt: range.to } },
+        { completedAt: { gte: range.from, lt: range.to } },
+        { cancelledAt: { gte: range.from, lt: range.to } }
+      ] },
+      select: { dueDate: true, state: true, completedAt: true, cancelledAt: true }
+    }),
     prisma.saleEvent.findMany({ where: { occurredAt: { gte: range.from, lt: range.to } } }),
-    prisma.stageHistory.findMany({ where: { createdAt: { gte: range.from, lt: range.to } } }),
-    prisma.activity.findMany({ where: { type: 'CONTACT', createdAt: { lt: range.to } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { leadId: true, channel: true, createdAt: true } })
+    prisma.stageHistory.findMany({ where: { createdAt: { gte: range.from, lt: range.to } } })
   ]);
   const approaches = activities.filter((activity) => activity.type === 'CONTACT' || !activity.type);
   const effectiveWins = wins.length ? wins : leads.filter((lead) => lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range)).map((lead) => ({ actorId: lead.wonById ?? 'unknown', leadId: lead.id, saleValue: lead.saleValue ?? 0, mrr: lead.mrr ?? 0, occurredAt: lead.wonAt! }));
+  const winLeadIds = [...new Set(effectiveWins.map((sale) => sale.leadId))];
+  const latestWinAt = effectiveWins.reduce<Date | null>((latest, sale) => !latest || sale.occurredAt > latest ? sale.occurredAt : latest, null);
+  const contacts = winLeadIds.length && latestWinAt ? await prisma.activity.findMany({
+    where: { type: 'CONTACT', leadId: { in: winLeadIds }, createdAt: { lt: latestWinAt } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { leadId: true, channel: true, createdAt: true }
+  }) : [];
   // Attribute each immutable sale once, to the last contact at or before its occurrence.
   const winChannels = effectiveWins.map((sale) => contacts.find((contact) => contact.leadId === sale.leadId && contact.createdAt <= sale.occurredAt)?.channel);
   const channels = Object.values(Channel).map((channel) => {

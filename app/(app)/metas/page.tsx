@@ -28,8 +28,11 @@ async function saveGoal(formData: FormData) {
 }
 
 export default async function GoalsPage() {
-  const user = await getCurrentUser(); const weekStart = currentWeekStart();
-  const goals = await prisma.goal.findMany({ where: { weekStart } });
+  const weekStart = currentWeekStart();
+  const [user, goals] = await Promise.all([
+    getCurrentUser(),
+    prisma.goal.findMany({ where: { weekStart } })
+  ]);
   const teamGoal = goals.find((goal) => goal.ownerId === '__team__');
   const personalGoal = user ? goals.find((goal) => goal.ownerId === user.id) : undefined;
   const GoalForm = ({ scope, goal, title }: { scope: 'team' | 'personal'; goal: typeof teamGoal; title: string }) => <Surface><form action={saveGoal} className="grid gap-5 p-6"><input type="hidden" name="scope" value={scope} /><h2 className="text-xl font-semibold">{title}</h2><label className="grid gap-2 text-sm">Meta de abordagens<input name="approachesTarget" type="number" min="0" defaultValue={goal?.approachesTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><label className="grid gap-2 text-sm">Meta de interesses<input name="interestsTarget" type="number" min="0" defaultValue={goal?.interestsTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><label className="grid gap-2 text-sm">Meta de reuniões / retornos<input name="meetingsTarget" type="number" min="0" defaultValue={goal?.meetingsTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><label className="grid gap-2 text-sm">Meta de vendas<input name="salesTarget" type="number" min="0" defaultValue={goal?.salesTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><label className="grid gap-2 text-sm">Meta de receita (R$)<input name="revenueTarget" type="number" min="0" step="0.01" defaultValue={goal?.revenueTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><button className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-4 py-2 font-semibold text-black">Salvar meta {scope === 'team' ? 'da equipe' : 'pessoal'}</button></form></Surface>;

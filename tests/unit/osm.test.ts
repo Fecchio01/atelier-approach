@@ -4,12 +4,44 @@ import {
   OsmRequestScheduler,
   OsmSearchSessionExpiredError,
   OsmUnavailableError,
-  createOsmSearchService
+  createOsmSearchService,
+  isGenericBusinessName
 } from '../../lib/osm';
 
 describe('searchBusinesses', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  test('recognizes category-only labels without discarding a named business', () => {
+    expect(isGenericBusinessName('Centro de Estética Automotiva')).toBe(true);
+    expect(isGenericBusinessName('Auto Repair')).toBe(true);
+    expect(isGenericBusinessName('Centro de Estética Automotiva LK')).toBe(false);
+  });
+
+  test('resolves a state or city bounding box for supplemental Overture queries', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([{
+      lat: '-22.5', lon: '-44.07', boundingbox: ['-22.9', '-22.1', '-44.5', '-43.8']
+    }]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    const bounds = await service.resolveSearchBounds('Rio de Janeiro, RJ');
+
+    expect(bounds).toEqual({ west: -44.5, south: -22.9, east: -43.8, north: -22.1 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('featuretype=state');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('Rio+de+Janeiro%2C+Brasil');
+  });
+
+  test('uses the supported full-country area without geocoding for a Brazil-wide Overture query', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    const bounds = await service.resolveSearchBounds('', undefined, true);
+
+    expect(bounds).toEqual({ west: -73.99, south: -33.75, east: -34.79, north: 5.27 });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test('normalizes a business returned by OpenStreetMap', async () => {
@@ -78,6 +110,23 @@ describe('searchBusinesses', () => {
     );
   });
 
+  test('does not show OSM yes/no tagging values as business categories', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ lat: '-22.9', lon: '-47.06' }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [{
+          type: 'node', id: 991, lat: -22.9, lon: -47.06,
+          tags: { amenity: 'yes', shop: 'yes', 'service:vehicle:car_wash': 'yes' }
+        }]
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    const businesses = await service.searchBusinesses({ niche: 'estética automotiva', region: 'Campinas, SP', radiusKm: 5 });
+
+    expect(businesses[0]?.category).toBe('Lavagem automotiva');
+  });
+
   test('uses an identifiable user agent when querying OpenStreetMap', async () => {
     const fetchMock = vi
       .fn()
@@ -120,6 +169,56 @@ describe('searchBusinesses', () => {
         phone: '+55 19 99999-9999',
         address: 'Campinas'
       })]);
+  });
+
+  test('deduplicates node and way records for the same named business at the same location', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ lat: '-22.9', lon: '-47.06' }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [
+          { type: 'node', id: 301, lat: -22.901, lon: -47.061, tags: { name: 'HR Car Wash', phone: '+55 19 90000-0000' } },
+          { type: 'way', id: 302, center: { lat: -22.9011, lon: -47.0611 }, tags: { name: 'HR Car Wash', website: 'https://hrwash.example' } }
+        ]
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: 'Campinas, SP', radiusKm: 5 }))
+      .resolves.toEqual([expect.objectContaining({ name: 'HR Car Wash', phone: '+55 19 90000-0000', website: 'https://hrwash.example' })]);
+  });
+
+  test('keeps branches with the same trade name when they are in different locations', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ lat: '-22.9', lon: '-47.06' }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [
+          { type: 'node', id: 311, lat: -22.901, lon: -47.061, tags: { name: 'Auto Brilho' } },
+          { type: 'way', id: 312, center: { lat: -22.95, lon: -47.1 }, tags: { name: 'Auto Brilho' } }
+        ]
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: 'Campinas, SP', radiusKm: 5 }))
+      .resolves.toHaveLength(2);
+  });
+
+  test('builds a street-level address from Nominatim address details, without repeating the place name', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response('temporarily unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        {
+          osm_type: 'node', osm_id: 401, name: 'Estética Brilho', display_name: 'Estética Brilho, Rua das Flores, Campinas, São Paulo, Brasil',
+          address: { road: 'Rua das Flores', house_number: '25', suburb: 'Centro', city: 'Campinas', state: 'São Paulo', postcode: '13000-000' },
+          lat: '-22.901', lon: '-47.061', extratags: { amenity: 'car_wash' }
+        }
+      ]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    await expect(service.searchBusinesses({ niche: 'estética automotiva', region: '', radiusKm: 5, national: true }))
+      .resolves.toContainEqual(expect.objectContaining({ osmId: 'node/401', name: 'Estética Brilho', address: 'Rua das Flores, 25, Centro, Campinas, São Paulo, 13000-000' }));
   });
 
   test('retries a failed Overpass request on the fallback endpoint', async () => {
@@ -259,16 +358,84 @@ describe('searchBusinesses', () => {
     expect(stateQuery).toContain('out center tags 1000;');
   });
 
-  test('does not crawl company websites while collecting free OSM prospects', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
-      elements: [{ type: 'node', id: 992, tags: { name: 'Estética Direta', website: 'https://example.test' } }]
-    }), { status: 200 }));
+  test('enriches missing contacts from a company website already listed in OSM', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [{ type: 'node', id: 992, tags: { name: 'Car Wash', amenity: 'car_wash', website: 'https://site-enrich-992.test' } }]
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(
+        '<meta property="og:site_name" content="Estética Direta"><a href="https://wa.me/5511999990000">WhatsApp</a><a href="https://instagram.com/esteticadireta">Instagram</a>',
+        { status: 200 }
+      ));
     vi.stubGlobal('fetch', fetchMock);
 
     const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
-    await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+    const businesses = await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(businesses).toContainEqual(expect.objectContaining({
+      osmId: 'node/992',
+      name: 'Estética Direta',
+      whatsapp: 'https://wa.me/5511999990000',
+      instagram: 'https://instagram.com/esteticadireta'
+    }));
+  });
+
+  test('looks up OSM namedetails for nameless Overpass businesses before showing them', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [{ type: 'way', id: 996, center: { lat: -22.91, lon: -43.2 }, tags: { amenity: 'car_wash' } }]
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        osm_type: 'way', osm_id: 996, name: 'Brilho Car',
+        namedetails: { name: 'Brilho Car', 'name:pt': 'Estética Brilho Car', brand: 'Brilho' }
+      }]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    const businesses = await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('nominatim.openstreetmap.org/lookup');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('osm_ids=W996');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('namedetails=1');
+    expect(businesses).toContainEqual(expect.objectContaining({ osmId: 'way/996', name: 'Estética Brilho Car' }));
+  });
+
+  test('uses alternate business names and contact tags without presenting a category as a company name', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [
+          {
+            type: 'node', id: 993,
+            tags: {
+              name: 'Auto Repair', brand: 'Brilho Premium', shop: 'car_repair',
+              'contact:mobile': '+55 11 99999-0000',
+              'contact:instagram:url': 'https://instagram.com/brilhopremium',
+              'contact:whatsapp': 'https://wa.me/5511999990001'
+            }
+          },
+          { type: 'way', id: 994, tags: { name: 'Car Wash', amenity: 'car_wash' } },
+          { type: 'node', id: 995, tags: { shop: 'car_repair' } }
+        ]
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+    const businesses = await service.searchBusinesses({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+
+    expect(businesses).toContainEqual(expect.objectContaining({
+      osmId: 'node/993', name: 'Brilho Premium', phone: '+55 11 99999-0000',
+      instagram: 'https://instagram.com/brilhopremium', whatsapp: 'https://wa.me/5511999990001',
+      category: 'Oficina mecânica'
+    }));
+    expect(businesses).toContainEqual(expect.objectContaining({
+      osmId: 'way/994', name: 'Nome comercial não informado', category: 'Lavagem automotiva'
+    }));
+    expect(businesses).toContainEqual(expect.objectContaining({
+      osmId: 'node/995', name: 'Nome comercial não informado', category: 'Oficina mecânica'
+    }));
   });
 
   test('recognizes alternate OSM website tags when the standard website tag is absent', async () => {
@@ -383,6 +550,9 @@ describe('searchBusinesses', () => {
 
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain('nominatim.openstreetmap.org/search');
     expect(String(fetchMock.mock.calls[2]?.[1]?.headers?.['User-Agent'])).toContain('AtelierApproach');
+    const nominatimUrl = new URL(String(fetchMock.mock.calls[2]?.[0]));
+    expect(nominatimUrl.searchParams.get('limit')).toBe('40');
+    expect(nominatimUrl.searchParams.get('namedetails')).toBe('1');
   });
 
   test('searches national fallback batches by state to expand coverage', async () => {
@@ -429,9 +599,25 @@ describe('searchBusinesses', () => {
     });
 
     const overpassQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
-    expect(overpassQuery).toContain('area["name"="Niterói"]["boundary"="administrative"]["admin_level"="8"]->.region;');
+    expect(overpassQuery).toContain('area["name"="Rio de Janeiro"]["boundary"="administrative"]["admin_level"="4"]->.state;');
+    expect(overpassQuery).toContain('rel(area.state)["name"="Niterói"]["boundary"="administrative"];');
+    expect(overpassQuery).toContain('map_to_area->.region;');
     expect(overpassQuery).toContain('(area.region)');
     expect(overpassQuery).not.toContain('around:');
+  });
+
+  test('queries any selected Brazilian state as its full administrative area', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ elements: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    await service.searchBusinesses({ niche: 'estética automotiva', region: 'Acre, AC', radiusKm: 50 });
+
+    const overpassQuery = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(overpassQuery).toContain('area["name"="Acre"]["boundary"="administrative"]["admin_level"="4"]->.region;');
+    expect(overpassQuery).toContain('(area.region)');
+    expect(overpassQuery).not.toContain('around:');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   test('shares a one-request-per-second slot across OSM services', async () => {
@@ -477,7 +663,8 @@ describe('searchBusinesses', () => {
                   'contact:phone': '+55 19 99999-9999',
                   'contact:website': 'https://oficina.example',
                   'contact:instagram': '@oficinacentral',
-                  'contact:whatsapp': '+55 19 98888-8888'
+                  'contact:whatsapp': '+55 19 98888-8888',
+                  image: 'https://oficina.example/fachada.jpg'
                 }
               }
             ]
@@ -497,7 +684,7 @@ describe('searchBusinesses', () => {
     expect(first).toEqual([
       expect.objectContaining({
         address: 'Rua das Flores, 45, Campinas',
-        category: 'car_repair',
+        category: 'Oficina mecânica',
         latitude: -22.9,
         longitude: -47.06,
         whatsapp: '+55 19 98888-8888',
@@ -532,17 +719,40 @@ describe('searchBusinesses', () => {
     const started = await service.startSearch({
       niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5
     });
-    const continued = await service.continueSearch(started.searchId);
 
     expect(started).toMatchObject({
       searchId: expect.any(String),
-      businesses: [expect.objectContaining({ osmId: 'node/1', name: 'Oficina Tags' })],
+      businesses: [
+        expect.objectContaining({ osmId: 'node/1', name: 'Oficina Tags' }),
+        expect.objectContaining({ osmId: 'node/2', name: 'Oficina Nome' })
+      ],
       hasMore: true
     });
-    expect(continued).toEqual({
-      businesses: [expect.objectContaining({ osmId: 'node/2', name: 'Oficina Nome' })],
-      hasMore: false
+  });
+
+  test('accumulates five new businesses in each progressive batch when national units have them', async () => {
+    const fetchMock = vi.fn();
+    for (const id of Array.from({ length: 10 }, (_, index) => index + 1)) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+        elements: [{ type: 'node', id, tags: { name: `Oficina ${id}`, shop: 'car_repair' } }]
+      }), { status: 200 }));
+    }
+    vi.stubGlobal('fetch', fetchMock);
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    const started = await service.startSearch({
+      niche: 'estética automotiva', region: '', radiusKm: 50, national: true
     });
+    const continued = await service.continueSearch(started.searchId);
+
+    expect(started.businesses.map((business) => business.osmId)).toEqual([
+      'node/1', 'node/2', 'node/3', 'node/4', 'node/5'
+    ]);
+    expect(started.hasMore).toBe(true);
+    expect(continued.businesses.map((business) => business.osmId)).toEqual([
+      'node/6', 'node/7', 'node/8', 'node/9', 'node/10'
+    ]);
+    expect(continued.hasMore).toBe(true);
   });
 
   test('rejects an unknown progressive-search session', async () => {
@@ -585,25 +795,75 @@ describe('searchBusinesses', () => {
     expect(searchSessions.size).toBe(1);
   });
 
-  test('keeps a progressive national search available after one unit fails', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
-      .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        elements: [{ type: 'node', id: 3, tags: { name: 'Oficina Próxima', shop: 'car_repair' } }]
-      }), { status: 200 }));
+  test('uses a short Overpass timeout before a progressive fallback', async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('overpass')) return new Response('unavailable', { status: 503 });
+      return new Response(JSON.stringify([{
+        osm_type: 'node', osm_id: 6, name: 'Oficina Rápida', lat: '-22.9', lon: '-43.2',
+        extratags: { shop: 'car_repair' }
+      }]), { status: 200 });
+    }));
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    await service.startSearch({ niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5 });
+
+    expect(timeoutSpy).toHaveBeenCalledWith(3_000);
+  });
+
+  test('uses a regional Nominatim fallback when a progressive Overpass unit is unavailable', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('overpass')) return new Response('unavailable', { status: 503 });
+      return new Response(JSON.stringify([{
+        osm_type: 'node',
+        osm_id: 5,
+        name: 'Detalhamento Local',
+        lat: '-22.9',
+        lon: '-43.2',
+        extratags: { shop: 'car_repair' }
+      }]), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
+
+    const started = await service.startSearch({
+      niche: 'estética automotiva', region: 'Rio de Janeiro, RJ', radiusKm: 5
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('nominatim.openstreetmap.org'), expect.anything());
+    expect(started).toMatchObject({
+      businesses: [expect.objectContaining({ osmId: 'node/5', name: 'Detalhamento Local' })],
+      hasMore: true
+    });
+  });
+
+  test('skips a sibling unit after its area succeeds through the progressive fallback', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('nominatim')) {
+        return new Response(JSON.stringify([{
+          osm_type: 'node', osm_id: 10, name: 'Detalhamento Paulista', lat: '-23.5', lon: '-46.6',
+          extratags: { shop: 'car_repair' }
+        }]), { status: 200 });
+      }
+      const query = String(init?.body);
+      if (query.includes('name"="São Paulo"')) return new Response('unavailable', { status: 503 });
+      return new Response(JSON.stringify({
+        elements: [{ type: 'node', id: 11, tags: { name: 'Oficina Carioca', shop: 'car_repair' } }]
+      }), { status: 200 });
+    });
     vi.stubGlobal('fetch', fetchMock);
     const service = createOsmSearchService({ scheduler: new OsmRequestScheduler({ minIntervalMs: 0 }) });
 
     const started = await service.startSearch({
       niche: 'estética automotiva', region: '', radiusKm: 50, national: true
     });
-    const continued = await service.continueSearch(started.searchId);
 
-    expect(started).toMatchObject({ businesses: [], hasMore: true });
-    expect(continued).toMatchObject({
-      businesses: [expect.objectContaining({ osmId: 'node/3', name: 'Oficina Próxima' })],
-      hasMore: true
-    });
+    expect(started.businesses).toEqual([
+      expect.objectContaining({ osmId: 'node/10' }),
+      expect.objectContaining({ osmId: 'node/11' })
+    ]);
+    expect(started.hasMore).toBe(false);
+    expect(fetchMock.mock.calls.filter(([, init]) => String((init as RequestInit | undefined)?.body).includes('name"="São Paulo"')))
+      .toHaveLength(2);
   });
 });

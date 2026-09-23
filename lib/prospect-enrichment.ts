@@ -2,6 +2,7 @@ const CACHE_TTL_MS = 10 * 60_000;
 const MAX_RESPONSE_BYTES = 1_000_000;
 const EMPTY_FIELDS: EnrichedContactFields = {
   website: null,
+  name: null,
   whatsapp: null,
   instagram: null,
   phone: null,
@@ -12,6 +13,7 @@ type CachedFields = { expiresAt: number; value: EnrichedContactFields };
 
 export type EnrichedContactFields = {
   website: string | null;
+  name: string | null;
   whatsapp: string | null;
   instagram: string | null;
   phone: string | null;
@@ -32,6 +34,7 @@ export async function enrichFromOfficialWebsite(website: string): Promise<Enrich
   try {
     const response = await fetch(normalizedWebsite, {
       signal: AbortSignal.timeout(5_000),
+      redirect: 'manual',
       headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': 'AtelierApproach/1.0 contato@atelier.local' }
     });
     const contentLength = Number(response.headers.get('content-length'));
@@ -77,7 +80,10 @@ async function readLimitedText(response: Response) {
 
 function extractFields(html: string, website: string): EnrichedContactFields {
   const hrefs = [...html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
-  const absoluteLinks = hrefs.map((href) => safeHttpUrl(href, website)).filter((href): href is string => Boolean(href));
+  const structured = extractStructuredData(html);
+  const absoluteLinks = [...hrefs, ...structured.sameAs]
+    .map((href) => safeHttpUrl(href, website))
+    .filter((href): href is string => Boolean(href));
   const rawPhone = hrefs.find((href) => href.toLowerCase().startsWith('tel:'));
   const whatsapp = absoluteLinks.find((href) => /^(https:\/\/wa\.me\/|https:\/\/api\.whatsapp\.com\/)/i.test(href)) ?? null;
   const instagram = absoluteLinks.find((href) => /^https?:\/\/(www\.)?instagram\.com\//i.test(href)) ?? null;
@@ -86,11 +92,58 @@ function extractFields(html: string, website: string): EnrichedContactFields {
 
   return {
     website,
+    name: metaContent(html, 'og:site_name') ?? structured.name,
     whatsapp,
     instagram,
-    phone: normalizePhone(rawPhone?.slice(4) ?? null),
+    phone: normalizePhone(rawPhone?.slice(4) ?? structured.telephone),
     imageUrl: safeHttpUrl(imageMatch?.[1] ?? '', website)
   };
+}
+
+function extractStructuredData(html: string) {
+  const output = { name: null as string | null, telephone: null as string | null, sameAs: [] as string[] };
+  const blocks = [...html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+
+  for (const [, rawJson] of blocks) {
+    try {
+      visitStructuredData(JSON.parse(rawJson), output);
+    } catch {
+      // Ignore malformed structured data and continue with the rest of the page.
+    }
+  }
+
+  return output;
+}
+
+function visitStructuredData(value: unknown, output: { name: string | null; telephone: string | null; sameAs: string[] }) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => visitStructuredData(item, output));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+
+  const record = value as Record<string, unknown>;
+  const types = Array.isArray(record['@type']) ? record['@type'] : [record['@type']];
+  const businessType = types.some((type) => typeof type === 'string' && /localbusiness|organization|autorepair|autobodyshop|automotivebusiness/i.test(type));
+  if (businessType) {
+    if (!output.name && typeof record.name === 'string') output.name = record.name.trim() || null;
+    if (!output.telephone && typeof record.telephone === 'string') output.telephone = record.telephone;
+    if (Array.isArray(record.sameAs)) output.sameAs.push(...record.sameAs.filter((link): link is string => typeof link === 'string'));
+    else if (typeof record.sameAs === 'string') output.sameAs.push(record.sameAs);
+  }
+
+  Object.values(record).forEach((item) => visitStructuredData(item, output));
+}
+
+function metaContent(html: string, property: string) {
+  const metaTags = [...html.matchAll(/<meta\b[^>]*>/gi)].map(([tag]) => tag);
+  for (const tag of metaTags) {
+    const key = tag.match(/(?:property|name)\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (key?.toLowerCase() !== property.toLowerCase()) continue;
+    const content = tag.match(/content\s*=\s*["']([^"']+)["']/i)?.[1]?.trim();
+    if (content) return content.replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'");
+  }
+  return null;
 }
 
 function safeHttpUrl(value: string, base?: string) {

@@ -11,6 +11,17 @@ test('offers Brazil as a country and derives national search without a radius', 
   expect(formSource).not.toContain('Raio (km)');
 });
 
+test('submits the actual selected form values so restored browser selections are honored', () => {
+  const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
+
+  expect(formSource).toContain('new FormData(event.currentTarget)');
+  expect(formSource.indexOf('const formData = new FormData(event.currentTarget);')).toBeLessThan(formSource.indexOf('onSearchStart();'));
+  expect(formSource).toContain("const region = String(formData.get('region') ?? '');");
+  expect(formSource).toContain('value={region}');
+  expect(formSource).not.toContain('defaultValue=""');
+  expect(formSource).toContain("const isNational = country === 'BR' && !region;");
+});
+
 test('keeps automotive aesthetics fixed and does not expose narrowing filters', () => {
   const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
 
