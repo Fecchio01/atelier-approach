@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { enrichFromOfficialWebsite, enrichOvertureBusinesses } from '../../lib/prospect-enrichment';
+import type { ExternalBusiness } from '../../lib/osm';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -110,4 +111,40 @@ test('checks every Overture website in the returned batch, including after the t
 
   expect(enriched[0].website).toBe('https://working-0.example/');
   expect(enriched[10].website).toBeNull();
+});
+
+test('keeps images from different profiles on the same host separate', async () => {
+  const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(new Response(
+    url.includes('/oficina-a')
+      ? '<meta property="og:title" content="Oficina A"><meta property="og:image" content="https://img.example/a.jpg">'
+      : '<meta property="og:title" content="Oficina B"><meta property="og:image" content="https://img.example/b.jpg">',
+    { status: 200 }
+  )));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const first = await enrichFromOfficialWebsite('https://profiles.example/oficina-a');
+  const second = await enrichFromOfficialWebsite('https://profiles.example/oficina-b');
+
+  expect(first.imageUrl).toBe('https://img.example/a.jpg');
+  expect(second.imageUrl).toBe('https://img.example/b.jpg');
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test('does not assign another brand profile image to an Overture business', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve(new Response(
+    url.includes('/bianquini-garage')
+      ? '<meta property="og:title" content="Bianquini Garage Official: Instagram | Linktree"><meta property="og:image" content="https://img.example/bianquini.jpg">'
+      : '<meta property="og:title" content="Automecânica Multimarcas Official: Instagram | Linktree"><meta property="og:image" content="https://img.example/multimarcas.jpg">',
+    { status: 200 }
+  ))));
+
+  const businesses: ExternalBusiness[] = [
+    { osmId: 'overture/ph', name: 'PH Serviços Automotivos', source: 'Overture', website: 'https://link-profiles.example/bianquini-garage', phone: null, whatsapp: null, instagram: null },
+    { osmId: 'overture/auto', name: 'Auto Mecânica e Auto Peças Multimarcas', source: 'Overture', website: 'https://link-profiles.example/amecanicamultimarcas', phone: null, whatsapp: null, instagram: null }
+  ];
+
+  const enriched = await enrichOvertureBusinesses(businesses);
+
+  expect(enriched[0].imageUrl).toBeNull();
+  expect(enriched[1].imageUrl).toBe('https://img.example/multimarcas.jpg');
 });

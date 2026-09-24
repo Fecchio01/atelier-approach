@@ -26,7 +26,7 @@ export async function enrichFromOfficialWebsite(website: string): Promise<Enrich
   const normalizedWebsite = safeHttpUrl(website);
   if (!normalizedWebsite) return { ...EMPTY_FIELDS };
 
-  const cacheKey = new URL(normalizedWebsite).hostname;
+  const cacheKey = normalizedWebsite;
   const cached = cache.get(cacheKey);
   if (cached?.expiresAt && cached.expiresAt > Date.now()) return cached.value;
 
@@ -69,7 +69,7 @@ export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): 
       phone: business.phone ?? fields.phone,
       whatsapp: business.whatsapp ?? fields.whatsapp,
       instagram: business.instagram ?? fields.instagram,
-      imageUrl: business.imageUrl ?? fields.imageUrl
+      imageUrl: business.imageUrl ?? (imageMatchesBusiness(business.name, fields.name) ? fields.imageUrl : null)
     } : business;
   });
 }
@@ -117,12 +117,24 @@ function extractFields(html: string, website: string): EnrichedContactFields {
 
   return {
     website,
-    name: metaContent(html, 'og:site_name') ?? structured.name,
+    name: structured.name ?? metaContent(html, 'og:title') ?? metaContent(html, 'og:site_name'),
     whatsapp,
     instagram,
     phone: normalizePhone(rawPhone?.slice(4) ?? structured.telephone),
     imageUrl: safeHttpUrl(imageMatch?.[1] ?? '', website)
   };
+}
+
+function imageMatchesBusiness(businessName: string, pageName: string | null) {
+  if (!pageName) return false;
+  const distinctiveTokens = (value: string) => new Set(value.toLocaleLowerCase('pt-BR')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/auto\s+mecanica/g, 'automecanica')
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2 && !/^(auto|car|wash|oficina|mecanica|servicos|automotivos|automotiva|oficial|official|instagram|facebook|linktree|pecas)$/.test(token)));
+  const businessTokens = distinctiveTokens(businessName);
+  const pageTokens = distinctiveTokens(pageName);
+  return [...businessTokens].some((token) => pageTokens.has(token));
 }
 
 function extractStructuredData(html: string) {
