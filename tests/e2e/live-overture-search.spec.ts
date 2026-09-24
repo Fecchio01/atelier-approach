@@ -22,6 +22,13 @@ test('real search shows named Overture places and maps searches by identity, the
   expect(first.businesses.length).toBeGreaterThanOrEqual(5);
   expect(first.hasMore).toBe(true);
   expect(first.businesses.every((business: { source: string }) => business.source === 'Overture')).toBe(true);
+  const businessWithSite = first.businesses.find((business: { website: string | null }) => business.website);
+  expect(businessWithSite).toBeTruthy();
+  const siteLink = page.getByRole('link', { name: `Abrir site de ${businessWithSite.name}` }).first();
+  await expect(siteLink).toHaveAttribute('href', businessWithSite.website);
+  const [siteTab] = await Promise.all([page.waitForEvent('popup'), siteLink.click()]);
+  await expect.poll(() => siteTab.url()).not.toBe('about:blank');
+  await siteTab.close();
 
   for (const business of first.businesses.slice(0, 5)) {
     expect(business.name).not.toMatch(/nome comercial não informado|^(car wash|oficina mecânica)$/i);

@@ -93,3 +93,21 @@ test('does not present a missing website as a working site', async () => {
 
   await expect(enrichFromOfficialWebsite('https://missing-site.example')).resolves.toMatchObject({ website: null });
 });
+
+test('checks every Overture website in the returned batch, including after the tenth', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) =>
+    url.includes('eleventh-broken')
+      ? Promise.reject(new Error('getaddrinfo ENOTFOUND'))
+      : Promise.resolve(new Response('<html>OK</html>', { status: 200 }))
+  ));
+  const businesses = Array.from({ length: 11 }, (_, index) => ({
+    osmId: `overture/${index}`, name: `Oficina ${index}`, source: 'Overture' as const,
+    website: `https://${index === 10 ? 'eleventh-broken' : `working-${index}`}.example`,
+    phone: null, instagram: null, whatsapp: null
+  }));
+
+  const enriched = await enrichOvertureBusinesses(businesses);
+
+  expect(enriched[0].website).toBe('https://working-0.example/');
+  expect(enriched[10].website).toBeNull();
+});

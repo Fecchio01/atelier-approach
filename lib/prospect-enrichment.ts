@@ -54,11 +54,10 @@ export async function enrichFromOfficialWebsite(website: string): Promise<Enrich
 
 export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): Promise<ExternalBusiness[]> {
   const candidates = businesses.map((business, index) => ({ business, index }))
-    .filter(({ business }) => business.source === 'Overture' && business.website)
-    .slice(0, 10);
+    .filter(({ business }) => business.source === 'Overture' && business.website);
   const enriched = new Map<number, EnrichedContactFields>();
-  for (let offset = 0; offset < candidates.length; offset += 5) {
-    const chunk = candidates.slice(offset, offset + 5);
+  for (let offset = 0; offset < candidates.length; offset += 10) {
+    const chunk = candidates.slice(offset, offset + 10);
     const results = await Promise.all(chunk.map(({ business }) => enrichFromOfficialWebsite(business.website!)));
     chunk.forEach(({ index }, resultIndex) => enriched.set(index, results[resultIndex]));
   }

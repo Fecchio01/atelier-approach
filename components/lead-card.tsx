@@ -132,6 +132,9 @@ export function LeadCard({ business, result }: LeadCardProps) {
           <button type="button" onClick={saveApproach} disabled={isSaving} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 font-semibold text-black disabled:opacity-60">
             {isSaving ? 'Salvando…' : 'Salvar abordagem'}
           </button>
+          <button type="button" onClick={() => { setIsApproaching(false); setError(null); }} disabled={isSaving} className="min-h-10 rounded-lg border border-white/20 px-4 font-semibold text-white/75 disabled:opacity-60">
+            Cancelar abordagem
+          </button>
         </div>
       ) : (
         <button type="button" onClick={() => setIsApproaching(true)} className="min-h-10 rounded-lg border border-[var(--atelier-green)] px-4 font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)] hover:text-black">
