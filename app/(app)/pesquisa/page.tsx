@@ -99,7 +99,7 @@ export default function PesquisaPage() {
         {businesses.length ? (
           <>
             <p className="mb-4 text-sm text-white/65">{businesses.length} prospect{businesses.length === 1 ? '' : 's'} novo{businesses.length === 1 ? '' : 's'}, em ordem de prioridade.</p>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
               {businesses.map((business) => (
                 <LeadCard key={business.osmId} business={business} result={business} />
               ))}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { StorefrontIcon } from '@phosphor-icons/react';
 
 import type { Channel } from '@prisma/client';
 import type { ExternalBusiness } from '@/lib/osm';
@@ -59,7 +60,12 @@ export function LeadCard({ business, result }: LeadCardProps) {
         // External Open Graph images are not part of a configured, trusted image host list.
         // eslint-disable-next-line @next/next/no-img-element
         <img src={business.imageUrl} alt={`Foto pública de ${displayName}`} className="h-40 w-full rounded-xl object-cover" />
-      ) : null}
+      ) : (
+        <div className="flex h-40 flex-col items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.045] to-transparent text-white/35" aria-label={`Sem foto pública de ${displayName}`}>
+          <StorefrontIcon size={32} weight="thin" aria-hidden="true" />
+          <span className="text-xs">Sem foto pública</span>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
