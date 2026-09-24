@@ -4,7 +4,7 @@ import { e2eCredentials } from './credentials';
 
 test.skip(process.env.RUN_LIVE_SEARCH_E2E !== '1', 'Requires live Overture data');
 
-test('real search shows named Overture places and exact map coordinates, then loads new places', async ({ page }) => {
+test('real search shows named Overture places and maps searches by identity, then loads new places', async ({ page }) => {
   test.setTimeout(180_000);
 
   await page.goto('/login');
@@ -32,7 +32,8 @@ test('real search shows named Overture places and exact map coordinates, then lo
     const mapLink = page.getByRole('link', { name: `Abrir ${business.name} no Google Maps` }).first();
     await expect(mapLink).toBeVisible();
     const mapUrl = new URL((await mapLink.getAttribute('href'))!);
-    expect(mapUrl.searchParams.get('query')).toBe(`${business.latitude},${business.longitude}`);
+    expect(mapUrl.searchParams.get('query')).toContain(business.name);
+    expect(mapUrl.searchParams.get('query')).not.toBe(`${business.latitude},${business.longitude}`);
   }
 
   const nextResponsePromise = page.waitForResponse((response) => response.url().includes(`/api/search?searchId=${first.searchId}`), { timeout: 100_000 });

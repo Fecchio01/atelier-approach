@@ -77,6 +77,31 @@ describe('Overture automotive places', () => {
     })]);
   });
 
+  test('classifies social and WhatsApp URLs instead of exposing them as websites', () => {
+    const businesses = normalizeOverturePlaces([{
+      id: 'social-1', name: 'Oficina Central', category: 'automotive_repair',
+      website: 'https://instagram.com/oficinacentral',
+      socials: 'https://wa.me/5521999999999 https://instagram.com/oficinacentral',
+      latitude: -22.9, longitude: -43.2
+    }]);
+
+    expect(businesses[0]).toMatchObject({
+      website: null,
+      instagram: 'https://instagram.com/oficinacentral',
+      whatsapp: 'https://wa.me/5521999999999'
+    });
+  });
+
+  test('keeps city and region in the address used for identifying the business', () => {
+    const businesses = normalizeOverturePlaces([{
+      id: 'address-1', name: 'Oficina Central', category: 'automotive_repair',
+      address: 'Rua das Flores, 10', locality: 'Rio de Janeiro', region: 'RJ', country: 'BR',
+      latitude: -22.9, longitude: -43.2
+    }]);
+
+    expect(businesses[0].address).toBe('Rua das Flores, 10, Rio de Janeiro, RJ, Brasil');
+  });
+
   test('keeps automotive service types beyond car washes, while excluding unrelated and closed places', () => {
     const businesses = normalizeOverturePlaces([
       { id: 'repair', name: 'Oficina do Vale', category: 'automotive_repair', latitude: -22.5, longitude: -44.07 },
@@ -86,6 +111,7 @@ describe('Overture automotive places', () => {
       { id: 'music', name: 'Oficina de Música BST', category: 'music_production', latitude: -22.5, longitude: -44.07 },
       { id: 'beauty', name: 'Espaço de Estética Andreya Gomes', category: 'beauty_salon', latitude: -22.5, longitude: -44.07 },
       { id: 'retirement', name: 'Amor em Foco - Casa de Repouso', category: 'retirement_home', latitude: -22.5, longitude: -44.07 },
+      { id: 'retirement-tire', name: 'Residencial Cantinho dos Avós', category: 'retirement_home', latitude: -22.5, longitude: -44.07 },
       { id: 'insurance', name: '100 Agenda Corretora de Seguros', category: 'automotive_repair', latitude: -22.5, longitude: -44.07 },
       { id: 'detran', name: 'Detran/Rj', category: 'automotive_repair', latitude: -22.5, longitude: -44.07 },
       { id: 'protection', name: 'By Motors Proteção Veicular RJ', category: 'automotive_repair', latitude: -22.5, longitude: -44.07 },

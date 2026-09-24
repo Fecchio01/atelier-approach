@@ -1,6 +1,7 @@
 import { getCurrentUser } from '../../../lib/auth';
 import { prisma } from '../../../lib/db';
 import { approachabilityRank, scoreBusiness } from '../../../lib/lead-score';
+import { enrichOvertureBusinesses } from '../../../lib/prospect-enrichment';
 import {
   createOsmSearchService,
   ExternalBusiness,
@@ -258,7 +259,7 @@ async function consumeOverturePage(savedSearch: SavedSearch) {
     }
   }
 
-  return businesses;
+  return savedSearch.overtureOnly ? enrichOvertureBusinesses(businesses) : businesses;
 }
 
 function hasMoreOvertureAreas(savedSearch: SavedSearch) {

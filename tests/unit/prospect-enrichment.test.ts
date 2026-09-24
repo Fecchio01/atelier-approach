@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { enrichFromOfficialWebsite } from '../../lib/prospect-enrichment';
+import { enrichFromOfficialWebsite, enrichOvertureBusinesses } from '../../lib/prospect-enrichment';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -68,4 +68,28 @@ test('ignores unsafe links and returns empty fields when the official site fails
     phone: null,
     imageUrl: null
   });
+  await expect(enrichFromOfficialWebsite('https://broken-dns.example')).resolves.toMatchObject({ website: null });
+});
+
+test('enriches Overture prospects from a reachable official website without replacing the source name', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    '<a href="https://wa.me/5521999990000">WhatsApp</a><a href="https://instagram.com/realoficina">Instagram</a>',
+    { status: 200 }
+  )));
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/1', name: 'Oficina Real', category: 'automotive_repair',
+    source: 'Overture', website: 'https://realoficina.example', phone: null, whatsapp: null, instagram: null
+  }]);
+
+  expect(business).toMatchObject({
+    name: 'Oficina Real', website: 'https://realoficina.example/',
+    whatsapp: 'https://wa.me/5521999990000', instagram: 'https://instagram.com/realoficina'
+  });
+});
+
+test('does not present a missing website as a working site', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
+
+  await expect(enrichFromOfficialWebsite('https://missing-site.example')).resolves.toMatchObject({ website: null });
 });

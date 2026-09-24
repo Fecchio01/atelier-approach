@@ -21,9 +21,9 @@ const queryCache = new Map<string, CachedValue<OvertureAreaResult>>();
 let cachedCatalog: CachedValue<string> | null = null;
 let duckDbPromise: Promise<DuckDBInstance> | null = null;
 
-const AUTO_SERVICE_PATTERN = /automotive|auto[ _-](repair|body|parts|electrical|detailing|glass|service|tire)|car[ _](wash|repair|detail|service|parts|body)|vehicle[ _](repair|inspection)|tire|tyre|oil[ _]change|mechanic|oficina[ _](mecanica|automotiva)|mecanica[ _]automotiva|estetica[ _]automotiva|detalhamento[ _]automotivo|lavagem[ _]automotiva|lava[ _-]?jato|lava[ _-]?rapido|polimento[ _]automotivo|funilaria|martelinho|higienizacao[ _]automotiva|auto[ _-]?center|borracharia|pneus|insulfilm|troca[ _]de[ _]oleo/i;
+const AUTO_SERVICE_PATTERN = /automotive|auto[ _-](repair|body|parts|electrical|detailing|glass|service|tire)|car[ _](wash|repair|detail|service|parts|body)|vehicle[ _](repair|inspection)|\btire\b|\btyre\b|oil[ _]change|mechanic|oficina[ _](mecanica|automotiva)|mecanica[ _]automotiva|estetica[ _]automotiva|detalhamento[ _]automotivo|lavagem[ _]automotiva|lava[ _-]?jato|lava[ _-]?rapido|polimento[ _]automotivo|funilaria|martelinho|higienizacao[ _]automotiva|auto[ _-]?center|borracharia|pneus|insulfilm|troca[ _]de[ _]oleo/i;
 const UNRELATED_AUTO_PLACE_PATTERN = /retirement home|casa de repouso|residencial senior|corretora de seguros|insurance|detran|protecao veicular|clube de beneficios/i;
-const INSTAGRAM_URL = /https?:\/\/(?:www\.)?instagram\.com\/[\w.-]+\/?/i;
+const CONTACT_URL = /https?:\/\/[^\s,;]+/gi;
 
 const NATIONAL_FOCUS_POINTS = [
   { longitude: -43.2, latitude: -22.9 }, // Rio de Janeiro
@@ -131,14 +131,17 @@ export function normalizeOverturePlaces(rows: OvertureRow[]): ExternalBusiness[]
     if (stringValue(row.operating_status)?.toLowerCase() === 'permanently_closed') continue;
 
     seenIds.add(id);
+    const website = stringValue(row.website);
+    const contactUrls = [website, ...[...String(row.socials ?? '').matchAll(CONTACT_URL)].map((match) => match[0])]
+      .filter((value): value is string => Boolean(value));
     businesses.push({
       osmId: `overture/${id}`,
       name: name?.trim() || 'Nome comercial não informado',
       phone: stringValue(row.phone),
-      website: stringValue(row.website),
-      instagram: instagramFromSocials(row.socials),
-      whatsapp: null,
-      address: stringValue(row.address),
+      website: website && !isSocialContactUrl(website) ? website : null,
+      instagram: contactUrls.find((url) => urlHost(url) === 'instagram.com') ?? null,
+      whatsapp: contactUrls.find((url) => ['wa.me', 'api.whatsapp.com', 'wa.link'].includes(urlHost(url))) ?? null,
+      address: placeAddress(row),
       category: category?.trim() || null,
       latitude: numberValue(row.latitude),
       longitude: numberValue(row.longitude),
@@ -208,6 +211,9 @@ export function buildOvertureQuery(bounds: SearchBounds, release: string, files:
       coalesce(names.primary, brand.names.primary) AS name,
       coalesce(taxonomy.primary, basic_category) AS category,
       addresses[1].freeform AS address,
+      addresses[1].locality AS locality,
+      addresses[1].region AS region,
+      addresses[1].country AS country,
       phones[1] AS phone,
       websites[1] AS website,
       array_to_string(socials, ' ') AS socials,
@@ -260,9 +266,20 @@ function normalizeText(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function instagramFromSocials(value: unknown) {
-  const socials = stringValue(value);
-  return socials?.match(INSTAGRAM_URL)?.[0] ?? null;
+function urlHost(value: string) {
+  try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ''); }
+  catch { return ''; }
+}
+
+function isSocialContactUrl(value: string) {
+  return ['instagram.com', 'wa.me', 'api.whatsapp.com', 'wa.link', 'facebook.com', 'fb.com', 'tiktok.com'].includes(urlHost(value));
+}
+
+function placeAddress(row: OvertureRow) {
+  const values = [row.address, row.locality, row.region].map(stringValue).filter((value): value is string => Boolean(value));
+  const unique = values.filter((value, index) => !values.slice(0, index).some((previous) => previous.toLowerCase().includes(value.toLowerCase())));
+  if (stringValue(row.country)?.toUpperCase() === 'BR') unique.push('Brasil');
+  return unique.join(', ') || null;
 }
 
 function stringValue(value: unknown) {

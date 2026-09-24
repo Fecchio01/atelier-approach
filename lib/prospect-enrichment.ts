@@ -38,6 +38,9 @@ export async function enrichFromOfficialWebsite(website: string): Promise<Enrich
       headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': 'AtelierApproach/1.0 contato@atelier.local' }
     });
     const contentLength = Number(response.headers.get('content-length'));
+    if (response.status === 404 || response.status === 410) {
+      return cacheResult(cacheKey, { ...EMPTY_FIELDS });
+    }
     if (!response.ok || (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES)) {
       return cacheResult(cacheKey, fallback);
     }
@@ -45,8 +48,31 @@ export async function enrichFromOfficialWebsite(website: string): Promise<Enrich
     const html = await readLimitedText(response);
     return cacheResult(cacheKey, extractFields(html, normalizedWebsite));
   } catch {
-    return cacheResult(cacheKey, fallback);
+    return cacheResult(cacheKey, { ...EMPTY_FIELDS });
   }
+}
+
+export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): Promise<ExternalBusiness[]> {
+  const candidates = businesses.map((business, index) => ({ business, index }))
+    .filter(({ business }) => business.source === 'Overture' && business.website)
+    .slice(0, 10);
+  const enriched = new Map<number, EnrichedContactFields>();
+  for (let offset = 0; offset < candidates.length; offset += 5) {
+    const chunk = candidates.slice(offset, offset + 5);
+    const results = await Promise.all(chunk.map(({ business }) => enrichFromOfficialWebsite(business.website!)));
+    chunk.forEach(({ index }, resultIndex) => enriched.set(index, results[resultIndex]));
+  }
+  return businesses.map((business, index) => {
+    const fields = enriched.get(index);
+    return fields ? {
+      ...business,
+      website: fields.website,
+      phone: business.phone ?? fields.phone,
+      whatsapp: business.whatsapp ?? fields.whatsapp,
+      instagram: business.instagram ?? fields.instagram,
+      imageUrl: business.imageUrl ?? fields.imageUrl
+    } : business;
+  });
 }
 
 function cacheResult(cacheKey: string, value: EnrichedContactFields) {
@@ -166,3 +192,4 @@ function normalizePhone(value: string | null) {
   const compact = value.trim().replace(/[^\d+]/g, '');
   return compact.length >= 8 ? compact : null;
 }
+import type { ExternalBusiness } from './osm';
