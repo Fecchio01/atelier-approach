@@ -34,13 +34,13 @@ export async function POST(request: Request) {
   const business = body.business;
   const osmId = optionalText(business?.osmId);
   const name = optionalText(business?.name);
-  const note = optionalText(body.note);
+  const note = optionalText(body.note) ?? 'Abordagem iniciada a partir da pesquisa.';
   const channel = typeof body.channel === 'string' && Object.values(Channel).includes(body.channel as Channel)
     ? body.channel as Channel
     : null;
 
-  if (!osmId || !name || !channel || !note) {
-    return Response.json({ error: 'Informe prospect, canal e uma nota da abordagem.' }, { status: 400 });
+  if (!osmId || !name || !channel) {
+    return Response.json({ error: 'Informe prospect e canal da abordagem.' }, { status: 400 });
   }
 
   try {

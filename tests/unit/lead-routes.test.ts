@@ -34,6 +34,22 @@ describe('lead routes', () => {
     await expect(prisma.activity.findMany({ where: { leadId: payload.lead.id } })).resolves.toHaveLength(1);
   });
 
+  test('records a default approach note when the user submits only a channel', async () => {
+    const response = await POST(new Request('http://localhost/api/leads', {
+      method: 'POST',
+      body: JSON.stringify({
+        business: { osmId: 'node/no-note-required', name: 'Oficina Sem Nota' },
+        channel: 'WHATSAPP'
+      })
+    }));
+
+    expect(response.status).toBe(201);
+    const payload = await response.json();
+    await expect(prisma.activity.findFirstOrThrow({ where: { leadId: payload.lead.id } })).resolves.toMatchObject({
+      channel: 'WHATSAPP', note: 'Abordagem iniciada a partir da pesquisa.'
+    });
+  });
+
   test('deletes a test approach and all of its CRM history so it can return to research', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/restore-to-research' } });
     await prisma.activity.create({ data: { leadId: lead.id, actorId: 'internal-equipe', note: 'Abordagem de teste.' } });

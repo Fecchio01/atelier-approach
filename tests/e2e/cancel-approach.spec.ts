@@ -23,6 +23,7 @@ test('cancels an approach without saving or leaving the company card', async ({ 
   await page.getByRole('button', { name: 'Pesquisar' }).click();
   await page.getByRole('button', { name: 'Marcar como abordada' }).click();
   await expect(page.getByRole('button', { name: 'Salvar abordagem' })).toBeVisible();
+  await expect(page.getByLabel('Nota da abordagem')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Cancelar abordagem' }).click();
 

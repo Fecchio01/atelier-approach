@@ -18,7 +18,6 @@ export function LeadCard({ business, result }: LeadCardProps) {
   const router = useRouter();
   const [isApproaching, setIsApproaching] = useState(false);
   const [channel, setChannel] = useState<Channel>('WHATSAPP');
-  const [note, setNote] = useState('Abordagem iniciada a partir da pesquisa.');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const whatsappHref = toWhatsAppHref(business.whatsapp);
@@ -36,7 +35,7 @@ export function LeadCard({ business, result }: LeadCardProps) {
       const response = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ business, channel, note })
+        body: JSON.stringify({ business, channel })
       });
       const payload = (await response.json()) as { error?: string; href?: string };
       if (response.status === 409 && payload.href) {
@@ -129,10 +128,6 @@ export function LeadCard({ business, result }: LeadCardProps) {
               <option value="IN_PERSON">Presencial</option>
               <option value="OTHER">Outro</option>
             </select>
-          </label>
-          <label className="grid gap-1 text-sm text-white/80">
-            Nota da abordagem
-            <textarea value={note} onChange={(event) => setNote(event.target.value)} className="min-h-20 rounded-lg border border-white/20 bg-black px-3 py-2 text-white" />
           </label>
           {error ? <p role="alert" className="text-sm text-red-200">{error}</p> : null}
           <button type="button" onClick={saveApproach} disabled={isSaving} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 font-semibold text-black disabled:opacity-60">
