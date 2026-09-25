@@ -1,14 +1,24 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { LeadCard } from '@/components/lead-card';
-import { SearchForm, type SearchResultBatch } from '@/components/search-form';
+import { DEFAULT_SEARCH_FILTERS, SearchForm, type SearchFilters, type SearchResultBatch } from '@/components/search-form';
 import { PageHeading, Surface } from '@/components/ui';
 import { approachabilityRank, scoreBusiness } from '@/lib/lead-score';
 import type { ExternalBusiness } from '@/lib/osm';
 
 type ScoredBusiness = ExternalBusiness & ReturnType<typeof scoreBusiness>;
+type SearchSnapshot = {
+  businesses: ScoredBusiness[];
+  hasSearched: boolean;
+  searchId: string | null;
+  hasMore: boolean;
+  filters: SearchFilters;
+};
+
+let savedSearch: SearchSnapshot | null = null;
+const SEARCH_SCROLL_KEY = 'atelier-approach:search-scroll';
 
 function scoreAndSort(businesses: ExternalBusiness[]) {
   return businesses
@@ -23,9 +33,56 @@ export default function PesquisaPage() {
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [continuationError, setContinuationError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<SearchFilters>(DEFAULT_SEARCH_FILTERS);
+  const [isRestored, setIsRestored] = useState(false);
   const searchGeneration = useRef(0);
+  const restoredScrollY = useRef(0);
+
+  useEffect(() => {
+    if (savedSearch) {
+      const scrollY = Number(sessionStorage.getItem(SEARCH_SCROLL_KEY));
+      restoredScrollY.current = Number.isFinite(scrollY) ? scrollY : 0;
+      setBusinesses(savedSearch.businesses);
+      setHasSearched(savedSearch.hasSearched);
+      setSearchId(savedSearch.searchId);
+      setHasMore(savedSearch.hasMore);
+      setFilters(savedSearch.filters);
+    }
+    setIsRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isRestored) return;
+    savedSearch = { businesses, hasSearched, searchId, hasMore, filters };
+  }, [isRestored, businesses, hasSearched, searchId, hasMore, filters]);
+
+  useEffect(() => {
+    if (!isRestored) return;
+    const firstFrame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, restoredScrollY.current);
+      });
+    });
+    const rememberScroll = () => {
+      sessionStorage.setItem(SEARCH_SCROLL_KEY, String(window.scrollY));
+    };
+    window.addEventListener('atelier:save-search-scroll', rememberScroll);
+    window.addEventListener('popstate', rememberScroll);
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      window.removeEventListener('atelier:save-search-scroll', rememberScroll);
+      window.removeEventListener('popstate', rememberScroll);
+    };
+  }, [isRestored]);
+
+  function handleApproached(osmId: string) {
+    sessionStorage.setItem(SEARCH_SCROLL_KEY, String(window.scrollY));
+    if (savedSearch) savedSearch.businesses = savedSearch.businesses.filter((business) => business.osmId !== osmId);
+    setBusinesses((previous) => previous.filter((business) => business.osmId !== osmId));
+  }
 
   function handleSearchStart() {
+    sessionStorage.setItem(SEARCH_SCROLL_KEY, '0');
     searchGeneration.current += 1;
     setHasSearched(false);
     setBusinesses([]);
@@ -91,7 +148,7 @@ export default function PesquisaPage() {
       <PageHeading eyebrow="Pesquisa de prospecção" title="Encontre novas empresas." description="Resultados do OpenStreetMap e da Overture, combinados e priorizados pelos canais de contato disponíveis. Empresas já trabalhadas ficam fora da busca padrão." />
 
       <div className="mt-8">
-        <SearchForm onResults={handleResults} onSearchStart={handleSearchStart} onFailure={handleFailure} />
+        <SearchForm onResults={handleResults} onSearchStart={handleSearchStart} onFailure={handleFailure} filters={filters} onFiltersChange={setFilters} />
       </div>
 
       <div className="mt-10">
@@ -101,7 +158,7 @@ export default function PesquisaPage() {
             <p className="mb-4 text-sm text-white/65">{businesses.length} prospect{businesses.length === 1 ? '' : 's'} novo{businesses.length === 1 ? '' : 's'}, em ordem de prioridade.</p>
             <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
               {businesses.map((business) => (
-                <LeadCard key={business.osmId} business={business} result={business} />
+                <LeadCard key={business.osmId} business={business} result={business} onApproached={handleApproached} />
               ))}
             </div>
           </>

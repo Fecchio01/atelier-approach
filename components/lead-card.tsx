@@ -12,9 +12,10 @@ import { possibleWhatsAppHref } from '@/lib/contact-links';
 type LeadCardProps = {
   business: ExternalBusiness;
   result: BusinessScore;
+  onApproached?: (osmId: string) => void;
 };
 
-export function LeadCard({ business, result }: LeadCardProps) {
+export function LeadCard({ business, result, onApproached }: LeadCardProps) {
   const router = useRouter();
   const [isApproaching, setIsApproaching] = useState(false);
   const [channel, setChannel] = useState<Channel>('WHATSAPP');
@@ -44,6 +45,7 @@ export function LeadCard({ business, result }: LeadCardProps) {
         return;
       }
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível salvar a abordagem.');
+      onApproached?.(business.osmId);
       router.push('/crm');
       router.refresh();
     } catch (requestError) {

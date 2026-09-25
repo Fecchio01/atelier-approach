@@ -17,7 +17,7 @@ test('submits the actual selected form values so restored browser selections are
   expect(formSource).toContain('new FormData(event.currentTarget)');
   expect(formSource.indexOf('const formData = new FormData(event.currentTarget);')).toBeLessThan(formSource.indexOf('onSearchStart();'));
   expect(formSource).toContain("const region = String(formData.get('region') ?? '');");
-  expect(formSource).toContain('value={region}');
+  expect(formSource).toContain('value={filters.region}');
   expect(formSource).not.toContain('defaultValue=""');
   expect(formSource).toContain("const isNational = country === 'BR' && !region;");
 });

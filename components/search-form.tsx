@@ -14,6 +14,19 @@ type SearchFormProps = {
   onResults: (batch: SearchResultBatch) => void;
   onSearchStart: () => void;
   onFailure: () => void;
+  filters: SearchFilters;
+  onFiltersChange: (filters: SearchFilters) => void;
+};
+
+export type SearchFilters = {
+  country: string;
+  region: string;
+  city: string;
+  includeWorked: boolean;
+};
+
+export const DEFAULT_SEARCH_FILTERS: SearchFilters = {
+  country: 'BR', region: '', city: '', includeWorked: false
 };
 
 const FIXED_NICHE = 'estética automotiva';
@@ -47,10 +60,7 @@ const REGIONS = [
   { value: 'Tocantins, TO', label: 'Tocantins' }
 ] as const;
 
-export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormProps) {
-  const [country, setCountry] = useState('BR');
-  const [region, setRegion] = useState('');
-  const [city, setCity] = useState('');
+export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFiltersChange }: SearchFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -99,7 +109,7 @@ export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormPr
       </label>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         País
-        <select name="country" required value={country} onChange={(event) => setCountry(event.target.value)} className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none focus:border-[var(--atelier-green)]">
+        <select name="country" required value={filters.country} onChange={(event) => onFiltersChange({ ...filters, country: event.target.value })} className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none focus:border-[var(--atelier-green)]">
           <option value="BR">Brasil</option>
         </select>
       </label>
@@ -107,8 +117,8 @@ export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormPr
         Região / estado
         <select
           name="region"
-          value={region}
-          onChange={(event) => { setRegion(event.target.value); setCity(''); }}
+          value={filters.region}
+          onChange={(event) => onFiltersChange({ ...filters, region: event.target.value, city: '' })}
           className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none placeholder:text-white/40 focus:border-[var(--atelier-green)]"
         >
           <option value="">Todos os estados</option>
@@ -119,10 +129,10 @@ export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormPr
         Cidade (opcional)
         <input
           name="city"
-          disabled={!region}
-          value={city}
-          onChange={(event) => setCity(event.target.value)}
-          placeholder={region ? 'Ex.: Campinas' : 'Selecione um estado primeiro'}
+          disabled={!filters.region}
+          value={filters.city}
+          onChange={(event) => onFiltersChange({ ...filters, city: event.target.value })}
+          placeholder={filters.region ? 'Ex.: Campinas' : 'Selecione um estado primeiro'}
           className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:opacity-40 focus:border-[var(--atelier-green)]"
         />
       </label>
@@ -136,7 +146,7 @@ export function SearchForm({ onResults, onSearchStart, onFailure }: SearchFormPr
       <div className="grid gap-3 border-t border-white/[0.08] pt-4 text-sm md:col-span-5 md:grid-cols-[1fr_auto] md:items-center">
         <p className="text-white/55">Todos os estabelecimentos encontrados serão exibidos; os canais disponíveis ficam no topo.</p>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
-          <input name="includeWorked" defaultChecked={false} type="checkbox" />
+          <input name="includeWorked" checked={filters.includeWorked} onChange={(event) => onFiltersChange({ ...filters, includeWorked: event.target.checked })} type="checkbox" />
           Mostrar empresas já trabalhadas
         </label>
       </div>
