@@ -11,7 +11,7 @@ test('menu opens each section without requiring another navigation', async ({ pa
 
   const sections = [
     ['Painel', '/'], ['Empresas', '/pesquisa'], ['Metas', '/metas'],
-    ['Relatórios', '/relatorios'], ['Configurações', '/configuracoes'], ['Funil', '/crm']
+    ['Relatórios', '/relatorios'], ['Funil', '/crm']
   ] as const;
   for (let pass = 1; pass <= 2; pass++) {
     for (const [label, path] of sections) {
@@ -22,4 +22,7 @@ test('menu opens each section without requiring another navigation', async ({ pa
       console.log(`Passagem ${pass}, ${label}: ${Date.now() - started} ms`);
     }
   }
+  await page.getByRole('link', { name: /Meu perfil/ }).first().click();
+  await expect(page).toHaveURL('http://127.0.0.1:3001/configuracoes');
+  await expect(page.getByRole('heading', { name: 'Perfil e segurança' })).toBeVisible();
 });

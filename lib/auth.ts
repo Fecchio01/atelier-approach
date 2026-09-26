@@ -1,39 +1,28 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 
-import { authenticateInternalUser } from './internal-auth';
+import authConfig from './auth-config';
+import { authenticateMember } from './member-credentials';
 import { ensureMemberProfile } from './member-profile';
 import { prisma } from './db';
 
-export const { auth, handlers, signIn } = NextAuth({
-  // The internal app is routinely exercised on localhost and 127.0.0.1
-  // during local development and end-to-end checks.
-  trustHost: true,
-  session: { strategy: 'jwt' },
+export const { auth, handlers, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
         email: { label: 'E-mail', type: 'email' },
         password: { label: 'Senha', type: 'password' }
       },
-      authorize(credentials) {
+      async authorize(credentials) {
         if (typeof credentials?.email !== 'string' || typeof credentials.password !== 'string') {
           return null;
         }
 
-        return authenticateInternalUser(credentials.email, credentials.password);
+        return authenticateMember(credentials.email, credentials.password);
       }
     })
-  ],
-  callbacks: {
-    session({ session, token }) {
-      if (session.user && token.sub) {
-        session.user.id = token.sub;
-      }
-
-      return session;
-    }
-  }
+  ]
 });
 
 export async function getCurrentUser() {

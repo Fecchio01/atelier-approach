@@ -151,4 +151,15 @@ model MemberProfile {
   avatarUrl String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  credential MemberCredential?
+}
+
+model MemberCredential {
+  id           String   @id @default(cuid())
+  memberId     String   @unique
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  member       MemberProfile @relation(fields: [memberId], references: [id], onDelete: Cascade)
 }

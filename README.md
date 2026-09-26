@@ -27,6 +27,10 @@ O banco está no projeto Supabase `gxvdqmfjawnktpqguvvr`, região `sa-east-1`. A
 
 Os testes usam o esquema isolado `atelier_test` e apagam seus dados no início de cada execução. Configure `TEST_DATABASE_URL` antes de rodá-los.
 
+## Acesso e perfil
+
+As contas criadas no banco usam a tabela `MemberCredential` no esquema `atelier`, com senhas protegidas por scrypt. A tela de login usa essas contas; as credenciais internas configuradas no `.env` continuam disponíveis para membros antigos sem senha no banco. Cada pessoa pode atualizar nome e foto em **Meu perfil** e trocar a senha informando a senha atual. Depois da troca, o sistema pede um novo login.
+
 ## Pesquisa OpenStreetMap
 
 A pesquisa usa os serviços públicos Nominatim e Overpass do OpenStreetMap. Mantenha buscas moderadas: a aplicação limita cada pessoa autenticada a cinco buscas por minuto e comunica indisponibilidade temporária sem perder o contexto da tela. Para produção, informe um `User-Agent` identificável nas requisições e siga as políticas de uso dos serviços.
