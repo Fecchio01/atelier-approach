@@ -6,7 +6,7 @@ import { expect, test } from 'vitest';
 test('offers a confirmed return-to-research action that deletes the CRM record', () => {
   const source = readFileSync(resolve(process.cwd(), 'components/lead-detail-modal.tsx'), 'utf8');
 
-  expect(source).toContain("window.confirm('Devolver esta empresa para a pesquisa?")
+  expect(source).not.toContain("window.confirm('Devolver esta empresa para a pesquisa?")
   expect(source).toContain('method: \'DELETE\'');
   expect(source).toContain('Devolver para pesquisa');
   expect(source).toContain('onDeleted(id);');

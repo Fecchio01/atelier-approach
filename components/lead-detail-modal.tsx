@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowSquareOutIcon, GlobeIcon, InstagramLogoIcon, MapPinIcon, PhoneIcon, StorefrontIcon, WhatsappLogoIcon } from '@phosphor-icons/react';
+import { ArrowSquareOutIcon, GlobeIcon, InstagramLogoIcon, MapPinIcon, PhoneIcon, StorefrontIcon, TrashIcon, WhatsappLogoIcon } from '@phosphor-icons/react';
 import { mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage } from '@/lib/funnel';
 import type { CrmLead } from './kanban-board';
 import { googleMapsSearchUrl } from '@/lib/google-maps-url';
@@ -31,8 +31,12 @@ function dateTimeLabel(value: string) {
 export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead: CrmLead; onClose: () => void; onUpdated: (stage?: Stage) => void; onDeleted: (id: string) => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const returnButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmCancelRef = useRef<HTMLButtonElement>(null);
+  const wasConfirmingRef = useRef(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingReturn, setConfirmingReturn] = useState(false);
   const [followUpAt, setFollowUpAt] = useState<Record<string, string>>({});
   const [saleValues, setSaleValues] = useState<Record<string, string>>({});
   const [mrrValues, setMrrValues] = useState<Record<string, string>>({});
@@ -54,6 +58,16 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
   useEffect(() => {
     setStageDraft(normalizeFunnelStage(lead.stage));
   }, [lead.id, lead.stage]);
+
+  useEffect(() => {
+    if (confirmingReturn) {
+      confirmCancelRef.current?.focus();
+      wasConfirmingRef.current = true;
+    } else if (wasConfirmingRef.current) {
+      returnButtonRef.current?.focus();
+      wasConfirmingRef.current = false;
+    }
+  }, [confirmingReturn]);
 
   async function updateLead(id: string, details: Record<string, unknown>) {
     setSavingId(id);
@@ -124,8 +138,6 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
   }
 
   async function restoreToResearch(id: string) {
-    if (!window.confirm('Devolver esta empresa para a pesquisa? Isso apagará o registro e todo o histórico desta abordagem.')) return;
-
     setSavingId(id);
     setError(null);
     try {
@@ -165,7 +177,7 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
               <input aria-label="Data do follow-up" type="datetime-local" value={followUpAt[lead.id] ?? ''} onChange={(event) => setFollowUpAt({ ...followUpAt, [lead.id]: event.target.value })} className="min-h-12 rounded-lg border border-white/[0.14] bg-[#11171c] px-3 text-sm text-white" />
             </label><button type="button" disabled={savingId === lead.id} onClick={() => scheduleFollowUp(lead)} className="min-h-11 rounded-lg border border-[var(--atelier-green)] px-3 text-sm font-semibold text-[var(--atelier-green)] disabled:opacity-60">{activeFollowUp ? 'Reagendar follow-up' : 'Agendar follow-up'}</button></div>
           </div>
-          <button type="button" disabled={savingId === lead.id} onClick={() => restoreToResearch(lead.id)} className="justify-self-start text-sm font-semibold text-red-300 hover:text-red-200 disabled:opacity-60">Devolver para pesquisa</button>
+          <button ref={returnButtonRef} type="button" disabled={savingId === lead.id} onClick={() => { setError(null); setConfirmingReturn(true); }} className="justify-self-start text-sm font-semibold text-red-300 hover:text-red-200 disabled:opacity-60">Devolver para pesquisa</button>
         </section> : null}
         {activeTab === 'HISTORY' ? <section className="grid gap-4">{lead.activities.length ? (
           <ol className="grid max-h-60 gap-3 overflow-y-auto rounded-xl border border-white/[0.09] bg-black/10 p-4 text-sm text-white/70 md:col-span-2" aria-label="Histórico de atividades">
@@ -204,14 +216,28 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
     );
   };
 
-  return <dialog ref={dialogRef} aria-modal="true" aria-labelledby="lead-detail-title" data-testid="lead-modal-backdrop" onCancel={(event) => { event.preventDefault(); onClose(); }} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-center justify-center bg-transparent p-3 text-white backdrop:bg-[#030506]/80 backdrop:backdrop-blur-[6px] open:flex sm:p-8">
-    <div className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/[0.14] bg-[#10161b] shadow-[0_28px_100px_rgba(0,0,0,.55)]">
+  return <dialog ref={dialogRef} aria-modal="true" aria-labelledby="lead-detail-title" data-testid="lead-modal-backdrop" onCancel={(event) => { event.preventDefault(); if (confirmingReturn) { if (savingId !== lead.id) setConfirmingReturn(false); } else onClose(); }} onClick={(event) => { if (event.target === event.currentTarget && !confirmingReturn) onClose(); }} className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-center justify-center bg-transparent p-3 text-white backdrop:bg-[#030506]/80 backdrop:backdrop-blur-[6px] open:flex sm:p-8">
+    <div className="relative flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/[0.14] bg-[#10161b] shadow-[0_28px_100px_rgba(0,0,0,.55)]">
+      <div inert={confirmingReturn} className="flex min-h-0 flex-col">
       <header className="flex items-start justify-between gap-5 border-b border-white/[0.09] px-6 py-6 sm:px-8">
         <div className="min-w-0"><p className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50"><span className="h-2 w-2 rounded-full bg-[var(--atelier-green)]" />{stageLabels[normalizeFunnelStage(lead.stage)]}</p><h2 id="lead-detail-title" className="break-words text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">{displayCompanyName(lead.name)}</h2><p className="mt-2 text-xs text-white/40">Detalhes, contatos e próxima ação</p></div>
         <button ref={closeRef} type="button" aria-label="Fechar detalhes" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/[0.14] text-lg text-white/60 hover:bg-white/[0.06] hover:text-white"><span aria-hidden="true">×</span></button>
       </header>
-      {error ? <p role="alert" className="border-b border-red-300/15 bg-red-300/5 px-6 py-3 text-sm text-red-200">{error}</p> : null}
+      {error && !confirmingReturn ? <p role="alert" className="border-b border-red-300/15 bg-red-300/5 px-6 py-3 text-sm text-red-200">{error}</p> : null}
       <div className="atelier-scrollbar overflow-y-auto overscroll-contain p-5 sm:p-8">{renderLead(lead)}</div>
+      </div>
+      {confirmingReturn ? <div className="absolute inset-0 z-10 grid place-items-center bg-[#070b0e]/85 p-4 backdrop-blur-[4px]">
+        <section role="alertdialog" aria-modal="true" aria-labelledby="return-confirm-title" aria-describedby="return-confirm-description" className="w-full max-w-md rounded-2xl border border-white/[0.14] bg-[#151c20] p-6 shadow-[0_24px_70px_rgba(0,0,0,.42)] sm:p-7">
+          <div className="mb-5 grid h-11 w-11 place-items-center rounded-xl border border-red-300/25 bg-red-300/[0.07] text-red-200"><TrashIcon size={22} weight="regular" aria-hidden="true" /></div>
+          <h3 id="return-confirm-title" className="text-lg font-semibold tracking-[-0.025em]">Devolver empresa para pesquisa?</h3>
+          <p id="return-confirm-description" className="mt-2 text-sm leading-relaxed text-white/60">O registro de {displayCompanyName(lead.name)} e todo o histórico desta abordagem serão apagados. A empresa poderá aparecer novamente na pesquisa.</p>
+          {error ? <p role="alert" className="mt-4 rounded-lg border border-red-300/30 bg-red-300/[0.07] px-3 py-2 text-sm text-red-200">{error}</p> : null}
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+            <button ref={confirmCancelRef} type="button" disabled={savingId === lead.id} onClick={() => { setConfirmingReturn(false); setError(null); }} className="min-h-11 rounded-lg border border-white/[0.17] px-4 text-sm font-semibold text-white/75 hover:bg-white/[0.06] active:scale-[0.98] disabled:opacity-50">Cancelar</button>
+            <button type="button" disabled={savingId === lead.id} onClick={() => restoreToResearch(lead.id)} className="min-h-11 rounded-lg border border-red-300/45 bg-red-300/10 px-4 text-sm font-semibold text-red-100 hover:bg-red-300/15 active:scale-[0.98] disabled:opacity-50">{savingId === lead.id ? 'Devolvendo…' : 'Confirmar devolução'}</button>
+          </div>
+        </section>
+      </div> : null}
     </div>
   </dialog>;
 }
