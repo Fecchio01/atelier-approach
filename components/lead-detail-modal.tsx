@@ -28,7 +28,7 @@ function dateTimeLabel(value: string) {
   return new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-export function LeadDetailModal({ lead, onClose, onUpdated }: { lead: CrmLead; onClose: () => void; onUpdated: (stage?: Stage) => void }) {
+export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead: CrmLead; onClose: () => void; onUpdated: (stage?: Stage) => void; onDeleted: (id: string) => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -132,8 +132,7 @@ export function LeadDetailModal({ lead, onClose, onUpdated }: { lead: CrmLead; o
       const response = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível devolver a empresa para a pesquisa.');
-      onUpdated();
-      onClose();
+      onDeleted(id);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Não foi possível devolver a empresa para a pesquisa.');
     } finally {

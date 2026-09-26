@@ -9,5 +9,5 @@ test('offers a confirmed return-to-research action that deletes the CRM record',
   expect(source).toContain("window.confirm('Devolver esta empresa para a pesquisa?")
   expect(source).toContain('method: \'DELETE\'');
   expect(source).toContain('Devolver para pesquisa');
-  expect(source).toContain('onUpdated();');
+  expect(source).toContain('onDeleted(id);');
 });

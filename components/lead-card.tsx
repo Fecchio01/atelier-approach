@@ -47,7 +47,6 @@ export function LeadCard({ business, result, onApproached }: LeadCardProps) {
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível salvar a abordagem.');
       onApproached?.(business.osmId);
       router.push('/crm');
-      router.refresh();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Não foi possível salvar a abordagem.');
     } finally {

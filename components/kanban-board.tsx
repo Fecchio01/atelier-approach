@@ -6,6 +6,7 @@ import type { LeadStage } from '@prisma/client';
 import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage } from '@/lib/funnel';
 import { LeadDetailModal } from './lead-detail-modal';
 import { displayCompanyName } from '@/lib/display-name';
+import { visibleLeads } from '@/lib/kanban-visible-leads';
 
 export type CrmLead = {
   id: string;
@@ -31,11 +32,13 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
   const router = useRouter();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(focusedLeadId ?? null);
   const [stageOverrides, setStageOverrides] = useState<Record<string, LeadStage>>({});
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
   useEffect(() => { setSelectedLeadId(focusedLeadId ?? null); }, [focusedLeadId]);
-  const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
+  const currentLeads = visibleLeads(leads, removedIds);
+  const selectedLead = currentLeads.find((lead) => lead.id === selectedLeadId);
 
   function renderColumn(stage: FunnelStage) {
-    const stageLeads = leads.filter((lead) => normalizeFunnelStage(stageOverrides[lead.id] ?? lead.stage) === stage);
+    const stageLeads = currentLeads.filter((lead) => normalizeFunnelStage(stageOverrides[lead.id] ?? lead.stage) === stage);
     return <section key={stage} aria-label={stageLabels[stage]} className="min-w-0 rounded-xl border border-white/[0.07] bg-[#0d1216]/72 p-2">
       <header className="mb-3 flex min-h-8 items-center justify-between gap-2 px-1.5 pt-1">
         <h2 className="flex items-center gap-2 text-xs font-semibold text-white/80"><span className={`h-2 w-2 rounded-full ${stage === 'WON' ? 'bg-[var(--atelier-green)]' : stage === 'PROPOSAL' ? 'bg-amber-400' : stage === 'QUALIFIED' ? 'bg-violet-400' : stage === 'IN_CONVERSATION' ? 'bg-sky-400' : 'bg-white/60'}`} />{stageLabels[stage]}</h2>
@@ -66,7 +69,11 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
       <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.15em] text-white/35">Outras situações</h2>
       <div className="grid gap-4 md:grid-cols-2">{auxiliaryFunnelStages.map(renderColumn)}</div>
     </section>
-    {selectedLead ? <LeadDetailModal key={selectedLead.id} lead={selectedLead} onClose={() => setSelectedLeadId(null)} onUpdated={(updatedStage) => {
+    {selectedLead ? <LeadDetailModal key={selectedLead.id} lead={selectedLead} onClose={() => setSelectedLeadId(null)} onDeleted={(id) => {
+      setRemovedIds((previous) => [...previous, id]);
+      setSelectedLeadId(null);
+      router.refresh();
+    }} onUpdated={(updatedStage) => {
       if (!updatedStage) return;
       const stageChanged = normalizeFunnelStage(updatedStage) !== normalizeFunnelStage(selectedLead.stage);
       if (stageChanged) {
