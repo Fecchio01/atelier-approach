@@ -3,7 +3,7 @@ import nextPlugin from '@next/eslint-plugin-next';
 import tsParser from '@typescript-eslint/parser';
 
 export default [
-  { ignores: ['.next/**', '.next-e2e/**', '.next-local/**', 'node_modules/**', 'prisma/*.db', 'test-results/**', '**/*.d.ts'] },
+  { ignores: ['.next/**', '.next-e2e/**', '.next-local/**', '.next-release/**', '.next-supabase/**', 'node_modules/**', 'prisma/*.db', 'test-results/**', '**/*.d.ts'] },
   js.configs.recommended,
   { plugins: { '@next/next': nextPlugin }, rules: nextPlugin.configs.recommended.rules },
   {

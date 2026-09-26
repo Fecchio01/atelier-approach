@@ -3,6 +3,11 @@
 node_modules/
 .next/
 .next-e2e/
+.next-local/
+.next-release/
+.next-supabase/
 .env
+prisma/*.db
+tsconfig.tsbuildinfo
 playwright-report/
 test-results/

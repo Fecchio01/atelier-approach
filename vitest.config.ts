@@ -1,6 +1,12 @@
+import { loadEnvConfig } from '@next/env';
 import { defineConfig } from 'vitest/config';
 
-const testDatabaseUrl = 'file:./test.db';
+loadEnvConfig(process.cwd());
+
+const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+if (!testDatabaseUrl || new URL(testDatabaseUrl).searchParams.get('schema') !== 'atelier_test') {
+  throw new Error('TEST_DATABASE_URL must point to the isolated atelier_test schema.');
+}
 
 export default defineConfig({
   test: {

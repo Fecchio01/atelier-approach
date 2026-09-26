@@ -4,8 +4,8 @@ import { prisma } from '../../lib/db';
 import { createActivity } from '../../lib/lead-repository';
 
 describe('createActivity', () => {
-  test('uses the isolated SQLite test database', () => {
-    expect(process.env.DATABASE_URL).toBe('file:./test.db');
+  test('uses the isolated Supabase test schema', () => {
+    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
   });
 
   beforeEach(async () => {

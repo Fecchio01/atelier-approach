@@ -1,30 +1,19 @@
-import { execFileSync } from 'node:child_process';
-import { readdirSync, rmSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { PrismaClient } from '@prisma/client';
 
-const testDatabaseUrl = 'file:./test.db';
-const testDatabasePath = fileURLToPath(new URL('../prisma/test.db', import.meta.url));
-const schemaPath = fileURLToPath(new URL('../prisma/schema.prisma', import.meta.url));
-const prismaCliPath = fileURLToPath(new URL('../node_modules/prisma/build/index.js', import.meta.url));
-
-export default function setupTestDatabase() {
-  rmSync(testDatabasePath, { force: true });
-
-  const migrationsDirectory = fileURLToPath(new URL('../prisma/migrations/', import.meta.url));
-  for (const migration of readdirSync(migrationsDirectory).sort()) {
-    execFileSync(process.execPath, [
-      prismaCliPath,
-      'db',
-      'execute',
-      '--file',
-      `${migrationsDirectory}/${migration}/migration.sql`,
-      '--schema',
-      schemaPath
-    ], {
-      env: { ...process.env, DATABASE_URL: testDatabaseUrl },
-      stdio: 'inherit'
-    });
+export default async function setupTestDatabase() {
+  const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+  if (!testDatabaseUrl || new URL(testDatabaseUrl).searchParams.get('schema') !== 'atelier_test') {
+    throw new Error('TEST_DATABASE_URL must point to the isolated atelier_test schema.');
   }
 
-  return () => rmSync(testDatabasePath, { force: true });
+  process.env.DATABASE_URL = testDatabaseUrl;
+  const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl } } });
+
+  try {
+    await prisma.lead.deleteMany();
+    await prisma.goal.deleteMany();
+    await prisma.memberProfile.deleteMany();
+  } finally {
+    await prisma.$disconnect();
+  }
 }
