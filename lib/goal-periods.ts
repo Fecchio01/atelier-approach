@@ -8,6 +8,9 @@ export interface GoalPeriodWindow {
   end: Date;
 }
 
+export type DashboardPeriod = 'day' | 'week' | 'month';
+
+
 interface LocalDate {
   year: number;
   month: number;
@@ -145,6 +148,26 @@ export function getLocalDayWindow(reference: Date): { start: Date; end: Date } {
     end: localMidnightToUtc(addCalendarDays(localDate, 1))
   };
 }
+
+export function selectDashboardWindow(
+  period: DashboardPeriod,
+  reference: Date,
+  weeklyWindow: GoalPeriodWindow,
+  monthlyWindow: GoalPeriodWindow
+): { start: Date; end: Date } {
+  if (period === 'day') return getLocalDayWindow(reference);
+  const selectedWindow = period === 'week' ? weeklyWindow : monthlyWindow;
+  return { start: selectedWindow.start, end: selectedWindow.end };
+}
+
+export function selectGoalPeriod<T extends { periodStart: Date }>(
+  requestedStart: Date | null,
+  requestedGoal: T | null,
+  activeGoal: T | null
+): T | null {
+  return requestedStart ? requestedGoal : activeGoal;
+}
+
 
 export function isSameLocalDay(first: Date, second: Date): boolean {
   if (Number.isNaN(first.getTime()) || Number.isNaN(second.getTime())) return false;

@@ -5,7 +5,7 @@ import { PageHeading } from '@/components/ui';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { getTeamGoalProgress, getTeamGoalTargets } from '@/lib/metrics';
 import { prisma } from '@/lib/db';
-import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
+import { getGoalPeriodWindow, selectGoalPeriod, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { buildRecommendations, buildReport } from '@/lib/reports';
 
 export const dynamic = 'force-dynamic';
@@ -32,35 +32,46 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const kind = period === 'week' ? 'WEEKLY' : 'MONTHLY';
   const now = new Date();
   const start = parsePeriodStart(requestedStart);
-  const [settings, savedGoals, profiles] = await Promise.all([
+  const goalSelect = {
+    periodKind: true, periodStart: true, periodEnd: true,
+    approachesTarget: true, interestsTarget: true, meetingsTarget: true,
+    salesTarget: true, revenueTarget: true, mrrTarget: true,
+    followUpsCompletedTarget: true, conversionRateTarget: true
+  } as const;
+  const [settings, activeGoal, requestedGoal, profiles] = await Promise.all([
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
-    prisma.goal.findMany({
-      where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lte: now } },
-      select: {
-        periodKind: true, periodStart: true, periodEnd: true,
-        approachesTarget: true, interestsTarget: true, meetingsTarget: true,
-        salesTarget: true, revenueTarget: true, mrrTarget: true,
-        followUpsCompletedTarget: true, conversionRateTarget: true
-      },
-      orderBy: { periodStart: 'desc' },
-      take: 60
+    prisma.goal.findFirst({
+      where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lte: now }, periodEnd: { gt: now } },
+      select: goalSelect,
+      orderBy: { periodStart: 'desc' }
     }),
+    start ? prisma.goal.findFirst({ where: { ownerId: teamOwnerId, periodKind: kind, periodStart: start }, select: goalSelect }) : Promise.resolve(null),
     getMemberProfiles()
   ]);
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
-  const activeGoal = savedGoals.find((goal) => goal.periodStart <= now && goal.periodEnd > now);
   const activeWindow: GoalPeriodWindow = activeGoal
     ? { kind, start: activeGoal.periodStart, end: activeGoal.periodEnd }
     : getGoalPeriodWindow(kind, now, monthlyStartDay);
-  const selectedGoal = start ? savedGoals.find((goal) => goal.periodStart.getTime() === start.getTime()) : activeGoal;
+  const selectedGoal = selectGoalPeriod(start, requestedGoal, activeGoal);
   const selectedWindow: GoalPeriodWindow = selectedGoal ? { kind, start: selectedGoal.periodStart, end: selectedGoal.periodEnd } : activeWindow;
   const [report] = await Promise.all([buildReport({ from: selectedWindow.start, to: selectedWindow.end })]);
   const recommendations = buildRecommendations(report);
   const nameFor = (memberId: string) => profiles.find((profile) => profile.id === memberId)?.name ?? memberId;
   const progress = getTeamGoalProgress(report.goalActuals, getTeamGoalTargets(selectedGoal));
-  const previousGoals = savedGoals.filter((goal) => goal.periodStart < activeWindow.start).slice(0, 8);
   const viewingCurrent = selectedWindow.start.getTime() === activeWindow.start.getTime();
+  const [previousGoal, nextGoal] = await Promise.all([
+    prisma.goal.findFirst({
+      where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lt: selectedWindow.start } },
+      select: goalSelect,
+      orderBy: { periodStart: 'desc' }
+    }),
+    prisma.goal.findFirst({
+      where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { gt: selectedWindow.start, lte: activeWindow.start } },
+      select: goalSelect,
+      orderBy: { periodStart: 'asc' }
+    })
+  ]);
 
   return <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
     <PageHeading eyebrow="Relatórios comerciais" title="Leituras do CRM, sem previsões." description="Os números usam atividades, etapas e eventos de ganho registrados no CRM." action={<Link href="/" className="text-sm text-[var(--atelier-green)]">← Painel</Link>} />
@@ -68,7 +79,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <Link href="/relatorios?period=week" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'week' && viewingCurrent ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Esta semana</Link>
       <Link href="/relatorios?period=month" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'month' && viewingCurrent ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Ciclo atual</Link>
     </nav>
-    {previousGoals.length ? <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-white/55"><span>Ciclos anteriores com meta salva:</span>{previousGoals.map((goal) => <Link key={goal.periodStart.toISOString()} href={`/relatorios?period=${period}&start=${encodeURIComponent(goal.periodStart.toISOString())}`} className="rounded-full border border-white/15 px-3 py-1 hover:border-[var(--atelier-green)] hover:text-white">{dateRangeLabel({ kind, start: goal.periodStart, end: goal.periodEnd })}</Link>)}</div> : null}
+    <nav aria-label="Navegar pelos ciclos salvos" className="mt-4 flex flex-wrap gap-3 text-xs">
+      {previousGoal ? <Link href={`/relatorios?period=${period}&start=${encodeURIComponent(previousGoal.periodStart.toISOString())}`} className="rounded-full border border-white/15 px-3 py-1 hover:border-[var(--atelier-green)]">← Anterior · {dateRangeLabel({ kind, start: previousGoal.periodStart, end: previousGoal.periodEnd })}</Link> : null}
+      {nextGoal ? <Link href={`/relatorios?period=${period}&start=${encodeURIComponent(nextGoal.periodStart.toISOString())}`} className="rounded-full border border-white/15 px-3 py-1 hover:border-[var(--atelier-green)]">Próximo · {dateRangeLabel({ kind, start: nextGoal.periodStart, end: nextGoal.periodEnd })} →</Link> : null}
+      {!viewingCurrent ? <Link href={`/relatorios?period=${period}`} className="rounded-full border border-white/15 px-3 py-1 hover:border-[var(--atelier-green)]">Voltar ao ciclo atual</Link> : null}
+    </nav>
+    {start && !requestedGoal ? <p role="status" className="mt-5 text-sm text-amber-200">Esse ciclo salvo não foi encontrado. Exibindo o período atual.</p> : null}
     <p className="mt-5 text-sm text-white/65">Período analisado: <strong className="text-white">{dateRangeLabel(selectedWindow)}</strong>{selectedGoal ? ' · meta salva' : ' · sem meta configurada'}</p>
 
     <section aria-labelledby="goal-comparison-title" className="mt-6 rounded-2xl border border-white/[0.09] bg-[#111411] p-6">

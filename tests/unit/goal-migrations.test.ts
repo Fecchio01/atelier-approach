@@ -12,8 +12,8 @@ describe('goal migrations', () => {
   });
 
   test('preserves weekly and personal goal rows when moving to period-based goals', () => {
-    expect(goalMigration).toContain('"periodStart" = "weekStart"');
-    expect(goalMigration).toContain('"periodEnd" = "weekStart" + INTERVAL \'7 days\'');
+    expect(goalMigration).toContain('date_trunc(\'week\', "weekStart") + INTERVAL \'3 hours\'');
+    expect(goalMigration).toContain('"periodEnd" = "periodStart" + INTERVAL \'7 days\'');
     expect(goalMigration).toContain('NULLIF("approachesTarget", 0)');
     expect(goalMigration).toContain('ALTER TABLE "Goal" DROP COLUMN "weekStart"');
     expect(goalMigration).not.toMatch(/DELETE\s+FROM\s+"Goal"/i);

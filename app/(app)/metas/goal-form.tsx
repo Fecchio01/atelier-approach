@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 
 import { saveMonthlyGoal, saveWeeklyGoal } from './actions';
 import { initialGoalActionState, type GoalActionState } from './goal-form-state';
@@ -28,8 +28,11 @@ const metricFields = [
   { key: 'conversionRate', goalKey: 'conversionRateTarget', label: 'Taxa de conversão (%)', type: 'number', min: '1', max: '100', step: '0.1' }
 ] as const;
 
-function initialValue(goal: GoalRecord, key: typeof metricFields[number]['goalKey']) {
-  return goal?.[key] ?? '';
+type GoalTargetField = typeof metricFields[number]['key'];
+type GoalTargetDraft = Record<GoalTargetField, string>;
+
+function goalDraftFromRecord(goal: GoalRecord): GoalTargetDraft {
+  return Object.fromEntries(metricFields.map((field) => [field.key, goal?.[field.goalKey]?.toString() ?? ''])) as GoalTargetDraft;
 }
 
 function formatDate(date: Date) {
@@ -53,6 +56,8 @@ export function GoalForm({
 }) {
   const action = kind === 'WEEKLY' ? saveWeeklyGoal : saveMonthlyGoal;
   const [state, formAction, pending] = useActionState<GoalActionState, FormData>(action, initialGoalActionState);
+  const [draft, setDraft] = useState(() => goalDraftFromRecord(goal));
+  const [monthlyStartDayDraft, setMonthlyStartDayDraft] = useState(String(monthlyStartDay));
   const heading = kind === 'WEEKLY' ? 'Meta semanal da equipe' : 'Meta mensal da equipe';
 
   return <form action={formAction} className="rounded-2xl border border-white/[0.09] bg-[#111411] p-6">
@@ -62,7 +67,7 @@ export function GoalForm({
         <p className="mt-1 text-sm text-white/60">Ciclo: {goalPeriodLabel(period)}</p>
       </div>
       {kind === 'MONTHLY' ? <label className="grid gap-2 text-sm text-white/70">Dia de início do ciclo
-        <input name="monthlyStartDay" type="number" inputMode="numeric" min="1" max="31" step="1" required defaultValue={monthlyStartDay} className="w-32 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-white" />
+        <input name="monthlyStartDay" type="number" inputMode="numeric" min="1" max="31" step="1" required value={monthlyStartDayDraft} onChange={(event) => setMonthlyStartDayDraft(event.target.value)} className="w-32 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-white" />
       </label> : null}
     </div>
 
@@ -70,7 +75,7 @@ export function GoalForm({
       <legend className="text-xs font-semibold uppercase tracking-[0.14em] text-white/55">Produção comercial</legend>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {metricFields.slice(0, 5).map((field) => <label key={field.key} className="grid gap-2 text-sm text-white/75">{field.label}
-          <input name={field.key} type={field.type} inputMode="decimal" min={field.min} step={field.step} defaultValue={initialValue(goal, field.goalKey)} placeholder="Sem meta" className="rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-white placeholder:text-white/30" />
+          <input name={field.key} type={field.type} inputMode="decimal" min={field.min} step={field.step} value={draft[field.key]} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} placeholder="Sem meta" className="rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-white placeholder:text-white/30" />
         </label>)}
       </div>
     </fieldset>
@@ -79,7 +84,7 @@ export function GoalForm({
       <legend className="text-xs font-semibold uppercase tracking-[0.14em] text-white/55">Receita e eficiência</legend>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {metricFields.slice(5).map((field) => <label key={field.key} className="grid gap-2 text-sm text-white/75">{field.label}
-          <input name={field.key} type={field.type} inputMode="decimal" min={field.min} step={field.step} {...('max' in field ? { max: field.max } : {})} defaultValue={initialValue(goal, field.goalKey)} placeholder="Sem meta" className="rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-white placeholder:text-white/30" />
+          <input name={field.key} type={field.type} inputMode="decimal" min={field.min} step={field.step} {...('max' in field ? { max: field.max } : {})} value={draft[field.key]} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} placeholder="Sem meta" className="rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-white placeholder:text-white/30" />
         </label>)}
       </div>
     </fieldset>

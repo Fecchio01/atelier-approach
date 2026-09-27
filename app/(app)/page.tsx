@@ -6,20 +6,14 @@ import { PageHeading } from '@/components/ui';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getMemberProfiles } from '@/lib/member-profile';
-import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type DashboardRange, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
-import { getGoalPeriodWindow, getLocalDayWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
+import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
+import { getGoalPeriodWindow, getLocalDayWindow, selectDashboardWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels } from '@/lib/funnel';
 
 type Period = 'day' | 'week' | 'month';
 const teamOwnerId = '__team__';
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 const shortDate = (value: Date) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo' }).format(value);
-
-function rangeFor(period: Period, now: Date, monthlyStartDay: number): DashboardRange {
-  if (period === 'day') return { ...getLocalDayWindow(now), now };
-  const window = getGoalPeriodWindow(period === 'week' ? 'WEEKLY' : 'MONTHLY', now, monthlyStartDay);
-  return { start: window.start, end: window.end, now };
-}
 
 function windowLabel(window: GoalPeriodWindow) {
   const date = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -77,7 +71,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const monthlyPeriod: GoalPeriodWindow = monthlyGoal
     ? { kind: 'MONTHLY', start: monthlyGoal.periodStart, end: monthlyGoal.periodEnd }
     : getGoalPeriodWindow('MONTHLY', now, monthlyStartDay);
-  const selectedRange = rangeFor(period, now, monthlyStartDay);
+  const selectedRange = { ...selectDashboardWindow(period, now, weeklyPeriod, monthlyPeriod), now };
   const dataFrom = [selectedRange.start, weeklyPeriod.start, monthlyPeriod.start].reduce((earliest, date) => date < earliest ? date : earliest);
   const dataTo = [selectedRange.end, weeklyPeriod.end, monthlyPeriod.end].reduce((latest, date) => date > latest ? date : latest);
   const today = getLocalDayWindow(now);

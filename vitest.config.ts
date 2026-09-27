@@ -1,4 +1,6 @@
 import { loadEnvConfig } from '@next/env';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 loadEnvConfig(process.cwd());
@@ -9,6 +11,9 @@ if (!testDatabaseUrl || new URL(testDatabaseUrl).searchParams.get('schema') !== 
 }
 
 export default defineConfig({
+  resolve: {
+    alias: { '@': path.dirname(fileURLToPath(import.meta.url)) }
+  },
   test: {
     exclude: ['tests/e2e/**', 'node_modules/**', '.next/**'],
     fileParallelism: false,

@@ -10,8 +10,10 @@ ADD COLUMN "conversionRateTarget" DOUBLE PRECISION;
 
 UPDATE "Goal"
 SET
-  "periodStart" = "weekStart",
-  "periodEnd" = "weekStart" + INTERVAL '7 days';
+  "periodStart" = date_trunc('week', "weekStart") + INTERVAL '3 hours';
+
+UPDATE "Goal"
+SET "periodEnd" = "periodStart" + INTERVAL '7 days';
 
 ALTER TABLE "Goal"
 ALTER COLUMN "periodStart" SET NOT NULL,

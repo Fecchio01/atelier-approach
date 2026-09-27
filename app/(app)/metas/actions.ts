@@ -23,13 +23,13 @@ async function revalidateGoals() {
 }
 
 export async function saveWeeklyGoal(_previous: GoalActionState, formData: FormData): Promise<GoalActionState> {
-  const user = await getCurrentUser();
-  if (!user) return { status: 'error', message: 'Entre no sistema para salvar a meta.' };
-
-  const parsed = parseGoalTargets(targetsFromForm(formData));
-  if (!parsed.ok) return { status: 'error', message: parsed.message };
-
   try {
+    const user = await getCurrentUser();
+    if (!user) return { status: 'error', message: 'Entre no sistema para salvar a meta.' };
+
+    const parsed = parseGoalTargets(targetsFromForm(formData));
+    if (!parsed.ok) return { status: 'error', message: parsed.message };
+
     const now = new Date();
     const period = getGoalPeriodWindow('WEEKLY', now, 1);
     await upsertTeamGoal(period, parsed.targets);
@@ -41,18 +41,18 @@ export async function saveWeeklyGoal(_previous: GoalActionState, formData: FormD
 }
 
 export async function saveMonthlyGoal(_previous: GoalActionState, formData: FormData): Promise<GoalActionState> {
-  const user = await getCurrentUser();
-  if (!user) return { status: 'error', message: 'Entre no sistema para salvar a meta.' };
-
-  const parsed = parseGoalTargets(targetsFromForm(formData));
-  if (!parsed.ok) return { status: 'error', message: parsed.message };
-
-  const monthlyStartDay = Number(formData.get('monthlyStartDay'));
-  if (!Number.isInteger(monthlyStartDay) || monthlyStartDay < 1 || monthlyStartDay > 31) {
-    return { status: 'error', message: 'Escolha um dia de início entre 1 e 31.' };
-  }
-
   try {
+    const user = await getCurrentUser();
+    if (!user) return { status: 'error', message: 'Entre no sistema para salvar a meta.' };
+
+    const parsed = parseGoalTargets(targetsFromForm(formData));
+    if (!parsed.ok) return { status: 'error', message: parsed.message };
+
+    const monthlyStartDay = Number(formData.get('monthlyStartDay'));
+    if (!Number.isInteger(monthlyStartDay) || monthlyStartDay < 1 || monthlyStartDay > 31) {
+      return { status: 'error', message: 'Escolha um dia de início entre 1 e 31.' };
+    }
+
     const now = new Date();
     await prisma.$transaction(async (transaction) => {
       const settings = await transaction.teamGoalSettings.findUnique({ where: { id: 'team' } });
