@@ -1,36 +1,91 @@
 import Link from 'next/link';
 
-import { buildRecommendations, buildReport, getRecentReportRange } from '@/lib/reports';
-import { getMemberProfiles } from '@/lib/member-profile';
+import { TeamGoalProgress } from '@/components/team-goal-progress';
 import { PageHeading } from '@/components/ui';
+import { getMemberProfiles } from '@/lib/member-profile';
+import { getTeamGoalProgress, getTeamGoalTargets } from '@/lib/metrics';
+import { prisma } from '@/lib/db';
+import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
+import { buildRecommendations, buildReport } from '@/lib/reports';
 
 export const dynamic = 'force-dynamic';
 
 type Period = 'week' | 'month';
-
+const teamOwnerId = '__team__';
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
-  const { period: requestedPeriod } = await searchParams;
+function parsePeriodStart(value?: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? null : date;
+}
+
+function dateRangeLabel(window: GoalPeriodWindow) {
+  const date = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
+  return `${date.format(window.start)} a ${date.format(new Date(window.end.getTime() - 1))}`;
+}
+
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ period?: string; start?: string }> }) {
+  const { period: requestedPeriod, start: requestedStart } = await searchParams;
   const period: Period = requestedPeriod === 'month' ? 'month' : 'week';
-  const [report, profiles] = await Promise.all([buildReport(getRecentReportRange(period)), getMemberProfiles()]);
+  const kind = period === 'week' ? 'WEEKLY' : 'MONTHLY';
+  const now = new Date();
+  const start = parsePeriodStart(requestedStart);
+  const [settings, savedGoals, profiles] = await Promise.all([
+    prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
+    prisma.goal.findMany({
+      where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lte: now } },
+      select: {
+        periodKind: true, periodStart: true, periodEnd: true,
+        approachesTarget: true, interestsTarget: true, meetingsTarget: true,
+        salesTarget: true, revenueTarget: true, mrrTarget: true,
+        followUpsCompletedTarget: true, conversionRateTarget: true
+      },
+      orderBy: { periodStart: 'desc' },
+      take: 60
+    }),
+    getMemberProfiles()
+  ]);
+
+  const monthlyStartDay = settings?.monthlyStartDay ?? 1;
+  const activeGoal = savedGoals.find((goal) => goal.periodStart <= now && goal.periodEnd > now);
+  const activeWindow: GoalPeriodWindow = activeGoal
+    ? { kind, start: activeGoal.periodStart, end: activeGoal.periodEnd }
+    : getGoalPeriodWindow(kind, now, monthlyStartDay);
+  const selectedGoal = start ? savedGoals.find((goal) => goal.periodStart.getTime() === start.getTime()) : activeGoal;
+  const selectedWindow: GoalPeriodWindow = selectedGoal ? { kind, start: selectedGoal.periodStart, end: selectedGoal.periodEnd } : activeWindow;
+  const [report] = await Promise.all([buildReport({ from: selectedWindow.start, to: selectedWindow.end })]);
   const recommendations = buildRecommendations(report);
   const nameFor = (memberId: string) => profiles.find((profile) => profile.id === memberId)?.name ?? memberId;
+  const progress = getTeamGoalProgress(report.goalActuals, getTeamGoalTargets(selectedGoal));
+  const previousGoals = savedGoals.filter((goal) => goal.periodStart < activeWindow.start).slice(0, 8);
+  const viewingCurrent = selectedWindow.start.getTime() === activeWindow.start.getTime();
 
   return <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
     <PageHeading eyebrow="Relatórios comerciais" title="Leituras do CRM, sem previsões." description="Os números usam atividades, etapas e eventos de ganho registrados no CRM." action={<Link href="/" className="text-sm text-[var(--atelier-green)]">← Painel</Link>} />
-    <nav aria-label="Período do relatório" className="mt-8 flex gap-3">
-      <Link href="/relatorios?period=week" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'week' ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Últimos 7 dias</Link>
-      <Link href="/relatorios?period=month" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'month' ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Últimos 30 dias</Link>
+    <nav aria-label="Período do relatório" className="mt-8 flex flex-wrap gap-3">
+      <Link href="/relatorios?period=week" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'week' && viewingCurrent ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Esta semana</Link>
+      <Link href="/relatorios?period=month" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'month' && viewingCurrent ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Ciclo atual</Link>
     </nav>
+    {previousGoals.length ? <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-white/55"><span>Ciclos anteriores com meta salva:</span>{previousGoals.map((goal) => <Link key={goal.periodStart.toISOString()} href={`/relatorios?period=${period}&start=${encodeURIComponent(goal.periodStart.toISOString())}`} className="rounded-full border border-white/15 px-3 py-1 hover:border-[var(--atelier-green)] hover:text-white">{dateRangeLabel({ kind, start: goal.periodStart, end: goal.periodEnd })}</Link>)}</div> : null}
+    <p className="mt-5 text-sm text-white/65">Período analisado: <strong className="text-white">{dateRangeLabel(selectedWindow)}</strong>{selectedGoal ? ' · meta salva' : ' · sem meta configurada'}</p>
+
+    <section aria-labelledby="goal-comparison-title" className="mt-6 rounded-2xl border border-white/[0.09] bg-[#111411] p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 id="goal-comparison-title" className="text-xl font-semibold">Meta da equipe · realizado x alvo</h2><p className="mt-1 text-sm text-white/60">{period === 'week' ? 'Semana de segunda a domingo' : `Ciclo iniciado no dia ${monthlyStartDay}`}</p></div><Link href="/metas" className="text-sm text-[var(--atelier-green)]">Editar metas</Link></div>
+      <div className="mt-5"><TeamGoalProgress progress={progress} hasApproaches={report.goalActuals.approaches > 0} /></div>
+    </section>
+
     <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <Metric label="Abordagens" value={String(report.conversion.approaches)} detail="Atividades no período" />
+      <Metric label="Interesses" value={String(report.goalActuals.interests)} detail="Mudanças de etapa registradas" />
+      <Metric label="Reuniões / retornos" value={String(report.goalActuals.meetings)} detail="Avanços para follow-up" />
       <Metric label="Ganhos" value={String(report.conversion.wins)} detail="Eventos WON no período" />
-      <Metric label="Conversão" value={percent(report.conversion.rate)} detail="Ganhos ÷ abordagens" />
+      <Metric label="Conversão" value={report.conversion.approaches ? percent(report.conversion.rate) : '—'} detail="Ganhos ÷ abordagens" />
       <Metric label="Receita vendida" value={money(report.revenue.sales)} detail="Valores de eventos WON no período" />
       <Metric label="MRR" value={money(report.revenue.mrr)} detail="MRR de eventos WON no período" />
-      <Metric label="Follow-ups pendentes" value={String(report.followUps.pending)} detail={`${report.followUps.overdue} vencido${report.followUps.overdue === 1 ? '' : 's'} · ${report.followUps.completed} concluído${report.followUps.completed === 1 ? '' : 's'}`} />
+      <Metric label="Follow-ups concluídos" value={String(report.followUps.completed)} detail="Contados pela data de conclusão" />
+      <Metric label="Follow-ups pendentes" value={String(report.followUps.pending)} detail={`${report.followUps.overdue} vencido${report.followUps.overdue === 1 ? '' : 's'} · ${report.followUps.cancelled} cancelado${report.followUps.cancelled === 1 ? '' : 's'}`} />
     </div>
     <div className="mt-8 grid gap-6 lg:grid-cols-2">
       <ReportTable title="Por canal" headers={['Canal', 'Abordagens', 'Ganhos', 'Conversão']} rows={report.channels.map((item) => [item.channel, item.approaches, item.wins, percent(item.conversionRate)])} empty="Nenhuma abordagem registrada neste período." />

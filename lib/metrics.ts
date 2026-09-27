@@ -1,6 +1,7 @@
-import type { ActivityType, LeadStage } from '@prisma/client';
+import type { ActivityType, GoalPeriodKind, LeadStage, Prisma } from '@prisma/client';
 import { prisma } from './db';
 import { isInterestStage, isMeetingStage } from './funnel';
+import { isSameLocalDay, type GoalPeriodWindow } from './goal-periods';
 
 export type MetricActivity = { actorId: string; type?: ActivityType; createdAt: Date; note?: string };
 export type MetricStageEvent = { actorId: string; toStage: LeadStage; createdAt: Date };
@@ -9,6 +10,7 @@ export type MetricSaleEvent = { actorId: string; saleValue: MetricNumber; mrr: M
 export type MetricFollowUp = {
   id?: string;
   dueDate: Date;
+  completedAt?: Date | null;
   ownerId: string;
   state: 'PENDING' | 'COMPLETED' | 'CANCELLED';
   lead?: { id: string; name: string | null };
@@ -29,17 +31,13 @@ export type MetricLead = {
   followUps: MetricFollowUp[];
 };
 
-export type WeeklyGoalInput = {
-  ownerId: string | null;
-  weekStart: Date;
-  approachesTarget: number;
-  interestsTarget?: number;
-  meetingsTarget?: number;
-  salesTarget?: number;
-  revenueTarget: number;
-};
+export type DashboardRange = { start: Date; end: Date; now?: Date };
 
-export type DashboardRange = { start: Date; end: Date; now?: Date; goalWeekStart?: Date };
+export type GoalMetricKey = 'approaches' | 'interests' | 'meetings' | 'sales' | 'revenue' | 'mrr' | 'followUpsCompleted' | 'conversionRate';
+export type GoalMetricActuals = Record<GoalMetricKey, number>;
+export type TeamGoalTargets = Record<GoalMetricKey, number | null>;
+export type GoalMetricProgress = { actual: number; target: number | null; ratio: number | null };
+export type GoalProgressByMetric = Record<GoalMetricKey, GoalMetricProgress>;
 
 export type DashboardMetrics = {
   sales: number;
@@ -48,14 +46,12 @@ export type DashboardMetrics = {
   won: number;
   interests: number;
   meetings: number;
-  goalProgress: GoalProgress;
+  goalActuals: GoalMetricActuals;
   dueToday: MetricFollowUp[];
   overdue: MetricFollowUp[];
   personalResults: Record<string, MemberResults>;
-  personalGoalProgress: Record<string, GoalProgress>;
 };
 
-export type GoalProgress = { approaches: number; interests: number; meetings: number; sales: number; revenue: number };
 export type MemberResults = { approaches: number; interests: number; meetings: number; sales: number; won: number };
 
 const TEAM_GOAL_OWNER = '__team__';
@@ -64,14 +60,40 @@ function inRange(date: Date, range: DashboardRange) {
   return date >= range.start && date < range.end;
 }
 
-function progress(value: number, target: number) {
-  return target > 0 ? Number((value / target).toFixed(2)) : 0;
+export function getTeamGoalProgress(actuals: GoalMetricActuals, targets: TeamGoalTargets): GoalProgressByMetric {
+  return Object.fromEntries(Object.keys(actuals).map((key) => {
+    const metric = key as GoalMetricKey;
+    const actual = actuals[metric];
+    const target = targets[metric];
+    const ratio = target !== null && target > 0 && !(metric === 'conversionRate' && actuals.approaches === 0)
+      ? Math.round((actual / target) * 100) / 100
+      : null;
+    return [metric, { actual, target: target !== null && target > 0 ? target : null, ratio }];
+  })) as GoalProgressByMetric;
 }
 
-function isSameDay(first: Date, second: Date) {
-  return first.getFullYear() === second.getFullYear()
-    && first.getMonth() === second.getMonth()
-    && first.getDate() === second.getDate();
+export type GoalTargetRecord = {
+  approachesTarget?: number | null;
+  interestsTarget?: number | null;
+  meetingsTarget?: number | null;
+  salesTarget?: number | null;
+  revenueTarget?: number | null;
+  mrrTarget?: number | null;
+  followUpsCompletedTarget?: number | null;
+  conversionRateTarget?: number | null;
+};
+
+export function getTeamGoalTargets(goal?: GoalTargetRecord | null): TeamGoalTargets {
+  return {
+    approaches: goal?.approachesTarget ?? null,
+    interests: goal?.interestsTarget ?? null,
+    meetings: goal?.meetingsTarget ?? null,
+    sales: goal?.salesTarget ?? null,
+    revenue: goal?.revenueTarget ?? null,
+    mrr: goal?.mrrTarget ?? null,
+    followUpsCompleted: goal?.followUpsCompletedTarget ?? null,
+    conversionRate: goal?.conversionRateTarget ?? null
+  };
 }
 
 const emptyResults = (): MemberResults => ({ approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 });
@@ -80,7 +102,9 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
   const personal: Record<string, MemberResults> = {};
   const member = (id: string) => personal[id] ??= emptyResults();
   let mrr = 0;
+  let followUpsCompleted = 0;
   for (const lead of leads) {
+    followUpsCompleted += lead.followUps.filter((followUp) => followUp.state === 'COMPLETED' && followUp.completedAt && inRange(followUp.completedAt, range)).length;
     for (const activity of lead.activities) {
       if ((activity.type === 'CONTACT' || !activity.type) && inRange(activity.createdAt, range)) member(activity.actorId).approaches += 1;
     }
@@ -113,30 +137,13 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
     sales: total.sales + result.sales,
     won: total.won + result.won
   }), emptyResults());
-  return { personal, team, mrr };
+  return { personal, team, mrr, followUpsCompleted };
 }
 
-function goalProgress(results: MemberResults, goal?: WeeklyGoalInput): GoalProgress {
-  return {
-    approaches: progress(results.approaches, goal?.approachesTarget ?? 0),
-    interests: progress(results.interests, goal?.interestsTarget ?? 0),
-    meetings: progress(results.meetings, goal?.meetingsTarget ?? 0),
-    sales: progress(results.won, goal?.salesTarget ?? 0),
-    revenue: progress(results.sales, goal?.revenueTarget ?? 0)
-  };
-}
-
-export function getDashboardMetrics(leads: MetricLead[], goals: WeeklyGoalInput[], range: DashboardRange): DashboardMetrics {
-  const { personal: personalResults, team: teamResults, mrr } = resultsFor(leads, range);
-  const goalWeekStart = range.goalWeekStart ?? range.start;
-  const goalWeekEnd = new Date(goalWeekStart);
-  goalWeekEnd.setDate(goalWeekEnd.getDate() + 7);
-  const weekly = resultsFor(leads, { start: goalWeekStart, end: goalWeekEnd });
-  const teamGoal = goals.find((goal) => goal.ownerId === null && isSameDay(goal.weekStart, goalWeekStart));
+export function getDashboardMetrics(leads: MetricLead[], range: DashboardRange): DashboardMetrics {
+  const { personal: personalResults, team: teamResults, mrr, followUpsCompleted } = resultsFor(leads, range);
   const now = range.now ?? new Date();
   const pendingFollowUps = leads.flatMap((lead) => lead.followUps.filter((followUp) => followUp.state === 'PENDING'));
-  const owners = new Set([...Object.keys(weekly.personal), ...goals.flatMap((goal) => goal.ownerId ? [goal.ownerId] : [])]);
-  const personalGoalProgress = Object.fromEntries([...owners].map((ownerId) => [ownerId, goalProgress(weekly.personal[ownerId] ?? emptyResults(), goals.find((goal) => goal.ownerId === ownerId && isSameDay(goal.weekStart, goalWeekStart)))]));
 
   return {
     sales: teamResults.sales,
@@ -145,19 +152,55 @@ export function getDashboardMetrics(leads: MetricLead[], goals: WeeklyGoalInput[
     interests: teamResults.interests,
     meetings: teamResults.meetings,
     won: teamResults.won,
-    goalProgress: goalProgress(weekly.team, teamGoal),
-    dueToday: pendingFollowUps.filter((followUp) => isSameDay(followUp.dueDate, now)),
-    overdue: pendingFollowUps.filter((followUp) => followUp.dueDate < now && !isSameDay(followUp.dueDate, now)),
-    personalResults,
-    personalGoalProgress
+    goalActuals: {
+      approaches: teamResults.approaches,
+      interests: teamResults.interests,
+      meetings: teamResults.meetings,
+      sales: teamResults.won,
+      revenue: teamResults.sales,
+      mrr,
+      followUpsCompleted,
+      conversionRate: teamResults.approaches ? Number((teamResults.won / teamResults.approaches * 100).toFixed(2)) : 0
+    },
+    dueToday: pendingFollowUps.filter((followUp) => isSameLocalDay(followUp.dueDate, now)),
+    overdue: pendingFollowUps.filter((followUp) => followUp.dueDate < now && !isSameLocalDay(followUp.dueDate, now)),
+    personalResults
   };
 }
 
-export async function upsertWeeklyGoal(input: WeeklyGoalInput) {
-  const ownerId = input.ownerId ?? TEAM_GOAL_OWNER;
-  return prisma.goal.upsert({
-    where: { ownerId_weekStart: { ownerId, weekStart: input.weekStart } },
-    create: { ownerId, weekStart: input.weekStart, approachesTarget: input.approachesTarget, interestsTarget: input.interestsTarget ?? 0, meetingsTarget: input.meetingsTarget ?? 0, salesTarget: input.salesTarget ?? 0, revenueTarget: input.revenueTarget },
-    update: { approachesTarget: input.approachesTarget, interestsTarget: input.interestsTarget ?? 0, meetingsTarget: input.meetingsTarget ?? 0, salesTarget: input.salesTarget ?? 0, revenueTarget: input.revenueTarget }
+export async function upsertTeamGoal(
+  period: GoalPeriodWindow,
+  targets: TeamGoalTargets,
+  database: Prisma.TransactionClient | typeof prisma = prisma
+) {
+  const targetFields = {
+    approachesTarget: targets.approaches,
+    interestsTarget: targets.interests,
+    meetingsTarget: targets.meetings,
+    salesTarget: targets.sales,
+    revenueTarget: targets.revenue,
+    mrrTarget: targets.mrr,
+    followUpsCompletedTarget: targets.followUpsCompleted,
+    conversionRateTarget: targets.conversionRate
+  };
+  const unique = { ownerId: TEAM_GOAL_OWNER, periodKind: period.kind as GoalPeriodKind, periodStart: period.start };
+  return database.goal.upsert({
+    where: { ownerId_periodKind_periodStart: unique },
+    create: { ...unique, periodEnd: period.end, ...targetFields },
+    update: { periodEnd: period.end, ...targetFields }
+  });
+}
+
+export async function saveMonthlyStartDay(
+  monthlyStartDay: number,
+  database: Prisma.TransactionClient | typeof prisma = prisma
+) {
+  if (!Number.isInteger(monthlyStartDay) || monthlyStartDay < 1 || monthlyStartDay > 31) {
+    throw new RangeError('O dia de início do ciclo mensal deve ser um inteiro entre 1 e 31.');
+  }
+  return database.teamGoalSettings.upsert({
+    where: { id: 'team' },
+    create: { id: 'team', monthlyStartDay },
+    update: { monthlyStartDay }
   });
 }

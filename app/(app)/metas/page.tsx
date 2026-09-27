@@ -1,40 +1,53 @@
 import Link from 'next/link';
-import { revalidatePath } from 'next/cache';
 
-import { getCurrentUser } from '@/lib/auth';
+import { PageHeading } from '@/components/ui';
 import { prisma } from '@/lib/db';
-import { upsertWeeklyGoal } from '@/lib/metrics';
-import { PageHeading, Surface } from '@/components/ui';
+import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
+import { GoalForm } from './goal-form';
 
-function currentWeekStart() {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-  return start;
-}
-
-async function saveGoal(formData: FormData) {
-  'use server';
-  const user = await getCurrentUser();
-  if (!user) return;
-  const approachesTarget = Number(formData.get('approachesTarget'));
-  const interestsTarget = Number(formData.get('interestsTarget'));
-  const meetingsTarget = Number(formData.get('meetingsTarget'));
-  const salesTarget = Number(formData.get('salesTarget'));
-  const revenueTarget = Number(formData.get('revenueTarget'));
-  if (![approachesTarget, interestsTarget, meetingsTarget, salesTarget].every((value) => Number.isInteger(value) && value >= 0) || !Number.isFinite(revenueTarget) || revenueTarget < 0) return;
-  await upsertWeeklyGoal({ ownerId: formData.get('scope') === 'team' ? null : user.id, weekStart: currentWeekStart(), approachesTarget, interestsTarget, meetingsTarget, salesTarget, revenueTarget });
-  revalidatePath('/'); revalidatePath('/metas');
-}
+const teamOwnerId = '__team__';
 
 export default async function GoalsPage() {
-  const weekStart = currentWeekStart();
-  const [user, goals] = await Promise.all([
-    getCurrentUser(),
-    prisma.goal.findMany({ where: { weekStart } })
+  const now = new Date();
+  const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
+  const [settings, goals] = await Promise.all([
+    prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
+    prisma.goal.findMany({
+      where: {
+        ownerId: teamOwnerId,
+        OR: [
+          { periodKind: 'WEEKLY', periodStart: currentWeek.start },
+          { periodKind: 'MONTHLY', periodStart: { lte: now }, periodEnd: { gt: now } }
+        ]
+      },
+      select: {
+        periodKind: true, periodStart: true, periodEnd: true,
+        approachesTarget: true, interestsTarget: true, meetingsTarget: true,
+        salesTarget: true, revenueTarget: true, mrrTarget: true,
+        followUpsCompletedTarget: true, conversionRateTarget: true
+      },
+      orderBy: { periodStart: 'desc' }
+    })
   ]);
-  const teamGoal = goals.find((goal) => goal.ownerId === '__team__');
-  const personalGoal = user ? goals.find((goal) => goal.ownerId === user.id) : undefined;
-  const GoalForm = ({ scope, goal, title }: { scope: 'team' | 'personal'; goal: typeof teamGoal; title: string }) => <Surface><form action={saveGoal} className="grid gap-5 p-6"><input type="hidden" name="scope" value={scope} /><h2 className="text-xl font-semibold">{title}</h2><label className="grid gap-2 text-sm">Meta de abordagens<input name="approachesTarget" type="number" min="0" defaultValue={goal?.approachesTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><label className="grid gap-2 text-sm">Meta de interesses<input name="interestsTarget" type="number" min="0" defaultValue={goal?.interestsTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><label className="grid gap-2 text-sm">Meta de reuniões / retornos<input name="meetingsTarget" type="number" min="0" defaultValue={goal?.meetingsTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><label className="grid gap-2 text-sm">Meta de vendas<input name="salesTarget" type="number" min="0" defaultValue={goal?.salesTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><label className="grid gap-2 text-sm">Meta de receita (R$)<input name="revenueTarget" type="number" min="0" step="0.01" defaultValue={goal?.revenueTarget ?? 0} className="rounded-lg border border-white/15 bg-black/30 px-3 py-2" /></label><button className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-4 py-2 font-semibold text-black">Salvar meta {scope === 'team' ? 'da equipe' : 'pessoal'}</button></form></Surface>;
-  return <section className="mx-auto max-w-3xl px-5 py-12 md:px-8"><PageHeading eyebrow="Planejamento semanal" title="Metas semanais" description="Edite metas de equipe e pessoais em formulários separados, sem misturar seus valores." action={<Link className="text-sm text-[var(--atelier-green)]" href="/">← Painel</Link>} /><div className="mt-8 grid gap-6"><GoalForm scope="team" goal={teamGoal} title="Meta da equipe" /><GoalForm scope="personal" goal={personalGoal} title="Minha meta" /></div></section>;
+
+  const monthlyStartDay = settings?.monthlyStartDay ?? 1;
+  const weeklyPeriod = getGoalPeriodWindow('WEEKLY', now, monthlyStartDay);
+  const savedMonthlyGoal = goals.find((goal) => goal.periodKind === 'MONTHLY' && goal.periodStart <= now && goal.periodEnd > now);
+  const monthlyPeriod: GoalPeriodWindow = savedMonthlyGoal
+    ? { kind: 'MONTHLY', start: savedMonthlyGoal.periodStart, end: savedMonthlyGoal.periodEnd }
+    : getGoalPeriodWindow('MONTHLY', now, monthlyStartDay);
+  const weeklyGoal = goals.find((goal) => goal.periodKind === 'WEEKLY' && goal.periodStart.getTime() === weeklyPeriod.start.getTime());
+
+  return <section className="mx-auto max-w-5xl px-5 py-12 md:px-8">
+    <PageHeading
+      eyebrow="Planejamento da equipe"
+      title="Metas"
+      description="Defina um alvo coletivo para cada período. Os realizados aparecem no painel e nos relatórios; metas pessoais antigas continuam preservadas no histórico."
+      action={<Link className="text-sm text-[var(--atelier-green)]" href="/">← Painel</Link>}
+    />
+    <div className="mt-8 grid gap-6">
+      <GoalForm kind="WEEKLY" period={weeklyPeriod} goal={weeklyGoal ?? null} monthlyStartDay={monthlyStartDay} />
+      <GoalForm kind="MONTHLY" period={monthlyPeriod} goal={savedMonthlyGoal ?? null} monthlyStartDay={monthlyStartDay} />
+    </div>
+  </section>;
 }

@@ -46,6 +46,11 @@ enum ActivityType {
   DISCARDED
 }
 
+enum GoalPeriodKind {
+  WEEKLY
+  MONTHLY
+}
+
 model Lead {
   id        String     @id @default(cuid())
   osmId     String     @unique
@@ -129,19 +134,30 @@ model FollowUp {
 }
 
 model Goal {
-  id                String   @id @default(cuid())
-  ownerId           String
-  weekStart         DateTime
-  approachesTarget  Int
-  interestsTarget   Int      @default(0)
-  meetingsTarget    Int      @default(0)
-  salesTarget       Int      @default(0)
-  revenueTarget     Float
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                       String         @id @default(cuid())
+  ownerId                  String
+  periodKind               GoalPeriodKind
+  periodStart              DateTime
+  periodEnd                DateTime
+  approachesTarget         Int?
+  interestsTarget          Int?
+  meetingsTarget           Int?
+  salesTarget              Int?
+  revenueTarget            Float?
+  mrrTarget                Float?
+  followUpsCompletedTarget Int?
+  conversionRateTarget     Float?
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
 
-  @@unique([ownerId, weekStart])
-  @@index([weekStart])
+  @@unique([ownerId, periodKind, periodStart])
+  @@index([periodStart])
+}
+
+model TeamGoalSettings {
+  id              String   @id @default("team")
+  monthlyStartDay Int      @default(1)
+  updatedAt       DateTime @updatedAt
 }
 
 model MemberProfile {

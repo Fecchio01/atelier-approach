@@ -1,2 +1,1 @@
-# Legacy migrations for the original local SQLite database.
-provider = "sqlite"
+provider = "postgresql"

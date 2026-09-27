@@ -2,12 +2,15 @@ import { Channel, LeadStage } from '@prisma/client';
 
 import { prisma } from './db';
 import { auxiliaryFunnelStages, isInterestStage, isMeetingStage, mainFunnelStages, normalizeFunnelStage } from './funnel';
+import { getGoalPeriodWindow } from './goal-periods';
+import type { GoalMetricActuals } from './metrics';
 
 export type ReportRange = { from: Date; to: Date; now?: Date };
 export type RecentReportPeriod = 'week' | 'month';
 
 export type WeeklyMonthlyReport = {
   period: { from: Date; to: Date };
+  goalActuals: GoalMetricActuals;
   conversion: { approaches: number; wins: number; rate: number };
   revenue: { sales: number; mrr: number };
   channels: { channel: Channel; approaches: number; wins: number; conversionRate: number }[];
@@ -27,13 +30,9 @@ export type Recommendation = {
 const inRange = (date: Date, { from, to }: ReportRange) => date >= from && date < to;
 const rate = (numerator: number, denominator: number) => denominator ? Number((numerator / denominator).toFixed(2)) : 0;
 
-export function getRecentReportRange(period: RecentReportPeriod, reference = new Date()): Pick<ReportRange, 'from' | 'to'> {
-  const to = new Date(reference);
-  to.setHours(0, 0, 0, 0);
-  to.setDate(to.getDate() + 1);
-  const from = new Date(to);
-  from.setDate(from.getDate() - (period === 'week' ? 7 : 30));
-  return { from, to };
+export function getRecentReportRange(period: RecentReportPeriod, reference = new Date(), monthlyStartDay = 1): Pick<ReportRange, 'from' | 'to'> {
+  const window = getGoalPeriodWindow(period === 'week' ? 'WEEKLY' : 'MONTHLY', reference, monthlyStartDay);
+  return { from: window.start, to: window.end };
 }
 
 export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyReport> {
@@ -56,6 +55,8 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
     prisma.stageHistory.findMany({ where: { createdAt: { gte: range.from, lt: range.to } } })
   ]);
   const approaches = activities.filter((activity) => activity.type === 'CONTACT' || !activity.type);
+  const interests = stageHistory.filter((event) => isInterestStage(event.toStage)).length;
+  const meetings = stageHistory.filter((event) => isMeetingStage(event.toStage)).length;
   const effectiveWins = wins.length ? wins : leads.filter((lead) => lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range)).map((lead) => ({ actorId: lead.wonById ?? 'unknown', leadId: lead.id, saleValue: lead.saleValue ?? 0, mrr: lead.mrr ?? 0, occurredAt: lead.wonAt! }));
   const winLeadIds = [...new Set(effectiveWins.map((sale) => sale.leadId))];
   const latestWinAt = effectiveWins.reduce<Date | null>((latest, sale) => !latest || sale.occurredAt > latest ? sale.occurredAt : latest, null);
@@ -98,6 +99,16 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
 
   return {
     period: { from: range.from, to: range.to },
+    goalActuals: {
+      approaches: approaches.length,
+      interests,
+      meetings,
+      sales: effectiveWins.length,
+      revenue: effectiveWins.reduce((total, lead) => total + Number(lead.saleValue ?? 0), 0),
+      mrr: effectiveWins.reduce((total, lead) => total + Number(lead.mrr ?? 0), 0),
+      followUpsCompleted: followUps.filter((followUp) => followUp.state === 'COMPLETED' && followUp.completedAt && inRange(followUp.completedAt, range)).length,
+      conversionRate: approaches.length ? Number((effectiveWins.length / approaches.length * 100).toFixed(2)) : 0
+    },
     conversion: { approaches: approaches.length, wins: effectiveWins.length, rate: rate(effectiveWins.length, approaches.length) },
     revenue: {
       sales: effectiveWins.reduce((total, lead) => total + Number(lead.saleValue ?? 0), 0),

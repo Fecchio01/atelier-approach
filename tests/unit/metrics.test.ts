@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { getDashboardMetrics, upsertWeeklyGoal } from '../../lib/metrics';
+import { getDashboardMetrics, upsertTeamGoal } from '../../lib/metrics';
 import { prisma } from '../../lib/db';
 
 describe('getDashboardMetrics', () => {
@@ -14,7 +14,6 @@ describe('getDashboardMetrics', () => {
           { actorId: 'ana', toStage: 'PROPOSAL', createdAt: new Date('2026-09-10T10:00:00.000Z') }
         ]
       }],
-      [],
       { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z') }
     );
 
@@ -79,14 +78,12 @@ describe('getDashboardMetrics', () => {
           followUps: []
         }
       ],
-      [{ ownerId: null, weekStart: new Date('2026-09-07T00:00:00.000Z'), approachesTarget: 25, revenueTarget: 3000 }],
       { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z'), now: new Date('2026-09-12T12:00:00.000Z') }
     );
 
     expect(metrics.sales).toBe(2000);
     expect(metrics.mrr).toBe(594);
-    expect(metrics.goalProgress.approaches).toBe(0.68);
-    expect(metrics.goalProgress.revenue).toBeCloseTo(0.67, 2);
+    expect(metrics.goalActuals).toMatchObject({ approaches: 17, sales: 2, revenue: 2000, mrr: 594 });
     expect(metrics.personalResults).toMatchObject({
       ana: { sales: 1200, won: 1 },
       bia: { sales: 800, won: 1 }
@@ -104,7 +101,6 @@ describe('getDashboardMetrics', () => {
         ],
         followUps: []
       }],
-      [],
       { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z') }
     );
 
@@ -121,12 +117,24 @@ describe('getDashboardMetrics', () => {
           { id: 'finished', ownerId: 'ana', state: 'COMPLETED', dueDate: new Date('2026-09-10T09:00:00.000Z') }
         ]
       }],
-      [],
       { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z'), now: new Date('2026-09-12T12:00:00.000Z') }
     );
 
     expect(metrics.dueToday.map((followUp) => followUp.id)).toEqual(['today']);
     expect(metrics.overdue.map((followUp) => followUp.id)).toEqual(['overdue']);
+  });
+
+  test('counts completed follow-ups by completion time instead of the scheduled due date', () => {
+    const metrics = getDashboardMetrics([{
+      id: 'completed-follow-up', stage: 'FOLLOW_UP', saleValue: null, mrr: null, activities: [],
+      followUps: [{
+        id: 'completed', ownerId: 'ana', state: 'COMPLETED',
+        dueDate: new Date('2026-09-01T12:00:00.000Z'),
+        completedAt: new Date('2026-09-10T12:00:00.000Z')
+      }]
+    }], { start: new Date('2026-09-07T03:00:00.000Z'), end: new Date('2026-09-14T03:00:00.000Z') });
+
+    expect(metrics.goalActuals.followUpsCompleted).toBe(1);
   });
 
   test('tracks interest, meeting, and sales-count goal progress for the team and each member', () => {
@@ -140,39 +148,41 @@ describe('getDashboardMetrics', () => {
         ],
         followUps: []
       }],
-      [
-        { ownerId: null, weekStart: new Date('2026-09-07T00:00:00.000Z'), approachesTarget: 4, interestsTarget: 2, meetingsTarget: 2, salesTarget: 2, revenueTarget: 1000 },
-        { ownerId: 'ana', weekStart: new Date('2026-09-07T00:00:00.000Z'), approachesTarget: 2, interestsTarget: 1, meetingsTarget: 1, salesTarget: 1, revenueTarget: 500 }
-      ],
       { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z') }
     );
 
-    expect(metrics.goalProgress).toEqual({ approaches: 0.5, interests: 0.5, meetings: 0.5, sales: 0.5, revenue: 0.5 });
+    expect(metrics.goalActuals).toMatchObject({ approaches: 2, interests: 1, meetings: 1, sales: 1, revenue: 500, mrr: 50 });
     expect(metrics.personalResults.ana).toMatchObject({ approaches: 2, interests: 1, meetings: 1, won: 1, sales: 500 });
-    expect(metrics.personalGoalProgress.ana).toEqual({ approaches: 1, interests: 1, meetings: 1, sales: 1, revenue: 1 });
   });
 
-  test('updates the existing weekly goal for the same owner and week', async () => {
-    const weekStart = new Date('2026-09-07T00:00:00.000Z');
+  test('updates the existing team goal for the same period', async () => {
+    const period = { kind: 'WEEKLY' as const, start: new Date('2026-09-07T03:00:00.000Z'), end: new Date('2026-09-14T03:00:00.000Z') };
+    const targets = (approaches: number, interests: number, meetings: number, sales: number, revenue: number) => ({
+      approaches, interests, meetings, sales, revenue, mrr: null, followUpsCompleted: null, conversionRate: null
+    });
     await prisma.goal.deleteMany();
 
-    await upsertWeeklyGoal({ ownerId: 'ana', weekStart, approachesTarget: 10, interestsTarget: 2, meetingsTarget: 1, salesTarget: 1, revenueTarget: 1000 });
-    const updated = await upsertWeeklyGoal({ ownerId: 'ana', weekStart, approachesTarget: 15, interestsTarget: 4, meetingsTarget: 2, salesTarget: 2, revenueTarget: 2000 });
+    await upsertTeamGoal(period, targets(10, 2, 1, 1, 1000));
+    const updated = await upsertTeamGoal(period, targets(15, 4, 2, 2, 2000));
 
-    expect(updated).toMatchObject({ ownerId: 'ana', approachesTarget: 15, interestsTarget: 4, meetingsTarget: 2, salesTarget: 2, revenueTarget: 2000 });
+    expect(updated).toMatchObject({ ownerId: '__team__', periodKind: 'WEEKLY', periodStart: period.start, periodEnd: period.end, approachesTarget: 15, interestsTarget: 4, meetingsTarget: 2, salesTarget: 2, revenueTarget: 2000 });
     expect(await prisma.goal.count()).toBe(1);
   });
 
-  test('keeps team and personal weekly goals in separate scopes', async () => {
-    const weekStart = new Date('2026-09-14T00:00:00.000Z');
+  test('keeps legacy personal goals stored separately from team goal writes', async () => {
+    const period = { kind: 'WEEKLY' as const, start: new Date('2026-09-14T03:00:00.000Z'), end: new Date('2026-09-21T03:00:00.000Z') };
     await prisma.goal.deleteMany();
 
-    await upsertWeeklyGoal({ ownerId: null, weekStart, approachesTarget: 30, interestsTarget: 6, meetingsTarget: 4, salesTarget: 3, revenueTarget: 5000 });
-    await upsertWeeklyGoal({ ownerId: 'ana', weekStart, approachesTarget: 8, interestsTarget: 2, meetingsTarget: 1, salesTarget: 1, revenueTarget: 1200 });
+    await prisma.goal.create({ data: {
+      ownerId: 'ana', periodKind: 'WEEKLY', periodStart: period.start, periodEnd: period.end,
+      approachesTarget: 8, interestsTarget: 2, meetingsTarget: 1, salesTarget: 1, revenueTarget: 1200,
+      mrrTarget: null, followUpsCompletedTarget: null, conversionRateTarget: null
+    } });
+    await upsertTeamGoal(period, { approaches: 30, interests: 6, meetings: 4, sales: 3, revenue: 5000, mrr: null, followUpsCompleted: null, conversionRate: null });
 
     expect(await prisma.goal.findMany({ orderBy: { ownerId: 'asc' } })).toMatchObject([
-      { ownerId: '__team__', approachesTarget: 30, interestsTarget: 6, meetingsTarget: 4, salesTarget: 3, revenueTarget: 5000 },
-      { ownerId: 'ana', approachesTarget: 8, interestsTarget: 2, meetingsTarget: 1, salesTarget: 1, revenueTarget: 1200 }
+      { ownerId: '__team__', periodKind: 'WEEKLY', approachesTarget: 30, interestsTarget: 6, meetingsTarget: 4, salesTarget: 3, revenueTarget: 5000 },
+      { ownerId: 'ana', periodKind: 'WEEKLY', approachesTarget: 8, interestsTarget: 2, meetingsTarget: 1, salesTarget: 1, revenueTarget: 1200 }
     ]);
   });
 });

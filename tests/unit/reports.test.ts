@@ -48,6 +48,7 @@ describe('commercial reports', () => {
   test('recommends reducing overdue follow-ups from the measured report, without a predictive claim', () => {
     const report = {
       conversion: { approaches: 3, wins: 1, rate: 0.33 },
+      goalActuals: { approaches: 3, interests: 0, meetings: 0, sales: 1, revenue: 1200, mrr: 297, followUpsCompleted: 0, conversionRate: 33 },
       revenue: { sales: 1200, mrr: 297 },
       channels: [], funnel: [], members: [], followUps: { pending: 2, completed: 0, cancelled: 0, overdue: 1 }, notes: { total: 1, recent: ['Retornar amanhã.'] },
       period: { from: new Date('2026-09-07T00:00:00.000Z'), to: new Date('2026-09-14T00:00:00.000Z') }
@@ -76,6 +77,43 @@ describe('commercial reports', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ report: { period: { from: '2026-09-07T00:00:00.000Z', to: '2026-09-14T00:00:00.000Z' } } });
+  });
+
+  test('resolves the current week to Monday through Sunday in São Paulo, not a rolling seven days', () => {
+    expect(getRecentReportRange('week', new Date('2026-09-12T14:00:00.000Z'))).toEqual({
+      from: new Date('2026-09-07T03:00:00.000Z'),
+      to: new Date('2026-09-14T03:00:00.000Z')
+    });
+  });
+
+  test('resolves a custom monthly cycle from the configured start day', () => {
+    expect(getRecentReportRange('month', new Date('2026-06-14T02:59:59.999Z'), 14)).toEqual({
+      from: new Date('2026-05-14T03:00:00.000Z'),
+      to: new Date('2026-06-14T03:00:00.000Z')
+    });
+  });
+
+  test('returns the eight actuals that the team goal compares with targets', async () => {
+    const lead = await prisma.lead.create({
+      data: {
+        osmId: 'report-goal-actuals', stage: 'WON', saleValue: 1200, mrr: 297,
+        wonAt: new Date('2026-09-10T10:00:00.000Z'), wonById: 'ana',
+        activities: { create: { actorId: 'ana', type: 'CONTACT', channel: 'WHATSAPP', note: 'Primeira abordagem.', createdAt: new Date('2026-09-09T10:00:00.000Z') } },
+        stageHistory: { create: [
+          { actorId: 'ana', toStage: 'INTEREST', createdAt: new Date('2026-09-09T11:00:00.000Z') },
+          { actorId: 'ana', toStage: 'FOLLOW_UP', createdAt: new Date('2026-09-09T12:00:00.000Z') }
+        ] },
+        followUps: { create: { ownerId: 'ana', dueDate: new Date('2026-09-10T10:00:00.000Z'), note: 'Retorno concluído.', state: 'COMPLETED', completedAt: new Date('2026-09-10T11:00:00.000Z'), completedById: 'ana' } }
+      }
+    });
+
+    const report = await buildReport({ from: new Date('2026-09-07T03:00:00.000Z'), to: new Date('2026-09-14T03:00:00.000Z') });
+
+    expect(lead.id).toBeTruthy();
+    expect(report.goalActuals).toEqual({
+      approaches: 1, interests: 1, meetings: 1, sales: 1,
+      revenue: 1200, mrr: 297, followUpsCompleted: 1, conversionRate: 100
+    });
   });
 
   test('includes activity and win events from the current day in the recent period', async () => {
