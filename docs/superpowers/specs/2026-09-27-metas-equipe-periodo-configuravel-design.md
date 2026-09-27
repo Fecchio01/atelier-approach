@@ -10,8 +10,8 @@ Simplificar a página de Metas para a equipe definir os resultados que quer alca
 - A meta semanal usa a semana de segunda-feira a domingo.
 - A meta mensal usa um dia de início configurado pela empresa, entre 1 e 31. O ciclo é inclusivo no início e exclusivo no próximo início. Exemplo: início no dia 14 significa de 14 de maio até o fim de 13 de junho; o ciclo seguinte começa em 14 de junho.
 - Se o dia escolhido não existir em um mês, usa-se o último dia daquele mês. Cada limite mensal é calculado a partir do dia configurado, sem deslocar permanentemente o ciclo. Exemplo com dia 31: 31 jan → 28 fev → 31 mar (ou 29 fev em ano bissexto).
-- Na primeira configuração, o ciclo atual começa na ocorrência mais recente do dia escolhido. Alterar o dia recalcula imediatamente os limites do ciclo atual e o alvo salvo acompanha esse ciclo recalculado; ciclos já encerrados mantêm datas e resultados históricos.
-- A tela de Metas permite editar e salvar uma meta semanal e uma meta mensal da equipe. Os relatórios permitem consultar o período semanal ou mensal correspondente e comparar realizado com meta.
+- Na primeira configuração, o ciclo atual começa na ocorrência mais recente do dia escolhido. Se a empresa alterar o dia durante um ciclo ativo, o ciclo mantém seu início e termina na próxima ocorrência futura do novo dia; isso pode formar um ciclo de transição mais curto ou mais longo, que deve ser identificado pelas datas exibidas. O alvo salvo acompanha o ciclo de transição; os ciclos já encerrados mantêm datas e resultados históricos. Depois da transição, os ciclos começam no dia escolhido.
+- A tela de Metas permite editar e salvar uma meta semanal e uma meta mensal da equipe. Os relatórios permitem consultar o período atual ou ciclos passados que tenham meta salva, usando os limites persistidos para comparar realizado com meta.
 - Registros de metas pessoais existentes deixam de aparecer na interface, mas não são apagados. Metas semanais existentes da equipe devem ser preservadas na migração.
 
 ## Indicadores das metas
@@ -43,7 +43,7 @@ O relatório mantém suas análises por canal, etapa do funil e membro da equipe
 
 O modelo de meta precisa identificar tipo de período e início do período, além do conjunto de alvos. A unicidade é por equipe, tipo de período e início. A configuração do dia de início mensal é guardada no escopo da empresa/equipe. O armazenamento de datas deve preservar limites locais do período sem depender da zona horária do navegador.
 
-A migração preserva as metas semanais existentes da equipe, mapeando seus cinco alvos atuais. Novos alvos começam sem valor definido e podem ser configurados pela empresa. O armazenamento distingue ausência de alvo de uma meta positiva. Metas pessoais permanecem no banco, mas não participam dos novos cálculos de meta da equipe. Dados históricos de atividades e vendas não são alterados.
+A migração preserva as metas semanais existentes da equipe e seus alvos configurados. Valores zero das metas antigas são tratados como não configurados; novos alvos começam sem valor definido. O armazenamento distingue ausência de alvo de uma meta positiva. Metas pessoais permanecem no banco, mas não participam dos novos cálculos de meta da equipe. Dados históricos de atividades e vendas não são alterados.
 
 ## Interface
 
