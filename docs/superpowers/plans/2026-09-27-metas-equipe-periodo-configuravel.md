@@ -29,6 +29,7 @@
 - Limites de segunda-feira e meia-noite no fuso de São Paulo, inclusive virada do mês/ano.
 - Campo de meta vazio e período sem abordagens, exibindo realizado sem progresso indefinido ou divisão por zero.
 - Migração com metas pessoais e metas semanais de equipe existentes, mantendo os alvos corretos e o histórico pessoal armazenado.
+- Histórico legado SQLite versus banco PostgreSQL atual sem `_prisma_migrations`, evitando reaplicar SQL SQLite no banco ativo.
 
 ---
 
@@ -37,8 +38,10 @@
 **Files:**
 - Create: `lib/goal-periods.ts`
 - Modify: `prisma/schema.prisma`
-- Create: `prisma/migrations/20260927000000_team_goals_by_period/migration.sql`
-- Modify only if required after provider preflight: `prisma/migrations/migration_lock.toml`
+- Move legacy SQLite migrations: `prisma/migrations/*` → `prisma/legacy-sqlite-migrations/*`
+- Modify: `prisma/migrations/migration_lock.toml`
+- Create: `prisma/migrations/20260927000000_baseline_postgresql/migration.sql`
+- Create: `prisma/migrations/20260927010000_team_goals_by_period/migration.sql`
 
 **Interfaces:**
 - Produces `GoalPeriodKind = 'WEEKLY' | 'MONTHLY'`.
@@ -47,27 +50,31 @@
 - Adds Prisma `GoalPeriodKind` enum, `Goal.periodKind`, `Goal.periodStart`, `Goal.periodEnd`, eight nullable target columns, and unique key `[ownerId, periodKind, periodStart]`.
 - Adds `TeamGoalSettings` singleton with `monthlyStartDay` defaulting to 1.
 
-- [ ] **Step 1: Confirm migration provider and existing deployment history**
+- [ ] **Step 1: Confirm the live PostgreSQL schema and migration state**
 
-Run `npx prisma migrate status` against the configured database without printing its URL or credentials. The schema datasource is PostgreSQL while `migration_lock.toml` labels the history as legacy SQLite. Record the applied migration state, then create an additive migration for the confirmed provider. If Prisma's provider check requires updating the lock file, do so only after confirming the existing database history; never rewrite historical migration SQL.
+`npx prisma migrate status` currently returns P3019 because the datasource is PostgreSQL and the lock file says SQLite. A read-only schema diff between the configured PostgreSQL schema and the current Prisma datamodel is empty, and `_prisma_migrations` does not exist. Preserve these findings in the ledger; do not run the legacy SQLite migration chain against PostgreSQL.
 
-- [ ] **Step 2: Define the Prisma schema for period-based team goals**
+- [ ] **Step 2: Preserve the old migration chain and establish PostgreSQL history**
+
+Move all existing SQLite migrations intact under `prisma/legacy-sqlite-migrations/`, set the active migration lock provider to PostgreSQL, and generate `20260927000000_baseline_postgresql/migration.sql` from the current (pre-feature) Prisma datamodel. Register that baseline as applied on the existing database with `prisma migrate resolve --applied 20260927000000_baseline_postgresql`; the command records history and must not execute the baseline SQL against existing tables.
+
+- [ ] **Step 3: Define the Prisma schema for period-based team goals**
 
 Replace `weekStart` with `periodKind`, `periodStart`, and `periodEnd`; make `approachesTarget`, `interestsTarget`, `meetingsTarget`, `salesTarget`, and `revenueTarget` nullable; add nullable `mrrTarget`, `followUpsCompletedTarget`, and `conversionRateTarget`; retain `ownerId` to preserve old personal rows; change uniqueness to `[ownerId, periodKind, periodStart]`; add `TeamGoalSettings` with `monthlyStartDay` defaulting to 1.
 
-- [ ] **Step 3: Add the migration preserving current rows**
+- [ ] **Step 4: Add the feature migration preserving all goal records**
 
-Map every existing `weekStart` row to `periodKind = WEEKLY`, `periodStart = weekStart`, and `periodEnd = weekStart + 7 days`; preserve `ownerId` and positive configured target values. Convert old zero targets to null (unset), leave new targets null, and keep personal goal rows in the table. Seed the team monthly start day to 1.
+Create `20260927010000_team_goals_by_period/migration.sql`. Map every existing `weekStart` row to `periodKind = WEEKLY`, `periodStart = weekStart`, and `periodEnd = weekStart + 7 days`; preserve `ownerId` and positive configured target values. Convert old zero targets to null (unset), leave new targets null, and keep personal goal rows in the table. Seed the team monthly start day to 1.
 
-- [ ] **Step 4: Implement São Paulo calendar boundaries**
+- [ ] **Step 5: Implement São Paulo calendar boundaries**
 
 In `lib/goal-periods.ts`, implement week and anchored-month bounds as half-open intervals. Calculate each month boundary independently with `min(monthlyStartDay, daysInMonth)` so day 31 returns to day 31 after February. On an anchor change, retain the current saved period start and end that transition period at the next new anchor date strictly after today; subsequent periods use the selected day. Use persisted `periodStart`/`periodEnd` for all closed goals.
 
-- [ ] **Step 5: Review the migration and period behavior**
+- [ ] **Step 6: Review the baseline, feature migration, and period behavior**
 
-Inspect the generated migration and the helper behavior against the five Review Focus cases before moving to UI integration. Do not modify existing migration history.
+Inspect the generated baseline and feature SQL. Confirm the live schema diff was empty before the baseline was registered, the feature migration is additive and keeps existing goal rows, and the helper behavior matches the Review Focus cases before moving to UI integration.
 
-- [ ] **Step 6: Commit the data model and period helper**
+- [ ] **Step 7: Commit the data model and period helper**
 
 Commit as `feat: add configurable team goal periods`.
 
