@@ -4,6 +4,7 @@ node_modules/
 .next/
 .next-e2e/
 .next-local/
+.next-metas/
 .next-release/
 .next-supabase/
 .env

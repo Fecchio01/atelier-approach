@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { PageHeading } from '@/components/ui';
 import { prisma } from '@/lib/db';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
-import { GoalForm } from './goal-form';
+import { GoalCenter } from './goal-center';
 
 const teamOwnerId = '__team__';
 
@@ -38,16 +38,20 @@ export default async function GoalsPage() {
     : getGoalPeriodWindow('MONTHLY', now, monthlyStartDay);
   const weeklyGoal = goals.find((goal) => goal.periodKind === 'WEEKLY' && goal.periodStart.getTime() === weeklyPeriod.start.getTime());
 
-  return <section className="mx-auto max-w-5xl px-5 py-12 md:px-8">
+  return <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-12">
     <PageHeading
       eyebrow="Planejamento da equipe"
-      title="Metas"
-      description="Defina um alvo coletivo para cada período. Os realizados aparecem no painel e nos relatórios; metas pessoais antigas continuam preservadas no histórico."
-      action={<Link className="text-sm text-[var(--atelier-green)]" href="/">← Painel</Link>}
+      title="Metas da equipe"
+      description="Alinhe os objetivos do time por ciclo e acompanhe os resultados no painel e nos relatórios."
+      action={<Link className="text-sm text-[var(--atelier-green)] hover:text-[#d1ff8e]" href="/relatorios">Ver relatórios →</Link>}
     />
-    <div className="mt-8 grid gap-6">
-      <GoalForm kind="WEEKLY" period={weeklyPeriod} goal={weeklyGoal ?? null} monthlyStartDay={monthlyStartDay} />
-      <GoalForm kind="MONTHLY" period={monthlyPeriod} goal={savedMonthlyGoal ?? null} monthlyStartDay={monthlyStartDay} />
-    </div>
+    <GoalCenter
+      weeklyPeriod={weeklyPeriod}
+      monthlyPeriod={monthlyPeriod}
+      weeklyGoal={weeklyGoal ?? null}
+      monthlyGoal={savedMonthlyGoal ?? null}
+      monthlyStartDay={monthlyStartDay}
+      now={now}
+    />
   </section>;
 }
