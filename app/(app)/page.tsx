@@ -1,8 +1,19 @@
 import Link from 'next/link';
+import {
+  ArrowRightIcon,
+  CalendarCheckIcon,
+  ChartBarIcon,
+  CheckCircleIcon,
+  CurrencyDollarIcon,
+  FunnelIcon,
+  MagnifyingGlassIcon,
+  PaperPlaneTiltIcon,
+  TargetIcon,
+  UserIcon,
+  UsersThreeIcon
+} from '@phosphor-icons/react/dist/ssr';
 
-import { MetricCard } from '@/components/metric-card';
 import { TeamGoalProgress } from '@/components/team-goal-progress';
-import { PageHeading } from '@/components/ui';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getMemberProfiles } from '@/lib/member-profile';
@@ -26,15 +37,25 @@ function FollowUps({ followUps, empty, nameFor, overdue = false }: {
   nameFor: (id: string) => string;
   overdue?: boolean;
 }) {
-  return <ul className="mt-3 grid gap-3">
-    {followUps.length ? followUps.map((followUp) => <li key={followUp.id} className={`rounded-lg border px-3 py-2 text-sm ${overdue ? 'border-red-300/25 bg-red-300/10' : 'border-white/15'}`}>
-      <strong>{followUp.lead?.name ?? 'Lead sem nome'}</strong> · {nameFor(followUp.ownerId)} · {overdue ? `vencido em ${shortDate(followUp.dueDate)}` : 'retorno hoje'}
-    </li>) : <li className="text-sm text-white/55">{empty}</li>}
+  return <ul className="mt-2 divide-y divide-white/[0.07]">
+    {followUps.length ? followUps.map((followUp) => <li key={followUp.id} className="flex items-start gap-3 py-3 text-sm">
+      <span className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${overdue ? 'bg-rose-300/10 text-rose-300' : 'bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]'}`}>
+        {overdue ? <CalendarCheckIcon size={17} weight="regular" aria-hidden="true" /> : <CheckCircleIcon size={17} weight="regular" aria-hidden="true" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <strong className="block truncate font-medium text-white">{followUp.lead?.name ?? 'Lead sem nome'}</strong>
+        <span className="mt-1 block text-xs text-white/55">{nameFor(followUp.ownerId)} · {overdue ? `Vencido em ${shortDate(followUp.dueDate)}` : 'Retorno previsto para hoje'}</span>
+      </span>
+      <ArrowRightIcon className="mt-2 shrink-0 text-white/35" size={15} aria-hidden="true" />
+    </li>) : <li className="py-3 text-sm text-white/50">{empty}</li>}
   </ul>;
 }
 
 function Result({ label, value }: { label: string; value: string | number }) {
-  return <div><strong className="block text-2xl">{value}</strong>{label}</div>;
+  return <div className="min-w-0 border-l border-white/10 pl-3 first:border-0 first:pl-0">
+    <strong className="block truncate text-xl font-semibold tabular-nums tracking-tight text-white md:text-2xl">{value}</strong>
+    <span className="mt-1 block text-xs leading-snug text-white/50">{label}</span>
+  </div>;
 }
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
@@ -121,39 +142,142 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     label: stageLabels[stage],
     leads: metricLeads.filter((lead) => normalizeFunnelStage(lead.stage) === stage).length
   }));
+  const maxFunnelLeads = Math.max(1, ...funnel.map((item) => item.leads));
   const periodLabel = period === 'day' ? 'Hoje' : period === 'week' ? 'Esta semana' : 'Este ciclo mensal';
+  const dashboardMetrics = [
+    { label: 'Receita vendida', value: money(selectedMetrics.sales), detail: `${selectedMetrics.won} negócio${selectedMetrics.won === 1 ? '' : 's'} ganho${selectedMetrics.won === 1 ? '' : 's'}`, Icon: CurrencyDollarIcon },
+    { label: 'MRR', value: money(selectedMetrics.mrr), detail: 'Receita mensal recorrente', Icon: ChartBarIcon },
+    { label: 'Abordagens', value: String(selectedMetrics.approaches), detail: 'Atividades no período', Icon: PaperPlaneTiltIcon },
+    { label: 'Interesses', value: String(selectedMetrics.interests), detail: 'Avanços para interesse', Icon: UsersThreeIcon },
+    { label: 'Reuniões / retornos', value: String(selectedMetrics.meetings), detail: 'Avanços para follow-up', Icon: CalendarCheckIcon },
+    { label: 'Follow-ups concluídos', value: String(selectedMetrics.goalActuals.followUpsCompleted), detail: 'Contados pela data de conclusão', Icon: CheckCircleIcon }
+  ];
 
-  return <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-    <PageHeading eyebrow="Atelier Approach" title="Visão operacional" description={`Indicadores registrados no CRM para ${periodLabel.toLowerCase()}.`} action={<Link href="/pesquisa" className="inline-flex min-h-11 items-center rounded-lg bg-[var(--atelier-green)] px-4 text-sm font-semibold text-black">Pesquisar empresas</Link>} />
-    <nav aria-label="Período do dashboard" className="mt-8 flex gap-3">{([['day', 'Hoje'], ['week', 'Semana'], ['month', 'Ciclo mensal']] as const).map(([value, label]) => <Link key={value} href={`/?period=${value}`} className={`rounded-md px-4 py-2 text-sm font-semibold ${period === value ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>{label}</Link>)}</nav>
-    <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      <MetricCard label="Receita vendida" value={money(selectedMetrics.sales)} detail={`${selectedMetrics.won} negócio${selectedMetrics.won === 1 ? '' : 's'} ganho${selectedMetrics.won === 1 ? '' : 's'}`} />
-      <MetricCard label="MRR" value={money(selectedMetrics.mrr)} detail="Receita mensal recorrente" />
-      <MetricCard label="Abordagens" value={String(selectedMetrics.approaches)} detail="Atividades no período" />
-      <MetricCard label="Interesses" value={String(selectedMetrics.interests)} detail="Avanços para interesse" />
-      <MetricCard label="Reuniões / retornos" value={String(selectedMetrics.meetings)} detail="Avanços para follow-up" />
-      <MetricCard label="Follow-ups concluídos" value={String(selectedMetrics.goalActuals.followUpsCompleted)} detail="Contados pela data de conclusão" />
+  return <section className="mx-auto max-w-[1480px] px-5 py-8 md:px-8 md:py-10 xl:px-10">
+    <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">Atelier Approach</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.045em] text-white md:text-[2.1rem]">Visão operacional</h1>
+        <p className="mt-2 max-w-[60ch] text-sm text-white/55">Indicadores registrados no CRM para {periodLabel.toLowerCase()}.</p>
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <nav aria-label="Período do dashboard" className="flex w-fit rounded-lg border border-white/10 bg-[#111719] p-1">
+          {([['day', 'Hoje'], ['week', 'Semana'], ['month', 'Ciclo mensal']] as const).map(([value, label]) => <Link key={value} href={`/?period=${value}`} aria-current={period === value ? 'page' : undefined} className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors duration-200 sm:px-3.5 ${period === value ? 'bg-[var(--atelier-green)] text-[#101411]' : 'text-white/60 hover:text-white'}`}>{label}</Link>)}
+        </nav>
+        <Link href="/pesquisa" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--atelier-green)] px-4 text-sm font-semibold text-[#101411] transition-transform duration-200 hover:-translate-y-px active:translate-y-px">
+          <MagnifyingGlassIcon size={17} weight="bold" aria-hidden="true" />Pesquisar empresas
+        </Link>
+      </div>
+    </header>
+
+    <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {dashboardMetrics.map(({ label, value, detail, Icon }) => <article className="flex min-h-[112px] items-start gap-3.5 rounded-xl border border-white/[0.08] bg-[#111719] p-4 transition-colors duration-200 hover:border-white/[0.14] md:p-5" key={label}>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.035] text-[var(--atelier-green)]">
+          <Icon size={20} weight="regular" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-white/55">{label}</p>
+          <p className="mt-1.5 truncate text-2xl font-semibold tabular-nums tracking-tight text-white">{value}</p>
+          <p className="mt-1 truncate text-xs text-white/40">{detail}</p>
+        </div>
+      </article>)}
     </div>
 
-    <div className="mt-8 grid gap-6 xl:grid-cols-2">
-      <section className="rounded-2xl border border-white/[0.09] bg-[#111411] p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-semibold">Meta semanal da equipe</h2><p className="mt-1 text-sm text-white/60">{windowLabel(weeklyPeriod)}</p></div><Link href="/metas" className="text-sm text-[var(--atelier-green)]">Editar metas</Link></div>
-        <div className="mt-5"><TeamGoalProgress progress={weeklyProgress} hasApproaches={weeklyMetrics.approaches > 0} compact /></div>
+    <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
+      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><TargetIcon size={19} weight="regular" aria-hidden="true" /></span>
+            <div><h2 className="text-base font-semibold tracking-tight">Meta semanal da equipe</h2><p className="mt-1 text-xs text-white/50">{windowLabel(weeklyPeriod)}</p></div>
+          </div>
+          <Link href="/metas" className="shrink-0 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <span aria-hidden="true">↗</span></Link>
+        </div>
+        <div className="mt-4"><TeamGoalProgress progress={weeklyProgress} hasApproaches={weeklyMetrics.approaches > 0} compact /></div>
       </section>
-      <section className="rounded-2xl border border-white/[0.09] bg-[#111411] p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-semibold">Meta do ciclo mensal</h2><p className="mt-1 text-sm text-white/60">{windowLabel(monthlyPeriod)} · começa no dia {monthlyStartDay}</p></div><Link href="/metas" className="text-sm text-[var(--atelier-green)]">Editar metas</Link></div>
-        <div className="mt-5"><TeamGoalProgress progress={monthlyProgress} hasApproaches={monthlyMetrics.approaches > 0} compact /></div>
+      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><TargetIcon size={19} weight="regular" aria-hidden="true" /></span>
+            <div><h2 className="text-base font-semibold tracking-tight">Meta do ciclo mensal</h2><p className="mt-1 text-xs text-white/50">{windowLabel(monthlyPeriod)} · começa no dia {monthlyStartDay}</p></div>
+          </div>
+          <Link href="/metas" className="shrink-0 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <span aria-hidden="true">↗</span></Link>
+        </div>
+        <div className="mt-4"><TeamGoalProgress progress={monthlyProgress} hasApproaches={monthlyMetrics.approaches > 0} compact /></div>
       </section>
     </div>
 
-    <div className="mt-8 grid gap-6 lg:grid-cols-2">
-      <section className="rounded-2xl border border-white/[0.09] bg-[#111411] p-6"><h2 className="text-xl font-semibold">Follow-ups</h2><p className="mt-1 text-sm text-white/60">Priorize retornos vencidos e distribuídos pela equipe.</p><FollowUps followUps={selectedMetrics.overdue} empty="Nenhum follow-up vencido." nameFor={nameFor} overdue /><h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.14em] text-white/65">Para hoje</h3><FollowUps followUps={selectedMetrics.dueToday} empty="Nenhum retorno para hoje." nameFor={nameFor} /></section>
-      <section className="rounded-2xl border border-white/15 bg-black/25 p-6"><h2 className="text-xl font-semibold">Funil atual</h2><div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">{funnel.map((item) => <div className="rounded-lg border border-white/10 p-3 text-sm" key={item.label}><strong className="block text-2xl">{item.leads}</strong>{item.label}</div>)}</div></section>
+    <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
+      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><CalendarCheckIcon size={19} weight="regular" aria-hidden="true" /></span>
+          <div><h2 className="text-base font-semibold tracking-tight">Follow-ups</h2><p className="mt-1 text-xs text-white/50">Retornos vencidos e previstos para hoje.</p></div>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 sm:divide-x sm:divide-white/[0.08]">
+          <section className="min-w-0 sm:pr-4" aria-labelledby="overdue-followups-heading">
+            <h3 id="overdue-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-rose-300" />Em atraso <span className="tabular-nums text-white/40">{selectedMetrics.overdue.length}</span></h3>
+            <FollowUps followUps={selectedMetrics.overdue} empty="Nenhum follow-up vencido." nameFor={nameFor} overdue />
+          </section>
+          <section className="min-w-0 sm:pl-4" aria-labelledby="today-followups-heading">
+            <h3 id="today-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-[var(--atelier-green)]" />Para hoje <span className="tabular-nums text-white/40">{selectedMetrics.dueToday.length}</span></h3>
+            <FollowUps followUps={selectedMetrics.dueToday} empty="Nenhum retorno para hoje." nameFor={nameFor} />
+          </section>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><FunnelIcon size={19} weight="regular" aria-hidden="true" /></span>
+          <div><h2 className="text-base font-semibold tracking-tight">Funil atual</h2><p className="mt-1 text-xs text-white/50">Empresas em cada etapa do funil.</p></div>
+        </div>
+        <ul className="mt-4 divide-y divide-white/[0.07]">
+          {funnel.map((item) => <li key={item.label} className="grid grid-cols-[minmax(100px,1fr)_minmax(70px,1.3fr)_2.5rem] items-center gap-3 py-2 text-xs sm:grid-cols-[minmax(120px,1fr)_minmax(90px,1.5fr)_3rem]">
+            <span className="truncate text-white/75">{item.label}</span>
+            <span className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]" role="progressbar" aria-label={`Leads em ${item.label}`} aria-valuemin={0} aria-valuemax={maxFunnelLeads} aria-valuenow={item.leads}>
+              <span className="block h-full rounded-full bg-[var(--atelier-green)]" style={{ width: `${(item.leads / maxFunnelLeads) * 100}%` }} />
+            </span>
+            <strong className="text-right font-semibold tabular-nums text-white">{item.leads}</strong>
+          </li>)}
+        </ul>
+      </section>
     </div>
 
-    <div className="mt-8 grid gap-6 lg:grid-cols-2">
-      <section className="rounded-2xl border border-white/15 bg-black/25 p-6"><h2 className="text-xl font-semibold">Desempenho da equipe · {periodLabel}</h2><div className="mt-5 grid gap-3">{teamRows.length ? teamRows.map(([ownerId, result]) => <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-3 text-sm" key={ownerId}><span>{nameFor(ownerId)}</span><span>{result.approaches} abordagens · {result.interests} interesses · {result.meetings} reuniões · {result.won} vendas</span></div>) : <p className="text-sm text-white/55">Ainda não há atividades neste período.</p>}</div></section>
-      <section className="rounded-2xl border border-white/15 bg-black/25 p-6"><h2 className="text-xl font-semibold">Meu desempenho</h2><p className="mt-1 text-sm text-white/60">{user?.name ?? 'Membro'} · {periodLabel}</p><div className="mt-5 grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-5"><Result label="abordagens" value={mine.approaches} /><Result label="interesses" value={mine.interests} /><Result label="reuniões" value={mine.meetings} /><Result label="vendas" value={mine.won} /><Result label="vendido" value={money(mine.sales)} /></div></section>
+    <div className="mt-6 grid items-start gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><UsersThreeIcon size={19} weight="regular" aria-hidden="true" /></span>
+          <div><h2 className="text-base font-semibold tracking-tight">Desempenho da equipe</h2><p className="mt-1 text-xs text-white/50">Resultados registrados · {periodLabel.toLowerCase()}</p></div>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[650px] border-collapse text-left text-xs">
+            <thead><tr className="border-b border-white/10 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40"><th className="pb-3 pr-4">Membro</th><th className="px-2 pb-3 text-right">Abordagens</th><th className="px-2 pb-3 text-right">Interesses</th><th className="px-2 pb-3 text-right">Reuniões</th><th className="px-2 pb-3 text-right">Vendas</th><th className="pb-3 pl-2 text-right">Vendido</th></tr></thead>
+            <tbody>
+              {teamRows.length ? teamRows.map(([ownerId, result]) => <tr className="border-b border-white/[0.06] last:border-0" key={ownerId}>
+                <th scope="row" className="py-3 pr-4 font-medium text-white"><span className="flex items-center gap-2.5"><span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-[10px] font-semibold text-white/70">{nameFor(ownerId).trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')}</span><span className="max-w-40 truncate">{nameFor(ownerId)}</span></span></th>
+                <td className="px-2 py-3 text-right tabular-nums text-white/70">{result.approaches}</td><td className="px-2 py-3 text-right tabular-nums text-white/70">{result.interests}</td><td className="px-2 py-3 text-right tabular-nums text-white/70">{result.meetings}</td><td className="px-2 py-3 text-right tabular-nums text-white/70">{result.won}</td><td className="py-3 pl-2 text-right tabular-nums text-white/70">{money(result.sales)}</td>
+              </tr>) : <tr><td colSpan={6} className="py-5 text-white/50">Ainda não há atividades neste período.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><UserIcon size={19} weight="regular" aria-hidden="true" /></span>
+          <div><h2 className="text-base font-semibold tracking-tight">Meu desempenho</h2><p className="mt-1 text-xs text-white/50">{user?.name ?? 'Membro'} · {periodLabel.toLowerCase()}</p></div>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-y-5 text-left sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
+          <Result label="Abordagens" value={mine.approaches} />
+          <Result label="Interesses" value={mine.interests} />
+          <Result label="Reuniões / retornos" value={mine.meetings} />
+          <Result label="Vendas" value={mine.won} />
+          <Result label="Receita vendida" value={money(mine.sales)} />
+        </div>
+      </section>
     </div>
+
+    <footer className="mt-8 flex flex-col gap-1 border-t border-white/[0.07] pt-4 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
+      <span><span className="font-medium text-white/65">Atelier Approach</span> · CRM para prospecção de serviços automotivos</span>
+      <span>Mais oficinas. Mais negócios.</span>
+    </footer>
   </section>;
 }
