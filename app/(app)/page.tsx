@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {
   ArrowRightIcon,
+  ArrowSquareOutIcon,
   CalendarCheckIcon,
   ChartBarIcon,
   CheckCircleIcon,
@@ -37,7 +38,7 @@ function FollowUps({ followUps, empty, nameFor, overdue = false }: {
   nameFor: (id: string) => string;
   overdue?: boolean;
 }) {
-  return <ul className="mt-2 divide-y divide-white/[0.07]">
+  return <ul className="mt-2 flex flex-1 flex-col divide-y divide-white/[0.07]">
     {followUps.length ? followUps.map((followUp) => <li key={followUp.id} className="flex items-start gap-3 py-3 text-sm">
       <span className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${overdue ? 'bg-rose-300/10 text-rose-300' : 'bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]'}`}>
         {overdue ? <CalendarCheckIcon size={17} weight="regular" aria-hidden="true" /> : <CheckCircleIcon size={17} weight="regular" aria-hidden="true" />}
@@ -47,7 +48,7 @@ function FollowUps({ followUps, empty, nameFor, overdue = false }: {
         <span className="mt-1 block text-xs text-white/55">{nameFor(followUp.ownerId)} · {overdue ? `Vencido em ${shortDate(followUp.dueDate)}` : 'Retorno previsto para hoje'}</span>
       </span>
       <ArrowRightIcon className="mt-2 shrink-0 text-white/35" size={15} aria-hidden="true" />
-    </li>) : <li className="py-3 text-sm text-white/50">{empty}</li>}
+    </li>) : <li className="flex flex-1 items-center py-3 text-sm text-white/50">{empty}</li>}
   </ul>;
 }
 
@@ -190,7 +191,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><TargetIcon size={19} weight="regular" aria-hidden="true" /></span>
             <div><h2 className="text-base font-semibold tracking-tight">Meta semanal da equipe</h2><p className="mt-1 text-xs text-white/50">{windowLabel(weeklyPeriod)}</p></div>
           </div>
-          <Link href="/metas" className="shrink-0 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <span aria-hidden="true">↗</span></Link>
+          <Link href="/metas" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <ArrowSquareOutIcon size={14} aria-hidden="true" /></Link>
         </div>
         <div className="mt-4"><TeamGoalProgress progress={weeklyProgress} hasApproaches={weeklyMetrics.approaches > 0} compact /></div>
       </section>
@@ -200,31 +201,31 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><TargetIcon size={19} weight="regular" aria-hidden="true" /></span>
             <div><h2 className="text-base font-semibold tracking-tight">Meta do ciclo mensal</h2><p className="mt-1 text-xs text-white/50">{windowLabel(monthlyPeriod)} · começa no dia {monthlyStartDay}</p></div>
           </div>
-          <Link href="/metas" className="shrink-0 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <span aria-hidden="true">↗</span></Link>
+          <Link href="/metas" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <ArrowSquareOutIcon size={14} aria-hidden="true" /></Link>
         </div>
         <div className="mt-4"><TeamGoalProgress progress={monthlyProgress} hasApproaches={monthlyMetrics.approaches > 0} compact /></div>
       </section>
     </div>
 
-    <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
-      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+    <div className="mt-6 grid items-stretch gap-4 xl:grid-cols-2">
+      <section className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><CalendarCheckIcon size={19} weight="regular" aria-hidden="true" /></span>
           <div><h2 className="text-base font-semibold tracking-tight">Follow-ups</h2><p className="mt-1 text-xs text-white/50">Retornos vencidos e previstos para hoje.</p></div>
         </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 sm:divide-x sm:divide-white/[0.08]">
-          <section className="min-w-0 sm:pr-4" aria-labelledby="overdue-followups-heading">
+        <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-2 sm:divide-x sm:divide-white/[0.08]">
+          <section className="flex min-w-0 flex-col sm:pr-4" aria-labelledby="overdue-followups-heading">
             <h3 id="overdue-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-rose-300" />Em atraso <span className="tabular-nums text-white/40">{selectedMetrics.overdue.length}</span></h3>
             <FollowUps followUps={selectedMetrics.overdue} empty="Nenhum follow-up vencido." nameFor={nameFor} overdue />
           </section>
-          <section className="min-w-0 sm:pl-4" aria-labelledby="today-followups-heading">
+          <section className="flex min-w-0 flex-col sm:pl-4" aria-labelledby="today-followups-heading">
             <h3 id="today-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-[var(--atelier-green)]" />Para hoje <span className="tabular-nums text-white/40">{selectedMetrics.dueToday.length}</span></h3>
             <FollowUps followUps={selectedMetrics.dueToday} empty="Nenhum retorno para hoje." nameFor={nameFor} />
           </section>
         </div>
       </section>
 
-      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+      <section className="min-w-0 rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><FunnelIcon size={19} weight="regular" aria-hidden="true" /></span>
           <div><h2 className="text-base font-semibold tracking-tight">Funil atual</h2><p className="mt-1 text-xs text-white/50">Empresas em cada etapa do funil.</p></div>
@@ -241,13 +242,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       </section>
     </div>
 
-    <div className="mt-6 grid items-start gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+    <div className="mt-6 grid items-stretch gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
+      <section className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><UsersThreeIcon size={19} weight="regular" aria-hidden="true" /></span>
           <div><h2 className="text-base font-semibold tracking-tight">Desempenho da equipe</h2><p className="mt-1 text-xs text-white/50">Resultados registrados · {periodLabel.toLowerCase()}</p></div>
         </div>
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 min-w-0 flex-1 overflow-x-auto">
           <table className="w-full min-w-[650px] border-collapse text-left text-xs">
             <thead><tr className="border-b border-white/10 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40"><th className="pb-3 pr-4">Membro</th><th className="px-2 pb-3 text-right">Abordagens</th><th className="px-2 pb-3 text-right">Interesses</th><th className="px-2 pb-3 text-right">Reuniões</th><th className="px-2 pb-3 text-right">Vendas</th><th className="pb-3 pl-2 text-right">Vendido</th></tr></thead>
             <tbody>
@@ -260,12 +261,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
         </div>
       </section>
 
-      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+      <section className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><UserIcon size={19} weight="regular" aria-hidden="true" /></span>
           <div><h2 className="text-base font-semibold tracking-tight">Meu desempenho</h2><p className="mt-1 text-xs text-white/50">{user?.name ?? 'Membro'} · {periodLabel.toLowerCase()}</p></div>
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-y-5 text-left sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
+        <div className="mt-5 grid grid-cols-2 gap-x-3 gap-y-5 text-left">
           <Result label="Abordagens" value={mine.approaches} />
           <Result label="Interesses" value={mine.interests} />
           <Result label="Reuniões / retornos" value={mine.meetings} />
@@ -277,7 +278,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
 
     <footer className="mt-8 flex flex-col gap-1 border-t border-white/[0.07] pt-4 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
       <span><span className="font-medium text-white/65">Atelier Approach</span> · CRM para prospecção de serviços automotivos</span>
-      <span>Mais oficinas. Mais negócios.</span>
     </footer>
   </section>;
 }

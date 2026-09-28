@@ -39,7 +39,6 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
         <AtelierMark />
         <span className="min-w-0">
           <span className="block text-[17px] font-semibold leading-[1.05] tracking-[-0.045em]">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span>
-          <span className="mt-1.5 block text-[8px] font-medium uppercase tracking-[0.18em] text-white/40">Mais oficinas. Mais negócios.</span>
         </span>
       </Link>
       <nav aria-label="Navegação principal" className="mt-8 grid gap-1">
