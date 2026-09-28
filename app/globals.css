@@ -33,5 +33,9 @@ button, a, input, select, textarea { transition: border-color 160ms ease, backgr
 button:active, a:active { transform: translateY(1px); }
 input, select, textarea { color-scheme: dark; }
 
+.goal-target-number { appearance: textfield; }
+.goal-target-number::-webkit-outer-spin-button,
+.goal-target-number::-webkit-inner-spin-button { appearance: none; margin: 0; }
+
 .atelier-scrollbar::-webkit-scrollbar { height: 9px; width: 9px; }
 .atelier-scrollbar::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,255,255,.14); }

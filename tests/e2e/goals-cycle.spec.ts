@@ -8,8 +8,21 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
   if (!databaseUrl) throw new Error('TEST_DATABASE_URL is required');
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
   const previousSettings = await prisma.teamGoalSettings.findUnique({ where: { id: 'team' } });
+  let testLeadId: string | null = null;
 
   try {
+    const testLead = await prisma.lead.create({ data: { osmId: `e2e-goals-${Date.now()}`, name: 'Progresso metas E2E' } });
+    testLeadId = testLead.id;
+    await prisma.activity.createMany({
+      data: Array.from({ length: 10 }, (_, index) => ({
+        leadId: testLead.id,
+        actorId: 'e2e-goals-agent',
+        note: `Abordagem automatizada ${index + 1}`,
+        type: 'CONTACT' as const,
+        createdAt: new Date(Date.now() - index)
+      }))
+    });
+
     await page.goto('/login');
     await page.getByLabel('E-mail').fill(e2eCredentials.email);
     await page.getByLabel('Senha').fill(e2eCredentials.password);
@@ -25,11 +38,19 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     const monthlyPanel = page.getByRole('tabpanel', { name: 'Mensal' });
 
     await expect(weeklyTab).toHaveAttribute('aria-selected', 'true');
-    await weeklyPanel.getByLabel('Meta para abordagens').fill('321');
+    const weeklyApproachesTarget = weeklyPanel.getByLabel('Meta para abordagens', { exact: true });
+    await expect(weeklyApproachesTarget).toBeHidden();
+    await weeklyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
+    await expect(weeklyApproachesTarget).toBeVisible();
+    await weeklyApproachesTarget.fill('321');
     await monthlyTab.click();
     await expect(monthlyTab).toHaveAttribute('aria-selected', 'true');
     await monthlyPanel.getByLabel('Dia de início do ciclo mensal').fill('14');
-    await monthlyPanel.getByLabel('Meta para abordagens').fill('777');
+    const monthlyApproachesTarget = monthlyPanel.getByLabel('Meta para abordagens', { exact: true });
+    await expect(monthlyApproachesTarget).toBeHidden();
+    await monthlyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
+    await expect(monthlyApproachesTarget).toBeVisible();
+    await monthlyApproachesTarget.fill('777');
     await monthlyPanel.getByRole('button', { name: 'Salvar metas' }).click();
     await expect(monthlyPanel.getByRole('status')).toContainText('Meta mensal da equipe salva');
 
@@ -39,9 +60,15 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     });
     expect(monthlyGoal?.approachesTarget).toBe(777);
     expect((await prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }))?.monthlyStartDay).toBe(14);
+    await monthlyPanel.getByRole('button', { name: 'Fechar edição da meta para abordagens' }).click();
+    await expect(monthlyPanel.getByLabel('Abordagens: 10 de 777')).toBeVisible();
+    await expect(monthlyPanel.getByRole('progressbar', { name: 'Progresso de abordagens' })).toHaveAttribute('aria-valuetext', '1% da meta');
 
     await weeklyTab.click();
-    await expect(weeklyPanel.getByLabel('Meta para abordagens')).toHaveValue('321');
+    await expect(weeklyPanel.getByLabel('Meta para abordagens', { exact: true })).toHaveValue('321');
+    await weeklyPanel.getByRole('button', { name: 'Fechar edição da meta para abordagens' }).click();
+    await expect(weeklyPanel.getByLabel('Abordagens: 10 de 321')).toBeVisible();
+    await expect(weeklyPanel.getByRole('progressbar', { name: 'Progresso de abordagens' })).toHaveAttribute('aria-valuetext', '3% da meta');
     await weeklyPanel.getByRole('button', { name: 'Salvar metas' }).click();
     await expect(weeklyPanel.getByRole('status')).toContainText('Meta semanal da equipe salva');
 
@@ -52,6 +79,7 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     expect(weeklyGoal?.approachesTarget).toBe(321);
   } finally {
     await prisma.goal.deleteMany({ where: { ownerId: '__team__' } });
+    if (testLeadId) await prisma.lead.delete({ where: { id: testLeadId } });
     if (previousSettings) {
       await prisma.teamGoalSettings.upsert({
         where: { id: previousSettings.id },

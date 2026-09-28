@@ -1,8 +1,9 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { ArrowsClockwiseIcon, CalendarBlankIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon } from '@phosphor-icons/react';
+import { ArrowsClockwiseIcon, CalendarBlankIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, XIcon } from '@phosphor-icons/react';
 
+import type { GoalMetricActuals } from '@/lib/metrics';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { saveMonthlyGoal, saveWeeklyGoal } from './actions';
 import { initialGoalActionState, type GoalActionState } from './goal-form-state';
@@ -25,8 +26,8 @@ const metricGroups = [
     description: 'Novas conversas e oportunidades para o time.',
     Icon: PaperPlaneTiltIcon,
     fields: [
-      { key: 'approaches', goalKey: 'approachesTarget', label: 'Abordagens', detail: 'Novas conversas iniciadas', min: '1', step: '1', unit: 'contatos' },
-      { key: 'interests', goalKey: 'interestsTarget', label: 'Interesses', detail: 'Empresas que avançaram', min: '1', step: '1', unit: 'empresas' }
+      { key: 'approaches', goalKey: 'approachesTarget', label: 'Abordagens', min: '1', step: '1' },
+      { key: 'interests', goalKey: 'interestsTarget', label: 'Interesses', min: '1', step: '1' }
     ]
   },
   {
@@ -35,9 +36,9 @@ const metricGroups = [
     description: 'Relacionamentos que seguem pelo funil.',
     Icon: ArrowsClockwiseIcon,
     fields: [
-      { key: 'meetings', goalKey: 'meetingsTarget', label: 'Reuniões e retornos', detail: 'Conversas com próximo passo', min: '1', step: '1', unit: 'reuniões' },
-      { key: 'followUpsCompleted', goalKey: 'followUpsCompletedTarget', label: 'Follow-ups concluídos', detail: 'Retornos feitos no ciclo', min: '1', step: '1', unit: 'retornos' },
-      { key: 'sales', goalKey: 'salesTarget', label: 'Vendas fechadas', detail: 'Negócios ganhos pelo time', min: '1', step: '1', unit: 'vendas' }
+      { key: 'meetings', goalKey: 'meetingsTarget', label: 'Reuniões e retornos', min: '1', step: '1' },
+      { key: 'followUpsCompleted', goalKey: 'followUpsCompletedTarget', label: 'Follow-ups concluídos', min: '1', step: '1' },
+      { key: 'sales', goalKey: 'salesTarget', label: 'Vendas fechadas', min: '1', step: '1' }
     ]
   },
   {
@@ -46,9 +47,9 @@ const metricGroups = [
     description: 'Resultados que se transformam em crescimento.',
     Icon: CurrencyCircleDollarIcon,
     fields: [
-      { key: 'revenue', goalKey: 'revenueTarget', label: 'Receita de vendas', detail: 'Valor total vendido', min: '0.01', step: '0.01', unit: 'R$' },
-      { key: 'mrr', goalKey: 'mrrTarget', label: 'MRR', detail: 'Receita recorrente mensal', min: '0.01', step: '0.01', unit: 'R$' },
-      { key: 'conversionRate', goalKey: 'conversionRateTarget', label: 'Taxa de conversão', detail: 'Abordagens que viram vendas', min: '1', max: '100', step: '0.1', unit: '%' }
+      { key: 'revenue', goalKey: 'revenueTarget', label: 'Receita de vendas', min: '0.01', step: '0.01' },
+      { key: 'mrr', goalKey: 'mrrTarget', label: 'MRR', min: '0.01', step: '0.01' },
+      { key: 'conversionRate', goalKey: 'conversionRateTarget', label: 'Taxa de conversão', min: '1', max: '100', step: '0.1' }
     ]
   }
 ] as const;
@@ -63,6 +64,14 @@ function goalDraftFromRecord(goal: GoalRecord): GoalTargetDraft {
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric'
 });
+const numberFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
+
+function formatMetricValue(metric: GoalTargetField, value: number) {
+  if (metric === 'revenue' || metric === 'mrr') return moneyFormatter.format(value);
+  if (metric === 'conversionRate') return `${numberFormatter.format(value)}%`;
+  return numberFormatter.format(value);
+}
 
 function inclusiveEnd(period: GoalPeriodWindow) {
   return new Date(period.end.getTime() - 1);
@@ -79,18 +88,21 @@ export function GoalForm({
   kind,
   period,
   goal,
+  actuals,
   monthlyStartDay,
   now
 }: {
   kind: 'WEEKLY' | 'MONTHLY';
   period: GoalPeriodWindow;
   goal: GoalRecord;
+  actuals: GoalMetricActuals;
   monthlyStartDay: number;
   now: Date;
 }) {
   const action = kind === 'WEEKLY' ? saveWeeklyGoal : saveMonthlyGoal;
   const [state, formAction, pending] = useActionState<GoalActionState, FormData>(action, initialGoalActionState);
   const [draft, setDraft] = useState(() => goalDraftFromRecord(goal));
+  const [editingField, setEditingField] = useState<GoalTargetField | null>(null);
   const [monthlyStartDayDraft, setMonthlyStartDayDraft] = useState(String(monthlyStartDay));
   const numericStartDay = Number(monthlyStartDayDraft);
   const displayedPeriod = kind === 'MONTHLY' && Number.isInteger(numericStartDay) && numericStartDay >= 1 && numericStartDay <= 31
@@ -164,25 +176,74 @@ export function GoalForm({
           <div><h3 id={`${key}-heading`} className="font-semibold text-white/90">{title}</h3><p className="mt-1 text-xs leading-5 text-white/45">{description}</p></div>
         </div>
         <div className="divide-y divide-white/[0.06]">
-          {fields.map((field) => <label key={field.key} className="grid gap-3 py-4 first:pt-4 last:pb-1 sm:grid-cols-[minmax(0,1fr)_104px] sm:items-center">
-            <span className="min-w-0"><span className="block text-sm font-medium text-white/85">{field.label}</span><span className="mt-1 block text-xs text-white/42">{field.detail}</span></span>
-            <span className="relative block">
-              <input
-                aria-label={`Meta para ${field.label.toLowerCase()}`}
-                name={field.key}
-                type="number"
-                inputMode="decimal"
-                min={field.min}
-                step={field.step}
-                {...('max' in field ? { max: field.max } : {})}
-                value={draft[field.key]}
-                onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}
-                placeholder="Definir"
-                className="w-full rounded-xl border border-white/[0.08] bg-[#1b2328] px-3 py-2.5 pr-12 text-sm font-semibold text-white placeholder:font-normal placeholder:text-white/30 focus:border-[var(--atelier-green)]/55 focus:bg-[#20292e] focus:outline-none"
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/35">{field.unit}</span>
-            </span>
-          </label>)}
+          {fields.map((field) => {
+            const target = draft[field.key] === '' ? null : Number(draft[field.key]);
+            const progressPercent = target !== null && target > 0 && !(field.key === 'conversionRate' && actuals.approaches === 0)
+              ? Math.round((actuals[field.key] / target) * 100)
+              : null;
+            const progressWidth = Math.min(100, Math.max(0, progressPercent ?? 0));
+            const isEditing = editingField === field.key;
+
+            return <div key={field.key} className="py-4 first:pt-4 last:pb-1">
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(104px,124px)] items-center gap-3">
+                <div className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-white/85">{field.label}</span>
+                  <p aria-label={`${field.label}: ${formatMetricValue(field.key, actuals[field.key])} de ${target === null ? 'meta não definida' : formatMetricValue(field.key, target)}`} className="mt-1.5 flex min-w-0 items-baseline gap-1.5 text-sm font-semibold tabular-nums">
+                    <span className="truncate text-[var(--atelier-green)]">{formatMetricValue(field.key, actuals[field.key])}</span>
+                    <span className="shrink-0 text-xs font-normal text-white/35">/</span>
+                    <span className="truncate text-white/65">{target === null ? '—' : formatMetricValue(field.key, target)}</span>
+                  </p>
+                </div>
+
+                <div className="flex min-w-0 items-center gap-1 rounded-lg border border-white/[0.08] bg-[#1b2328] py-1.5 pl-2.5 pr-1.5 focus-within:border-[var(--atelier-green)]/50">
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[10px] font-medium leading-4 text-white/45">Meta</span>
+                    {isEditing ? <input
+                      autoFocus
+                      aria-label={`Meta para ${field.label.toLowerCase()}`}
+                      name={field.key}
+                      type="number"
+                      inputMode="decimal"
+                      min={field.min}
+                      step={field.step}
+                      {...('max' in field ? { max: field.max } : {})}
+                      value={draft[field.key]}
+                      onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}
+                      placeholder="—"
+                      className="goal-target-number w-full min-w-0 bg-transparent text-sm font-semibold leading-5 text-white outline-none placeholder:text-white/35"
+                    /> : <>
+                      <span className="block truncate text-sm font-semibold leading-5 text-white/85">{target === null ? 'Definir' : formatMetricValue(field.key, target)}</span>
+                      <input type="hidden" name={field.key} value={draft[field.key]} />
+                    </>}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`${isEditing ? 'Fechar edição da' : 'Editar'} meta para ${field.label.toLowerCase()}`}
+                    aria-pressed={isEditing}
+                    onClick={() => setEditingField(isEditing ? null : field.key)}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-white/55 transition-colors hover:bg-white/[0.07] hover:text-[var(--atelier-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] active:scale-[0.96]"
+                  >
+                    {isEditing ? <XIcon size={16} weight="bold" aria-hidden="true" /> : <PencilSimpleIcon size={16} weight="regular" aria-hidden="true" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center gap-2.5">
+                <div
+                  role="progressbar"
+                  aria-label={`Progresso de ${field.label.toLowerCase()}`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={progressWidth}
+                  aria-valuetext={progressPercent === null ? 'Defina uma meta para calcular o progresso' : `${progressPercent}% da meta`}
+                  className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.12]"
+                >
+                  <span className="block h-full rounded-full bg-gradient-to-r from-[#81e986] to-[var(--atelier-green)] transition-[width] duration-300" style={{ width: `${progressWidth}%` }} />
+                </div>
+                <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-white/45">{progressPercent === null ? '—' : `${progressPercent}%`}</span>
+              </div>
+            </div>;
+          })}
         </div>
       </section>)}
     </div>

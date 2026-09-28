@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { PageHeading } from '@/components/ui';
 import { prisma } from '@/lib/db';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
+import { getTeamGoalActualsByPeriod } from '@/lib/metrics';
 import { GoalCenter } from './goal-center';
 
 const teamOwnerId = '__team__';
@@ -37,6 +38,7 @@ export default async function GoalsPage() {
     ? { kind: 'MONTHLY', start: savedMonthlyGoal.periodStart, end: savedMonthlyGoal.periodEnd }
     : getGoalPeriodWindow('MONTHLY', now, monthlyStartDay);
   const weeklyGoal = goals.find((goal) => goal.periodKind === 'WEEKLY' && goal.periodStart.getTime() === weeklyPeriod.start.getTime());
+  const [weeklyActuals, monthlyActuals] = await getTeamGoalActualsByPeriod([weeklyPeriod, monthlyPeriod], now);
 
   return <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-12">
     <PageHeading
@@ -52,6 +54,8 @@ export default async function GoalsPage() {
       monthlyGoal={savedMonthlyGoal ?? null}
       monthlyStartDay={monthlyStartDay}
       now={now}
+      weeklyActuals={weeklyActuals}
+      monthlyActuals={monthlyActuals}
     />
   </section>;
 }

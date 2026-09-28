@@ -168,6 +168,56 @@ export function getDashboardMetrics(leads: MetricLead[], range: DashboardRange):
   };
 }
 
+export async function getTeamGoalActualsByPeriod(
+  periods: GoalPeriodWindow[],
+  now = new Date(),
+  database: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<GoalMetricActuals[]> {
+  if (periods.length === 0) return [];
+
+  const dataFrom = periods.reduce((earliest, period) => period.start < earliest ? period.start : earliest, periods[0].start);
+  const dataTo = periods.reduce((latest, period) => period.end > latest ? period.end : latest, periods[0].end);
+  const [leads, activities, stageHistory, saleEvents, followUps] = await Promise.all([
+    database.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } }),
+    database.activity.findMany({
+      where: { createdAt: { gte: dataFrom, lt: dataTo } },
+      select: { leadId: true, actorId: true, type: true, createdAt: true, note: true },
+      orderBy: { createdAt: 'asc' }
+    }),
+    database.stageHistory.findMany({
+      where: { createdAt: { gte: dataFrom, lt: dataTo } },
+      select: { leadId: true, actorId: true, toStage: true, createdAt: true }
+    }),
+    database.saleEvent.findMany({
+      where: { occurredAt: { gte: dataFrom, lt: dataTo } },
+      select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true }
+    }),
+    database.followUp.findMany({
+      where: { state: 'COMPLETED', completedAt: { gte: dataFrom, lt: dataTo } },
+      select: { leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true }
+    })
+  ]);
+
+  const byLead = <T extends { leadId: string }>(rows: T[]) => {
+    const result = new Map<string, T[]>();
+    for (const row of rows) result.set(row.leadId, [...(result.get(row.leadId) ?? []), row]);
+    return result;
+  };
+  const activitiesByLead = byLead(activities);
+  const historyByLead = byLead(stageHistory);
+  const salesByLead = byLead(saleEvents);
+  const followUpsByLead = byLead(followUps);
+  const metricLeads: MetricLead[] = leads.map((lead) => ({
+    ...lead,
+    activities: activitiesByLead.get(lead.id) ?? [],
+    stageHistory: historyByLead.get(lead.id) ?? [],
+    saleEvents: salesByLead.get(lead.id) ?? [],
+    followUps: followUpsByLead.get(lead.id) ?? []
+  }));
+
+  return periods.map((period) => getDashboardMetrics(metricLeads, { start: period.start, end: period.end, now }).goalActuals);
+}
+
 export async function upsertTeamGoal(
   period: GoalPeriodWindow,
   targets: TeamGoalTargets,
