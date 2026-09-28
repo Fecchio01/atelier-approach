@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { TeamGoalProgress } from '@/components/team-goal-progress';
 import { PageHeading } from '@/components/ui';
 import { getMemberProfiles } from '@/lib/member-profile';
+import { normalizeFunnelStage, stageLabels } from '@/lib/funnel';
 import { getTeamGoalProgress, getTeamGoalTargets } from '@/lib/metrics';
 import { prisma } from '@/lib/db';
 import { getGoalPeriodWindow, selectGoalPeriod, type GoalPeriodWindow } from '@/lib/goal-periods';
@@ -105,7 +106,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     </div>
     <div className="mt-8 grid gap-6 lg:grid-cols-2">
       <ReportTable title="Por canal" headers={['Canal', 'Abordagens', 'Ganhos', 'Conversão']} rows={report.channels.map((item) => [item.channel, item.approaches, item.wins, percent(item.conversionRate)])} empty="Nenhuma abordagem registrada neste período." />
-      <ReportTable title="Funil atual" headers={['Etapa', 'Leads']} rows={report.funnel.map((item) => [item.stage, item.leads])} empty="Nenhum lead no CRM." />
+      <ReportTable title="Funil atual" headers={['Etapa', 'Leads']} rows={report.funnel.map((item) => [stageLabels[normalizeFunnelStage(item.stage)], item.leads])} empty="Nenhum lead no CRM." />
     </div>
     <div className="mt-8 grid gap-6 lg:grid-cols-2">
       <ReportTable title="Por membro" headers={['Membro', 'Abordagens', 'Interesses', 'Reuniões', 'Vendas', 'Receita']} rows={report.members.map((item) => [nameFor(item.memberId), item.approaches, item.interests, item.meetings, item.wins, money(item.sales)])} empty="Nenhuma atividade registrada neste período." />
