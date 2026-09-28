@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { ArrowLeftIcon, LockKeyIcon, UserCircleIcon } from '@phosphor-icons/react/dist/ssr';
+import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr';
 
 import { getCurrentUser, signOut } from '@/lib/auth';
 import { changeMemberPassword } from '@/lib/member-credentials';
@@ -66,35 +66,45 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const params = await searchParams;
   const initials = (user.name || 'Atelier').trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
 
-  return <section className="mx-auto max-w-5xl px-5 pb-20 pt-9 md:px-10 md:pt-14">
+  return <section className="mx-auto max-w-6xl px-5 pb-20 pt-9 md:px-8 md:pt-12">
     <Link href="/" className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-[var(--atelier-green)]"><ArrowLeftIcon size={16} /> Voltar ao painel</Link>
-    <div className="mt-9 grid gap-8 border-b border-white/10 pb-9 md:grid-cols-[1fr_auto] md:items-end">
-      <div><p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--atelier-green)]">Sua conta</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.055em] md:text-5xl">Perfil e segurança</h1><p className="mt-4 max-w-xl text-sm leading-6 text-white/55">Atualize como você aparece para a equipe e controle a senha usada para entrar no Atelier Approach.</p></div>
-      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#141c20] px-4 py-3"><span className="flex size-12 items-center justify-center rounded-xl bg-[var(--atelier-green)]/15 font-semibold text-[var(--atelier-green)]">{initials}</span><div className="min-w-0"><span className="block max-w-56 truncate text-sm font-semibold">{user.name}</span><span className="block max-w-56 truncate text-xs text-white/45">{user.email}</span></div></div>
-    </div>
+    <header className="mt-8 max-w-4xl">
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/45">Sua conta</p>
+      <h1 className="mt-3 text-4xl font-semibold tracking-[-0.055em] md:text-5xl">Perfil e segurança</h1>
+      <p className="mt-3 max-w-3xl text-sm leading-6 text-white/55">Atualize como você aparece para a equipe e controle a senha usada para entrar no Atelier Approach.</p>
+    </header>
 
-    <div className="mt-9 grid gap-6 lg:grid-cols-2">
-      <section className="rounded-[22px] border border-white/10 bg-[#11191d] p-6 md:p-8" aria-labelledby="profile-title">
-        <div className="flex items-start gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><UserCircleIcon size={22} /></span><div><h2 id="profile-title" className="text-xl font-semibold tracking-[-0.03em]">Meu perfil</h2><p className="mt-1 text-sm text-white/50">Nome e foto exibidos no sistema.</p></div></div>
-        {params.profile === 'updated' && <p role="status" className="mt-6 rounded-lg bg-[var(--atelier-green)]/10 px-4 py-3 text-sm text-[var(--atelier-green)]">Perfil salvo.</p>}
-        {params.profile === 'invalid' && <p role="alert" className="mt-6 rounded-lg bg-red-400/10 px-4 py-3 text-sm text-red-100">Confira o nome e a URL da foto.</p>}
-        <form action={saveProfile} className="mt-7 grid gap-5">
-          <label className="grid gap-2 text-sm font-medium">Nome exibido<input name="name" required maxLength={80} defaultValue={user.name ?? ''} className="min-h-12 rounded-xl border border-white/15 bg-black/25 px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
-          <label className="grid gap-2 text-sm font-medium">Foto de perfil <span className="font-normal text-white/45">URL opcional</span><input name="avatarUrl" type="url" defaultValue={user.image ?? ''} placeholder="https://..." className="min-h-12 rounded-xl border border-white/15 bg-black/25 px-4 outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)]" /></label>
-          <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3"><span className="block text-[11px] uppercase tracking-[0.16em] text-white/40">E-mail de acesso</span><span className="mt-1 block break-all text-sm text-white/80">{user.email}</span></div>
-          <button className="min-h-12 rounded-xl bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] hover:bg-[#c9ff72]">Salvar perfil</button>
+    <section aria-label="Resumo da conta" className="mt-7 flex min-h-24 items-center gap-5 rounded-xl border border-white/10 bg-[#11191d] px-5 py-4 md:px-7">
+      <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-[#303941] text-lg font-semibold text-white">{initials}</span>
+      <span aria-hidden="true" className="h-12 w-px shrink-0 bg-white/10" />
+      <div className="min-w-0">
+        <h2 className="text-base font-semibold">Meu perfil</h2>
+        <p className="mt-1 truncate text-sm text-white/50">{user.email}</p>
+      </div>
+    </section>
+
+    <div className="mt-6 grid gap-5 lg:grid-cols-2">
+      <section className="rounded-xl border border-white/10 bg-[#11191d] p-5 md:p-7" aria-labelledby="profile-title">
+        <div><h2 id="profile-title" className="text-xl font-semibold tracking-[-0.03em]">Meu perfil</h2><p className="mt-1 text-sm text-white/50">Nome e foto exibidos no sistema.</p></div>
+        {params.profile === 'updated' && <p role="status" className="mt-5 rounded-lg bg-[var(--atelier-green)]/10 px-4 py-3 text-sm text-[var(--atelier-green)]">Perfil salvo.</p>}
+        {params.profile === 'invalid' && <p role="alert" className="mt-5 rounded-lg bg-red-400/10 px-4 py-3 text-sm text-red-100">Confira o nome e a URL da foto.</p>}
+        <form action={saveProfile} className="mt-6 grid gap-4">
+          <label className="grid gap-2 text-sm font-medium">Nome exibido<input name="name" required maxLength={80} defaultValue={user.name ?? ''} className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
+          <label className="grid gap-2 text-sm font-medium">Foto de perfil<input name="avatarUrl" type="url" defaultValue={user.image ?? ''} placeholder="https://..." className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none placeholder:text-white/30 focus:border-[var(--atelier-green)]" /><span className="text-xs font-normal text-white/45">URL opcional</span></label>
+          <div className="rounded-lg border border-white/10 bg-[#1b2328] px-4 py-3"><span className="block text-[11px] uppercase tracking-[0.16em] text-white/40">E-mail de acesso</span><span className="mt-1 block break-all text-sm text-white/75">{user.email}</span></div>
+          <button className="min-h-11 w-fit min-w-32 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-colors hover:bg-[#c9ff72] active:scale-[0.98]">Salvar perfil</button>
         </form>
       </section>
 
-      <section className="rounded-[22px] border border-white/10 bg-[#11191d] p-6 md:p-8" aria-labelledby="password-title">
-        <div className="flex items-start gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><LockKeyIcon size={22} /></span><div><h2 id="password-title" className="text-xl font-semibold tracking-[-0.03em]">Alterar senha</h2><p className="mt-1 text-sm text-white/50">Confirme a senha atual antes de criar outra.</p></div></div>
-        {params.password && passwordErrors[params.password] && <p role="alert" className="mt-6 rounded-lg bg-red-400/10 px-4 py-3 text-sm text-red-100">{passwordErrors[params.password]}</p>}
-        <form action={changePassword} className="mt-7 grid gap-5">
-          <label className="grid gap-2 text-sm font-medium">Senha atual<input name="currentPassword" type="password" autoComplete="current-password" required className="min-h-12 rounded-xl border border-white/15 bg-black/25 px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
-          <label className="grid gap-2 text-sm font-medium">Nova senha<input name="newPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-12 rounded-xl border border-white/15 bg-black/25 px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
-          <label className="grid gap-2 text-sm font-medium">Confirmar nova senha<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-12 rounded-xl border border-white/15 bg-black/25 px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
-          <p className="text-xs leading-5 text-white/40">Após salvar, você entrará novamente com a nova senha.</p>
-          <button className="min-h-12 rounded-xl border border-[var(--atelier-green)]/50 bg-[var(--atelier-green)]/10 px-5 font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/20">Atualizar senha</button>
+      <section className="rounded-xl border border-white/10 bg-[#11191d] p-5 md:p-7" aria-labelledby="password-title">
+        <h2 id="password-title" className="text-xl font-semibold tracking-[-0.03em]">Alterar senha</h2>
+        {params.password && passwordErrors[params.password] && <p role="alert" className="mt-5 rounded-lg bg-red-400/10 px-4 py-3 text-sm text-red-100">{passwordErrors[params.password]}</p>}
+        <form action={changePassword} className="mt-6 grid gap-4">
+          <label className="grid gap-2 text-sm font-medium">Senha atual<input name="currentPassword" type="password" autoComplete="current-password" required className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
+          <label className="grid gap-2 text-sm font-medium">Nova senha<input name="newPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
+          <label className="grid gap-2 text-sm font-medium">Confirmar nova senha<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
+          <p className="text-xs leading-5 text-white/45">Após salvar, você entrará novamente com a nova senha.</p>
+          <button className="min-h-11 w-fit min-w-36 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-colors hover:bg-[#c9ff72] active:scale-[0.98]">Atualizar senha</button>
         </form>
       </section>
     </div>
