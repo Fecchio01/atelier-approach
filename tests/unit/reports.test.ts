@@ -1,10 +1,19 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { PDFDocument } from 'pdf-lib';
 
 const mocks = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 vi.mock('../../lib/auth', () => ({ getCurrentUser: mocks.getCurrentUser }));
 
+async function expectValidPdf(response: Response) {
+  const bytes = await response.arrayBuffer();
+  const pdf = await PDFDocument.load(bytes);
+  expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
+  expect(pdf.getPageCount()).toBeGreaterThan(0);
+}
+
 import { buildRecommendations, buildReport, getRecentReportRange } from '../../lib/reports';
 import { prisma } from '../../lib/db';
+import { closeCurrentDailyReport } from '../../lib/daily-reports';
 import { GET } from '../../app/api/reports/route';
 import * as reportModule from '../../lib/reports';
 import * as reportRouteModule from '../../app/api/reports/route';
@@ -12,6 +21,7 @@ import * as reportRouteModule from '../../app/api/reports/route';
 describe('commercial reports', () => {
   beforeEach(async () => {
     mocks.getCurrentUser.mockResolvedValue({ id: 'ana' });
+    await prisma.dailyReport.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.followUp.deleteMany();
     await prisma.lead.deleteMany();
@@ -88,6 +98,40 @@ describe('commercial reports', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ report: { period: { from: '2026-09-07T00:00:00.000Z', to: '2026-09-14T00:00:00.000Z' } } });
+  });
+
+  test('downloads a PDF for an in-progress weekly period', async () => {
+    const response = await GET(new Request('http://localhost/api/reports?format=pdf&period=week&from=2026-09-28T03%3A00%3A00.000Z&to=2026-10-05T03%3A00%3A00.000Z'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    expect(response.headers.get('content-disposition')).toMatch(/attachment; filename="relatorio-semanal-2026-09-28-2026-10-04\.pdf"/);
+    await expectValidPdf(response);
+  });
+
+  test('downloads a PDF for an in-progress monthly cycle', async () => {
+    const response = await GET(new Request('http://localhost/api/reports?format=pdf&period=month&from=2026-09-14T03%3A00%3A00.000Z&to=2026-10-14T03%3A00%3A00.000Z'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    expect(response.headers.get('content-disposition')).toMatch(/attachment; filename="relatorio-mensal-2026-09-14-2026-10-13\.pdf"/);
+    await expectValidPdf(response);
+  });
+
+  test('downloads the saved daily snapshot as PDF and does not export an unclosed date', async () => {
+    const date = '2026-09-29';
+    const request = () => GET(new Request(`http://localhost/api/reports?format=pdf&period=day&date=${date}`));
+    expect((await request()).status).toBe(404);
+
+    const lead = await prisma.lead.create({ data: { osmId: 'report-pdf-daily', name: 'Oficina Horizonte' } });
+    await prisma.activity.create({ data: { leadId: lead.id, actorId: 'ana', channel: 'WHATSAPP', note: 'Relatório exportável.', createdAt: new Date('2026-09-29T12:00:00.000Z') } });
+    await closeCurrentDailyReport('ana', new Date('2026-09-29T13:00:00.000Z'));
+
+    const response = await request();
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    expect(response.headers.get('content-disposition')).toContain('relatorio-diario-2026-09-29.pdf');
+    await expectValidPdf(response);
   });
 
   test('resolves the current week to Monday through Sunday in São Paulo, not a rolling seven days', () => {

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { expect, test, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 import { e2eCredentials } from './credentials';
 
@@ -33,6 +34,17 @@ async function expectNoViewportOverflow(page: Page) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 }
 
+async function expectPdfDownload(page: Page, filename: RegExp) {
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('link', { name: 'Baixar PDF' }).click({ timeout: 5_000 })
+  ]);
+  expect(download.suggestedFilename()).toMatch(filename);
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  expect((await readFile(path!)).subarray(0, 5).toString()).toBe('%PDF-');
+}
+
 test.beforeEach(async () => clearDailyReport());
 
 test('closes the team day from desktop dashboard and opens its saved daily report', async ({ page }) => {
@@ -52,6 +64,7 @@ test('closes the team day from desktop dashboard and opens its saved daily repor
   await expect(page.getByRole('heading', { name: 'Relatório diário' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Ações do dia' })).toBeVisible();
   await expect(page.getByText('Nenhuma atividade registrada antes do fechamento.')).toBeVisible();
+  await expectPdfDownload(page, /^relatorio-diario-\d{4}-\d{2}-\d{2}\.pdf$/);
 });
 
 test('closes and browses the daily archive on mobile without horizontal overflow', async ({ page }) => {
@@ -67,5 +80,17 @@ test('closes and browses the daily archive on mobile without horizontal overflow
   await page.getByRole('link', { name: 'Abrir relatório de hoje' }).click();
   await expect(page.getByRole('heading', { name: 'Relatório diário' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Fechamentos recentes' })).toBeVisible();
+  await expectPdfDownload(page, /^relatorio-diario-\d{4}-\d{2}-\d{2}\.pdf$/);
   await expectNoViewportOverflow(page);
+});
+
+test('downloads live weekly and monthly reports as PDFs before their periods end', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await signIn(page);
+
+  await page.goto('/relatorios');
+  await expectPdfDownload(page, /^relatorio-semanal-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.pdf$/);
+
+  await page.goto('/relatorios?period=month');
+  await expectPdfDownload(page, /^relatorio-mensal-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.pdf$/);
 });

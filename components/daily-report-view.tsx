@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ActivityType, Channel } from '@prisma/client';
 
 import { DailyCloseControl } from './daily-close-control';
+import { ReportPdfDownload } from './report-pdf-download';
 import type { DailyReportRecord } from '@/lib/daily-reports';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
@@ -56,7 +57,10 @@ export function DailyReportView({
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-white md:text-4xl">Relatório diário</h1>
         <p className="mt-3 text-sm leading-6 text-white/55">Retrato da equipe em {dateFormatter.format(selectedDate)}. Cada fechamento preserva os dados existentes naquele instante.</p>
       </div>
-      <Link href="/" className="shrink-0 text-sm text-[var(--atelier-green)]">← Painel</Link>
+      <div className="flex flex-wrap items-center gap-3">
+        {report ? <ReportPdfDownload href={`/api/reports?format=pdf&period=day&date=${date}`} /> : null}
+        <Link href="/" className="shrink-0 text-sm text-[var(--atelier-green)]">← Painel</Link>
+      </div>
     </header>
 
     <nav aria-label="Período do relatório" className="mt-6 flex flex-wrap gap-2">

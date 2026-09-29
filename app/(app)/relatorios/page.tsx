@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { TeamGoalProgress } from '@/components/team-goal-progress';
 import { DailyCloseControl } from '@/components/daily-close-control';
 import { DailyReportView } from '@/components/daily-report-view';
+import { ReportPdfDownload } from '@/components/report-pdf-download';
 import { PageHeading } from '@/components/ui';
 import { getDailyReportForDate, listRecentDailyReports } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
@@ -90,6 +91,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const nameFor = (memberId: string) => profiles.find((profile) => profile.id === memberId)?.name ?? memberId;
   const progress = getTeamGoalProgress(report.goalActuals, getTeamGoalTargets(selectedGoal));
   const viewingCurrent = selectedWindow.start.getTime() === activeWindow.start.getTime();
+  const pdfHref = `/api/reports?format=pdf&period=${period}&from=${encodeURIComponent(selectedWindow.start.toISOString())}&to=${encodeURIComponent(selectedWindow.end.toISOString())}`;
   const [previousGoal, nextGoal] = await Promise.all([
     prisma.goal.findFirst({
       where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lt: selectedWindow.start } },
@@ -104,7 +106,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   ]);
 
   return <section className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
-    <PageHeading eyebrow="Relatórios comerciais" title="Leituras do CRM, sem previsões." description="Os números usam atividades, etapas e eventos de ganho registrados no CRM." action={<Link href="/" className="text-sm text-[var(--atelier-green)]">← Painel</Link>} />
+    <PageHeading eyebrow="Relatórios comerciais" title="Leituras do CRM, sem previsões." description="Os números usam atividades, etapas e eventos de ganho registrados no CRM." action={<div className="flex flex-wrap items-center gap-3"><ReportPdfDownload href={pdfHref} /><Link href="/" className="text-sm text-[var(--atelier-green)]">← Painel</Link></div>} />
     <nav aria-label="Período do relatório" className="mt-8 flex flex-wrap gap-3">
       <Link href={todayHref} className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold">Diário</Link>
       <Link href="/relatorios?period=week" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'week' && viewingCurrent ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Esta semana</Link>
