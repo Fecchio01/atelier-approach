@@ -160,6 +160,15 @@ model TeamGoalSettings {
   updatedAt       DateTime @updatedAt
 }
 
+model DailyReport {
+  id         String   @id @default(cuid())
+  dayStart   DateTime @unique
+  dayEnd     DateTime
+  closedAt   DateTime
+  closedById String
+  snapshot   Json
+}
+
 model MemberProfile {
   id        String   @id
   name      String

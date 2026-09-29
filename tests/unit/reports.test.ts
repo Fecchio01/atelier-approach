@@ -6,6 +6,8 @@ vi.mock('../../lib/auth', () => ({ getCurrentUser: mocks.getCurrentUser }));
 import { buildRecommendations, buildReport, getRecentReportRange } from '../../lib/reports';
 import { prisma } from '../../lib/db';
 import { GET } from '../../app/api/reports/route';
+import * as reportModule from '../../lib/reports';
+import * as reportRouteModule from '../../app/api/reports/route';
 
 describe('commercial reports', () => {
   beforeEach(async () => {
@@ -13,6 +15,15 @@ describe('commercial reports', () => {
     await prisma.activity.deleteMany();
     await prisma.followUp.deleteMany();
     await prisma.lead.deleteMany();
+  });
+
+  test('provides a daily snapshot builder and close endpoint without changing the existing report GET', () => {
+    const builder = (reportModule as unknown as Record<string, unknown>).buildDailyReportSnapshot;
+    const closeHandler = (reportRouteModule as unknown as Record<string, unknown>).POST;
+
+    expect(builder).toBeTypeOf('function');
+    expect(closeHandler).toBeTypeOf('function');
+    expect(reportRouteModule.GET).toBe(GET);
   });
 
   test('uses CRM records and win events to calculate channel conversion for the selected range', async () => {

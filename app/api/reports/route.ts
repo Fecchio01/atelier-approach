@@ -1,4 +1,5 @@
 import { getCurrentUser } from '../../../lib/auth';
+import { closeCurrentDailyReport } from '../../../lib/daily-reports';
 import { buildRecommendations, buildReport } from '../../../lib/reports';
 
 function parseDate(value: string | null) {
@@ -20,4 +21,16 @@ export async function GET(request: Request) {
 
   const report = await buildReport({ from, to });
   return Response.json({ report, recommendations: buildRecommendations(report) });
+}
+
+export async function POST() {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
+
+    const result = await closeCurrentDailyReport(user.id);
+    return Response.json(result);
+  } catch {
+    return Response.json({ error: 'Não foi possível fechar o dia. Tente novamente.' }, { status: 500 });
+  }
 }
