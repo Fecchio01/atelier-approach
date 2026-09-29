@@ -1,0 +1,10 @@
+node_modules
+.next
+.next-*
+.vercel
+.worktrees
+.superpowers
+.env*
+test-results
+playwright-report
+coverage

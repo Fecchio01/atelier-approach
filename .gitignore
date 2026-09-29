@@ -12,3 +12,5 @@ prisma/*.db
 tsconfig.tsbuildinfo
 playwright-report/
 test-results/
+.vercel
+.env*
