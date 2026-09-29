@@ -5,6 +5,7 @@ vi.mock('../../lib/auth', () => ({ getCurrentUser: mocks.getCurrentUser }));
 
 import { prisma } from '../../lib/db';
 import * as reportModule from '../../lib/reports';
+import { listRecentDailyReports, reopenCurrentDailyReport } from '../../lib/daily-reports';
 import * as reportRouteModule from '../../app/api/reports/route';
 
 type DailySnapshot = {
@@ -29,9 +30,11 @@ type DailySnapshot = {
 type DailyReportBuilder = (input: { from: Date; to: Date; closedAt: Date }) => Promise<DailySnapshot>;
 type CloseResponse = { report: { closedAt: string; snapshot: DailySnapshot }; created: boolean };
 type ClosePost = (request: Request) => Promise<Response>;
+type ReopenDelete = () => Promise<Response>;
 
 const builder = (reportModule as unknown as Record<string, unknown>).buildDailyReportSnapshot as DailyReportBuilder | undefined;
 const post = (reportRouteModule as unknown as Record<string, unknown>).POST as ClosePost | undefined;
+const deleteReport = (reportRouteModule as unknown as Record<string, unknown>).DELETE as ReopenDelete | undefined;
 
 describe('daily report snapshots', () => {
   beforeEach(async () => {
@@ -55,6 +58,46 @@ describe('daily report snapshots', () => {
     const response = await post(new Request('http://localhost/api/reports', { method: 'POST' }));
 
     expect(response.status).toBe(401);
+  });
+
+  test('requires authentication before reopening the day', async () => {
+    expect(deleteReport).toBeTypeOf('function');
+    if (!deleteReport) return;
+
+    mocks.getCurrentUser.mockResolvedValue(null);
+    const response = await deleteReport();
+
+    expect(response.status).toBe(401);
+  });
+
+  test('reopens only today’s saved report and preserves CRM activities and prior reports', async () => {
+    const reference = new Date('2026-09-29T13:00:00.000Z');
+    const todayStart = new Date('2026-09-29T03:00:00.000Z');
+    const yesterdayStart = new Date('2026-09-28T03:00:00.000Z');
+    const lead = await prisma.lead.create({ data: { osmId: 'daily-reopen-preserves-activity', name: 'Oficina Mantida' } });
+    await prisma.activity.create({ data: { leadId: lead.id, actorId: 'daily-report-member', note: 'Registro preservado.' } });
+    await prisma.dailyReport.createMany({ data: [
+      { id: 'daily-reopen-today', dayStart: todayStart, dayEnd: new Date('2026-09-30T03:00:00.000Z'), closedAt: reference, closedById: 'daily-report-member', snapshot: { summary: { approaches: 1 }, actions: [] } },
+      { id: 'daily-reopen-yesterday', dayStart: yesterdayStart, dayEnd: todayStart, closedAt: new Date('2026-09-29T02:00:00.000Z'), closedById: 'daily-report-member', snapshot: { summary: { approaches: 7 }, actions: [] } }
+    ] });
+
+    await expect(reopenCurrentDailyReport(reference)).resolves.toBe(true);
+    await expect(prisma.dailyReport.findUnique({ where: { dayStart: todayStart } })).resolves.toBeNull();
+    await expect(prisma.dailyReport.findUnique({ where: { dayStart: yesterdayStart } })).resolves.toMatchObject({ id: 'daily-reopen-yesterday' });
+    await expect(prisma.activity.count({ where: { leadId: lead.id } })).resolves.toBe(1);
+  });
+
+  test('returns recent report dates and approach counts without loading their full snapshots', async () => {
+    const dayStart = new Date('2026-09-29T03:00:00.000Z');
+    await prisma.dailyReport.create({
+      data: {
+        id: 'daily-recent-compact', dayStart, dayEnd: new Date('2026-09-30T03:00:00.000Z'),
+        closedAt: new Date('2026-09-29T13:00:00.000Z'), closedById: 'daily-report-member',
+        snapshot: { summary: { approaches: 4 }, actions: [{ id: 'large-action-payload', note: 'Snapshot detail should not be loaded into the archive list.' }] }
+      }
+    });
+
+    await expect(listRecentDailyReports(1)).resolves.toEqual([{ id: 'daily-recent-compact', dayStart, approaches: 4 }]);
   });
 
   test('snapshots daily events through the close instant using São Paulo local boundaries', async () => {

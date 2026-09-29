@@ -67,6 +67,52 @@ test('closes the team day from desktop dashboard and opens its saved daily repor
   await expectPdfDownload(page, /^relatorio-diario-\d{4}-\d{2}-\d{2}\.pdf$/);
 });
 
+test('reopens a closed day, preserves CRM activities, and allows a fresh close', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await signIn(page);
+  await page.goto('/relatorios');
+
+  await page.getByRole('button', { name: 'Fechar o dia' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Dia fechado' })).toBeVisible();
+  await page.getByRole('button', { name: 'Reabrir dia' }).click();
+  await expect(page.getByText('O relatório e o PDF de hoje serão removidos. As atividades do CRM continuarão salvas.')).toBeVisible();
+  await page.getByRole('button', { name: 'Manter fechado' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Dia fechado' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Reabrir dia' }).click();
+  const reopenResponse = page.waitForResponse((response) => response.url().endsWith('/api/reports') && response.request().method() === 'DELETE');
+  await page.getByRole('button', { name: 'Confirmar reabertura' }).click();
+  expect((await reopenResponse).status()).toBe(200);
+  await expect(page.getByRole('button', { name: 'Fechar o dia' })).toBeVisible();
+
+  await page.getByRole('navigation', { name: 'Período do relatório' }).getByRole('link', { name: 'Diário' }).click();
+  await expect(page.getByText('Este dia ainda não foi fechado. Nenhum relatório diário salvo para esta data.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Baixar PDF' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Fechar o dia' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Dia fechado' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Baixar PDF' })).toBeVisible();
+});
+
+test('switches report periods through the period tabs and marks the selected view', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/relatorios');
+  const periodNav = page.getByRole('navigation', { name: 'Período do relatório' });
+
+  await periodNav.getByRole('link', { name: 'Ciclo atual' }).click();
+  await expect(page).toHaveURL(/\/relatorios\?period=month$/);
+  await expect(periodNav.getByRole('link', { name: 'Ciclo atual' })).toHaveAttribute('aria-current', 'page');
+
+  await periodNav.getByRole('link', { name: 'Diário' }).click();
+  await expect(page.getByRole('heading', { name: 'Relatório diário' })).toBeVisible();
+  const dailyPeriodNav = page.getByRole('navigation', { name: 'Período do relatório' });
+  await expect(dailyPeriodNav.getByRole('link', { name: 'Diário' })).toHaveAttribute('aria-current', 'page');
+
+  await dailyPeriodNav.getByRole('link', { name: 'Esta semana' }).click();
+  await expect(page).toHaveURL(/\/relatorios\?period=week$/);
+  await expect(page.getByRole('navigation', { name: 'Período do relatório' }).getByRole('link', { name: 'Esta semana' })).toHaveAttribute('aria-current', 'page');
+});
+
 test('closes and browses the daily archive on mobile without horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await signIn(page);

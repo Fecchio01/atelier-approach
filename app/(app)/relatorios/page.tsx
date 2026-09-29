@@ -4,6 +4,7 @@ import { TeamGoalProgress } from '@/components/team-goal-progress';
 import { DailyCloseControl } from '@/components/daily-close-control';
 import { DailyReportView } from '@/components/daily-report-view';
 import { ReportPdfDownload } from '@/components/report-pdf-download';
+import { ReportPeriodNavigation } from '@/components/report-period-navigation';
 import { PageHeading } from '@/components/ui';
 import { getDailyReportForDate, listRecentDailyReports } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
@@ -51,12 +52,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   if (requestedPeriod === 'day') {
     const reference = parseLocalDate(requestedDate, now);
     const date = localDateParam(reference);
+    const isToday = date === today;
     const [report, recent, todayReport] = await Promise.all([
       getDailyReportForDate(reference),
       listRecentDailyReports(),
-      getDailyReportForDate(now)
+      isToday ? Promise.resolve(null) : getDailyReportForDate(now)
     ]);
-    return <DailyReportView date={date} report={report} recent={recent} todayReport={Boolean(todayReport)} todayHref={todayHref} />;
+    return <DailyReportView date={date} report={report} recent={recent} todayReport={isToday ? Boolean(report) : Boolean(todayReport)} todayHref={todayHref} />;
   }
 
   const period: Period = requestedPeriod === 'month' ? 'month' : 'week';
@@ -68,16 +70,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     salesTarget: true, revenueTarget: true, mrrTarget: true,
     followUpsCompletedTarget: true, conversionRateTarget: true
   } as const;
-  const [settings, activeGoal, requestedGoal, profiles, dailyReport] = await Promise.all([
+  const [settings, activeGoal, requestedGoal] = await Promise.all([
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
     prisma.goal.findFirst({
       where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lte: now }, periodEnd: { gt: now } },
       select: goalSelect,
       orderBy: { periodStart: 'desc' }
     }),
-    start ? prisma.goal.findFirst({ where: { ownerId: teamOwnerId, periodKind: kind, periodStart: start }, select: goalSelect }) : Promise.resolve(null),
-    getMemberProfiles(),
-    getDailyReportForDate(now)
+    start ? prisma.goal.findFirst({ where: { ownerId: teamOwnerId, periodKind: kind, periodStart: start }, select: goalSelect }) : Promise.resolve(null)
   ]);
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
@@ -86,13 +86,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     : getGoalPeriodWindow(kind, now, monthlyStartDay);
   const selectedGoal = selectGoalPeriod(start, requestedGoal, activeGoal);
   const selectedWindow: GoalPeriodWindow = selectedGoal ? { kind, start: selectedGoal.periodStart, end: selectedGoal.periodEnd } : activeWindow;
-  const [report] = await Promise.all([buildReport({ from: selectedWindow.start, to: selectedWindow.end })]);
-  const recommendations = buildRecommendations(report);
-  const nameFor = (memberId: string) => profiles.find((profile) => profile.id === memberId)?.name ?? memberId;
-  const progress = getTeamGoalProgress(report.goalActuals, getTeamGoalTargets(selectedGoal));
-  const viewingCurrent = selectedWindow.start.getTime() === activeWindow.start.getTime();
-  const pdfHref = `/api/reports?format=pdf&period=${period}&from=${encodeURIComponent(selectedWindow.start.toISOString())}&to=${encodeURIComponent(selectedWindow.end.toISOString())}`;
-  const [previousGoal, nextGoal] = await Promise.all([
+  const [report, previousGoal, nextGoal, profiles, dailyReport] = await Promise.all([
+    buildReport({ from: selectedWindow.start, to: selectedWindow.end }),
     prisma.goal.findFirst({
       where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lt: selectedWindow.start } },
       select: goalSelect,
@@ -102,16 +97,19 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { gt: selectedWindow.start, lte: activeWindow.start } },
       select: goalSelect,
       orderBy: { periodStart: 'asc' }
-    })
+    }),
+    getMemberProfiles(),
+    getDailyReportForDate(now)
   ]);
+  const recommendations = buildRecommendations(report);
+  const nameFor = (memberId: string) => profiles.find((profile) => profile.id === memberId)?.name ?? memberId;
+  const progress = getTeamGoalProgress(report.goalActuals, getTeamGoalTargets(selectedGoal));
+  const viewingCurrent = selectedWindow.start.getTime() === activeWindow.start.getTime();
+  const pdfHref = `/api/reports?format=pdf&period=${period}&from=${encodeURIComponent(selectedWindow.start.toISOString())}&to=${encodeURIComponent(selectedWindow.end.toISOString())}`;
 
   return <section className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
     <PageHeading eyebrow="Relatórios comerciais" title="Leituras do CRM, sem previsões." description="Os números usam atividades, etapas e eventos de ganho registrados no CRM." action={<div className="flex flex-wrap items-center gap-3"><ReportPdfDownload href={pdfHref} /><Link href="/" className="text-sm text-[var(--atelier-green)]">← Painel</Link></div>} />
-    <nav aria-label="Período do relatório" className="mt-8 flex flex-wrap gap-3">
-      <Link href={todayHref} className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold">Diário</Link>
-      <Link href="/relatorios?period=week" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'week' && viewingCurrent ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Esta semana</Link>
-      <Link href="/relatorios?period=month" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'month' && viewingCurrent ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Ciclo atual</Link>
-    </nav>
+    <div className="mt-8"><ReportPeriodNavigation activePeriod={viewingCurrent ? period : null} date={today} /></div>
     <div className="mt-5"><DailyCloseControl initiallyClosed={Boolean(dailyReport)} reportHref={todayHref} /></div>
     <nav aria-label="Navegar pelos ciclos salvos" className="mt-4 flex flex-wrap gap-3 text-xs">
       {previousGoal ? <Link href={`/relatorios?period=${period}&start=${encodeURIComponent(previousGoal.periodStart.toISOString())}`} className="rounded-full border border-white/15 px-3 py-1 hover:border-[var(--atelier-green)]">← Anterior · {dateRangeLabel({ kind, start: previousGoal.periodStart, end: previousGoal.periodEnd })}</Link> : null}

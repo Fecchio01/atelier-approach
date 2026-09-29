@@ -3,7 +3,8 @@ import type { ActivityType, Channel } from '@prisma/client';
 
 import { DailyCloseControl } from './daily-close-control';
 import { ReportPdfDownload } from './report-pdf-download';
-import type { DailyReportRecord } from '@/lib/daily-reports';
+import { ReportPeriodNavigation } from './report-period-navigation';
+import type { DailyReportArchiveItem, DailyReportRecord } from '@/lib/daily-reports';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'long' });
@@ -44,7 +45,7 @@ export function DailyReportView({
 }: {
   date: string;
   report: DailyReportRecord | null;
-  recent: DailyReportRecord[];
+  recent: DailyReportArchiveItem[];
   todayReport: boolean;
   todayHref: string;
 }) {
@@ -63,11 +64,7 @@ export function DailyReportView({
       </div>
     </header>
 
-    <nav aria-label="Período do relatório" className="mt-6 flex flex-wrap gap-2">
-      <Link href={`/relatorios?period=day&date=${date}`} aria-current="page" className="rounded-md bg-[var(--atelier-green)] px-4 py-2 text-sm font-semibold text-black">Diário</Link>
-      <Link href="/relatorios?period=week" className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white/70 hover:text-white">Esta semana</Link>
-      <Link href="/relatorios?period=month" className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white/70 hover:text-white">Ciclo atual</Link>
-    </nav>
+    <ReportPeriodNavigation activePeriod="day" date={date} />
 
     <div className="mt-5">
       <DailyCloseControl initiallyClosed={todayReport} reportHref={todayHref} />
@@ -131,7 +128,7 @@ export function DailyReportView({
         {recent.length ? recent.map((item) => {
           const itemDate = localDateParam(item.dayStart);
           return <li key={item.id}><Link href={`/relatorios?period=day&date=${itemDate}`} aria-current={itemDate === date ? 'page' : undefined} className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-white/[0.08] px-3 py-2 text-sm transition-colors hover:border-[var(--atelier-green)]">
-            <span className="font-medium">{dateFormatter.format(item.dayStart)}</span><span className="text-xs text-white/50">{item.snapshot.summary.approaches} abordagens</span>
+            <span className="font-medium">{dateFormatter.format(item.dayStart)}</span><span className="text-xs text-white/50">{item.approaches} abordagens</span>
           </Link></li>;
         }) : <li className="py-2 text-sm text-white/50">Nenhum dia fechado ainda.</li>}
       </ul>

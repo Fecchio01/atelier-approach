@@ -6,6 +6,7 @@ import { getLocalDayWindow } from './goal-periods';
 import { buildDailyReportSnapshot, type DailyReportSnapshot } from './reports';
 
 export type DailyReportRecord = Omit<PrismaDailyReport, 'snapshot'> & { snapshot: DailyReportSnapshot };
+export type DailyReportArchiveItem = Pick<PrismaDailyReport, 'id' | 'dayStart'> & { approaches: number };
 
 function toDailyReportRecord(report: PrismaDailyReport): DailyReportRecord {
   return { ...report, snapshot: report.snapshot as unknown as DailyReportSnapshot };
@@ -43,8 +44,19 @@ export async function getDailyReportForDate(date: Date): Promise<DailyReportReco
   return report ? toDailyReportRecord(report) : null;
 }
 
-export async function listRecentDailyReports(limit = 30): Promise<DailyReportRecord[]> {
+export async function reopenCurrentDailyReport(reference = new Date()): Promise<boolean> {
+  const { start: dayStart } = getLocalDayWindow(reference);
+  const result = await prisma.dailyReport.deleteMany({ where: { dayStart } });
+  return result.count > 0;
+}
+
+export async function listRecentDailyReports(limit = 30): Promise<DailyReportArchiveItem[]> {
   const take = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 90) : 30;
-  const reports = await prisma.dailyReport.findMany({ orderBy: { dayStart: 'desc' }, take });
-  return reports.map(toDailyReportRecord);
+  return prisma.$queryRaw<DailyReportArchiveItem[]>`
+    SELECT "id", "dayStart",
+      COALESCE(("snapshot" #>> '{summary,approaches}')::integer, 0) AS "approaches"
+    FROM "DailyReport"
+    ORDER BY "dayStart" DESC
+    LIMIT ${take}
+  `;
 }

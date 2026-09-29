@@ -1,5 +1,5 @@
 import { getCurrentUser } from '../../../lib/auth';
-import { closeCurrentDailyReport, getDailyReportForDate } from '../../../lib/daily-reports';
+import { closeCurrentDailyReport, getDailyReportForDate, reopenCurrentDailyReport } from '../../../lib/daily-reports';
 import { buildRecommendations, buildReport, type DailyReportSnapshot, type WeeklyMonthlyReport } from '../../../lib/reports';
 import { createReportPdf, type ReportPdfSection } from '../../../lib/report-pdf';
 import { getMemberProfiles } from '../../../lib/member-profile';
@@ -267,5 +267,18 @@ export async function POST() {
     return Response.json(result);
   } catch {
     return Response.json({ error: 'Não foi possível fechar o dia. Tente novamente.' }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
+
+  try {
+    const reopened = await reopenCurrentDailyReport();
+    if (!reopened) return Response.json({ error: 'O dia não está fechado.' }, { status: 404 });
+    return Response.json({ reopened: true });
+  } catch {
+    return Response.json({ error: 'Não foi possível reabrir o dia. Tente novamente.' }, { status: 500 });
   }
 }
