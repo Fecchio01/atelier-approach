@@ -1,7 +1,10 @@
 import Link from 'next/link';
 
 import { TeamGoalProgress } from '@/components/team-goal-progress';
+import { DailyCloseControl } from '@/components/daily-close-control';
+import { DailyReportView } from '@/components/daily-report-view';
 import { PageHeading } from '@/components/ui';
+import { getDailyReportForDate, listRecentDailyReports } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { normalizeFunnelStage, stageLabels } from '@/lib/funnel';
 import { getTeamGoalProgress, getTeamGoalTargets } from '@/lib/metrics';
@@ -27,11 +30,36 @@ function dateRangeLabel(window: GoalPeriodWindow) {
   return `${date.format(window.start)} a ${date.format(new Date(window.end.getTime() - 1))}`;
 }
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ period?: string; start?: string }> }) {
-  const { period: requestedPeriod, start: requestedStart } = await searchParams;
+function localDateParam(value: Date) {
+  const parts = new Intl.DateTimeFormat('en', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function parseLocalDate(value: string | undefined, fallback: Date) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback;
+  const parsed = new Date(`${value}T12:00:00.000Z`);
+  return !Number.isNaN(parsed.valueOf()) && localDateParam(parsed) === value ? parsed : fallback;
+}
+
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ period?: string; start?: string; date?: string }> }) {
+  const { period: requestedPeriod, start: requestedStart, date: requestedDate } = await searchParams;
+  const now = new Date();
+  const today = localDateParam(now);
+  const todayHref = `/relatorios?period=day&date=${today}`;
+  if (requestedPeriod === 'day') {
+    const reference = parseLocalDate(requestedDate, now);
+    const date = localDateParam(reference);
+    const [report, recent, todayReport] = await Promise.all([
+      getDailyReportForDate(reference),
+      listRecentDailyReports(),
+      getDailyReportForDate(now)
+    ]);
+    return <DailyReportView date={date} report={report} recent={recent} todayReport={Boolean(todayReport)} todayHref={todayHref} />;
+  }
+
   const period: Period = requestedPeriod === 'month' ? 'month' : 'week';
   const kind = period === 'week' ? 'WEEKLY' : 'MONTHLY';
-  const now = new Date();
   const start = parsePeriodStart(requestedStart);
   const goalSelect = {
     periodKind: true, periodStart: true, periodEnd: true,
@@ -39,7 +67,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     salesTarget: true, revenueTarget: true, mrrTarget: true,
     followUpsCompletedTarget: true, conversionRateTarget: true
   } as const;
-  const [settings, activeGoal, requestedGoal, profiles] = await Promise.all([
+  const [settings, activeGoal, requestedGoal, profiles, dailyReport] = await Promise.all([
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
     prisma.goal.findFirst({
       where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lte: now }, periodEnd: { gt: now } },
@@ -47,7 +75,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       orderBy: { periodStart: 'desc' }
     }),
     start ? prisma.goal.findFirst({ where: { ownerId: teamOwnerId, periodKind: kind, periodStart: start }, select: goalSelect }) : Promise.resolve(null),
-    getMemberProfiles()
+    getMemberProfiles(),
+    getDailyReportForDate(now)
   ]);
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
@@ -77,9 +106,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   return <section className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
     <PageHeading eyebrow="Relatórios comerciais" title="Leituras do CRM, sem previsões." description="Os números usam atividades, etapas e eventos de ganho registrados no CRM." action={<Link href="/" className="text-sm text-[var(--atelier-green)]">← Painel</Link>} />
     <nav aria-label="Período do relatório" className="mt-8 flex flex-wrap gap-3">
+      <Link href={todayHref} className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold">Diário</Link>
       <Link href="/relatorios?period=week" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'week' && viewingCurrent ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Esta semana</Link>
       <Link href="/relatorios?period=month" className={`rounded-md px-4 py-2 text-sm font-semibold ${period === 'month' && viewingCurrent ? 'bg-[var(--atelier-green)] text-black' : 'border border-white/20'}`}>Ciclo atual</Link>
     </nav>
+    <div className="mt-5"><DailyCloseControl initiallyClosed={Boolean(dailyReport)} reportHref={todayHref} /></div>
     <nav aria-label="Navegar pelos ciclos salvos" className="mt-4 flex flex-wrap gap-3 text-xs">
       {previousGoal ? <Link href={`/relatorios?period=${period}&start=${encodeURIComponent(previousGoal.periodStart.toISOString())}`} className="rounded-full border border-white/15 px-3 py-1 hover:border-[var(--atelier-green)]">← Anterior · {dateRangeLabel({ kind, start: previousGoal.periodStart, end: previousGoal.periodEnd })}</Link> : null}
       {nextGoal ? <Link href={`/relatorios?period=${period}&start=${encodeURIComponent(nextGoal.periodStart.toISOString())}`} className="rounded-full border border-white/15 px-3 py-1 hover:border-[var(--atelier-green)]">Próximo · {dateRangeLabel({ kind, start: nextGoal.periodStart, end: nextGoal.periodEnd })} →</Link> : null}

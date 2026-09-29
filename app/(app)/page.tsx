@@ -15,8 +15,10 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 
 import { TeamGoalProgress } from '@/components/team-goal-progress';
+import { DailyCloseControl } from '@/components/daily-close-control';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getDailyReportForDate } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
 import { getGoalPeriodWindow, getLocalDayWindow, selectDashboardWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
@@ -26,6 +28,11 @@ type Period = 'day' | 'week' | 'month';
 const teamOwnerId = '__team__';
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 const shortDate = (value: Date) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo' }).format(value);
+function localDateParam(value: Date) {
+  const parts = new Intl.DateTimeFormat('en', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
 
 function windowLabel(window: GoalPeriodWindow) {
   const date = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -64,10 +71,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const period: Period = params.period === 'day' || params.period === 'month' ? params.period : 'week';
   const now = new Date();
   const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
-  const [user, settings, profiles, goals] = await Promise.all([
+  const [user, settings, profiles, dailyReport, goals] = await Promise.all([
     getCurrentUser(),
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
     getMemberProfiles(),
+    getDailyReportForDate(now),
     prisma.goal.findMany({
       where: {
         ownerId: teamOwnerId,
@@ -145,6 +153,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   }));
   const maxFunnelLeads = Math.max(1, ...funnel.map((item) => item.leads));
   const periodLabel = period === 'day' ? 'Hoje' : period === 'week' ? 'Esta semana' : 'Este ciclo mensal';
+  const dailyDate = localDateParam(now);
   const dashboardMetrics = [
     { label: 'Receita vendida', value: money(selectedMetrics.sales), detail: `${selectedMetrics.won} negócio${selectedMetrics.won === 1 ? '' : 's'} ganho${selectedMetrics.won === 1 ? '' : 's'}`, Icon: CurrencyDollarIcon },
     { label: 'MRR', value: money(selectedMetrics.mrr), detail: 'Receita mensal recorrente', Icon: ChartBarIcon },
@@ -170,6 +179,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
         </Link>
       </div>
     </header>
+
+    <div className="mt-5">
+      <DailyCloseControl initiallyClosed={Boolean(dailyReport)} reportHref={`/relatorios?period=day&date=${dailyDate}`} />
+    </div>
 
     <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {dashboardMetrics.map(({ label, value, detail, Icon }) => <article className="flex min-h-[112px] items-start gap-3.5 rounded-xl border border-white/[0.08] bg-[#111719] p-4 transition-colors duration-200 hover:border-white/[0.14] md:p-5" key={label}>
