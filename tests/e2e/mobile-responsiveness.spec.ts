@@ -197,3 +197,14 @@ test('keeps goals and reports usable without page overflow on phones', async ({ 
     await expectNoViewportOverflow(page);
   }
 });
+
+test('preserves the desktop sidebar and multi-column dashboard layout', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await signIn(page);
+  await page.goto('/');
+
+  await expect(page.getByRole('navigation', { name: 'Navegação principal' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Abrir menu' })).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Visão operacional' })).toBeVisible();
+  await expectNoViewportOverflow(page);
+});
