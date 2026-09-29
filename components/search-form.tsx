@@ -139,7 +139,7 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
       <button
         type="submit"
         disabled={isLoading}
-        className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-black transition hover:bg-[#d2ff55] disabled:cursor-wait disabled:opacity-60"
+        className="min-h-11 w-full rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-black transition hover:bg-[#d2ff55] disabled:cursor-wait disabled:opacity-60 md:w-auto"
       >
         {isLoading ? 'Pesquisando…' : 'Pesquisar'}
       </button>

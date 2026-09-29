@@ -92,7 +92,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <label className="grid gap-2 text-sm font-medium">Nome exibido<input name="name" required maxLength={80} defaultValue={user.name ?? ''} className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
           <label className="grid gap-2 text-sm font-medium">Foto de perfil<input name="avatarUrl" type="url" defaultValue={user.image ?? ''} placeholder="https://..." className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none placeholder:text-white/30 focus:border-[var(--atelier-green)]" /><span className="text-xs font-normal text-white/45">URL opcional</span></label>
           <div className="rounded-lg border border-white/10 bg-[#1b2328] px-4 py-3"><span className="block text-[11px] uppercase tracking-[0.16em] text-white/40">E-mail de acesso</span><span className="mt-1 block break-all text-sm text-white/75">{user.email}</span></div>
-          <button className="min-h-11 w-fit min-w-32 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-colors hover:bg-[#c9ff72] active:scale-[0.98]">Salvar perfil</button>
+          <button className="min-h-11 w-full min-w-32 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-colors hover:bg-[#c9ff72] active:scale-[0.98] sm:w-fit">Salvar perfil</button>
         </form>
       </section>
 
@@ -104,7 +104,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <label className="grid gap-2 text-sm font-medium">Nova senha<input name="newPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
           <label className="grid gap-2 text-sm font-medium">Confirmar nova senha<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
           <p className="text-xs leading-5 text-white/45">Após salvar, você entrará novamente com a nova senha.</p>
-          <button className="min-h-11 w-fit min-w-36 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-colors hover:bg-[#c9ff72] active:scale-[0.98]">Atualizar senha</button>
+          <button className="min-h-11 w-full min-w-36 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-colors hover:bg-[#c9ff72] active:scale-[0.98] sm:w-fit">Atualizar senha</button>
         </form>
       </section>
     </div>
