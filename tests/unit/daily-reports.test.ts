@@ -16,6 +16,7 @@ type DailySnapshot = {
     revenue: number;
     mrr: number;
     followUpsCompleted: number;
+    members: Array<{ memberId: string; wins: number; revenue: number; mrr: number }>;
   };
   actions: Array<{
     type: string;
@@ -93,6 +94,58 @@ describe('daily report snapshots', () => {
     expect(snapshot.actions).toHaveLength(3);
     expect(snapshot.actions[0]).toMatchObject({ leadName: 'Oficina Horizonte', occurredAt: '2026-09-29T03:00:00.000Z' });
     expect(snapshot.actions.at(-1)).toMatchObject({ occurredAt: '2026-09-29T13:00:00.000Z' });
+  });
+
+  test('reads all daily data from one repeatable-read database snapshot', async () => {
+    expect(builder).toBeTypeOf('function');
+    if (!builder) return;
+    const transactionSpy = vi.spyOn(prisma, '$transaction').mockImplementation((async (...args: unknown[]) => {
+      const [callback] = args as [(tx: typeof prisma) => Promise<unknown>];
+      return callback(prisma);
+    }) as typeof prisma.$transaction);
+
+    await builder({
+      from: new Date('2026-09-29T03:00:00.000Z'),
+      to: new Date('2026-09-30T03:00:00.000Z'),
+      closedAt: new Date('2026-09-29T13:00:00.000Z')
+    });
+
+    expect(transactionSpy).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' });
+  });
+
+  test('includes legacy wins per lead when other sales already have SaleEvent rows', async () => {
+    expect(builder).toBeTypeOf('function');
+    if (!builder) return;
+    const legacyLead = await prisma.lead.create({
+      data: {
+        osmId: 'daily-legacy-win', name: 'Oficina Legada', stage: 'WON',
+        saleValue: 400, mrr: 40, wonAt: new Date('2026-09-29T12:00:00.000Z'), wonById: 'legacy-member'
+      }
+    });
+    const eventLead = await prisma.lead.create({
+      data: {
+        osmId: 'daily-event-win', name: 'Oficina Atual', stage: 'WON',
+        saleValue: 600, mrr: 60, wonAt: new Date('2026-09-29T12:30:00.000Z'), wonById: 'event-member'
+      }
+    });
+    await prisma.saleEvent.create({
+      data: {
+        leadId: eventLead.id, actorId: 'event-member', saleValue: 600, mrr: 60,
+        occurredAt: new Date('2026-09-29T12:30:00.000Z')
+      }
+    });
+
+    const snapshot = await builder({
+      from: new Date('2026-09-29T03:00:00.000Z'),
+      to: new Date('2026-09-30T03:00:00.000Z'),
+      closedAt: new Date('2026-09-29T13:00:00.000Z')
+    });
+
+    expect(snapshot.summary).toMatchObject({ sales: 2, revenue: 1000, mrr: 100 });
+    expect(snapshot.summary.members).toEqual(expect.arrayContaining([
+      expect.objectContaining({ memberId: 'legacy-member', wins: 1, revenue: 400, mrr: 40 }),
+      expect.objectContaining({ memberId: 'event-member', wins: 1, revenue: 600, mrr: 60 })
+    ]));
   });
 
   test('returns the original snapshot on retry and leaves weekly activity live', async () => {

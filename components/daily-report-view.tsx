@@ -110,7 +110,7 @@ export function DailyReportView({
           {report.snapshot.actions.length ? report.snapshot.actions.map((action) => <li key={action.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:gap-5">
             <time dateTime={action.occurredAt} className="shrink-0 text-xs tabular-nums text-white/45">{timeFormatter.format(new Date(action.occurredAt))}</time>
             <div className="min-w-0 text-sm">
-              <p className="font-medium text-white">{activityLabels[action.type]} · {action.leadName}</p>
+              <p className="break-words font-medium text-white">{activityLabels[action.type]} · {action.leadName}</p>
               <p className="mt-1 text-xs text-white/50">{[action.actorName, action.channel ? channelLabels[action.channel] : null].filter(Boolean).join(' · ') || 'Responsável não identificado'}</p>
               {action.note ? <p className="mt-2 break-words text-sm text-white/65">{action.note}</p> : null}
             </div>
