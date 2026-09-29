@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 import { e2eCredentials } from './credentials';
 
 async function signIn(page: Page) {
@@ -95,5 +96,60 @@ test('keeps dashboard, search, and profile usable without page overflow on phone
     await expect(page.getByLabel('Nova senha', { exact: true })).toBeVisible();
     await expect.poll(() => page.getByRole('button', { name: 'Salvar perfil' }).evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(200);
     await expectNoViewportOverflow(page);
+  }
+});
+
+test('contains kanban scrolling and keeps lead actions reachable on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await signIn(page);
+  const name = `Oficina ${randomUUID().slice(0, 8)} Mobile`;
+  const response = await page.request.post('/api/leads', { data: {
+    business: {
+      osmId: `node/mobile-${randomUUID()}`,
+      name,
+      phone: '+55 11 99999-8888',
+      instagram: '@oficinamobile',
+      website: 'https://example.com',
+      address: 'Rua das Oficinas, número 123, bairro automotivo. '.repeat(35)
+    },
+    channel: 'WHATSAPP',
+    note: 'Prospect de teste de layout mobile.'
+  } });
+  expect(response.status()).toBe(201);
+  const { lead } = await response.json();
+
+  try {
+    await page.goto('/crm');
+    await expectNoViewportOverflow(page);
+    const board = page.getByRole('region', { name: 'Funil CRM' });
+    await expect(page.getByText('Deslize para ver todas as etapas')).toBeVisible();
+    await expect.poll(() => board.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    await expectNoViewportOverflow(page);
+
+    const card = page.getByRole('button', { name: `Abrir detalhes de ${name}` });
+    await expect(card).toBeVisible();
+    await card.click();
+    const dialog = page.getByRole('dialog', { name });
+    await expect(dialog).toBeVisible();
+    const panel = dialog.locator(':scope > div');
+    await expect.poll(() => panel.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.width <= window.innerWidth && bounds.left >= 0 && bounds.right <= window.innerWidth;
+    })).toBe(true);
+
+    const dialogContent = panel.locator('.overflow-y-auto');
+    await expect.poll(() => dialogContent.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    await expect(dialog.getByRole('button', { name: 'Contato', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Histórico', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Próxima ação', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Fechar detalhes' })).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Próxima ação', exact: true }).click();
+    const closeDeal = dialog.getByRole('button', { name: 'Fechar negócio', exact: true });
+    await closeDeal.scrollIntoViewIfNeeded();
+    await expect(closeDeal).toBeVisible();
+    await expectNoViewportOverflow(page);
+  } finally {
+    await page.request.delete(`/api/leads/${lead.id}`);
   }
 });

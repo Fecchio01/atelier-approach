@@ -161,11 +161,11 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
     const activeFollowUp = pendingFollowUps[0];
     return (
       <div className="grid items-start gap-5">
-        <nav className="flex gap-6 border-b border-white/[0.11]" aria-label="Seções do lead">
-          {([['CONTACT', 'Contato'], ['HISTORY', 'Histórico'], ['NEXT_ACTION', 'Próxima ação']] as const).map(([tab, label]) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`relative min-h-11 text-sm font-semibold ${activeTab === tab ? 'text-[var(--atelier-green)]' : 'text-white/50 hover:text-white/80'}`}>{label}{activeTab === tab ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--atelier-green)]" /> : null}</button>)}
+        <nav className="flex flex-wrap gap-x-6 gap-y-1 border-b border-white/[0.11]" aria-label="Seções do lead">
+          {([['CONTACT', 'Contato'], ['HISTORY', 'Histórico'], ['NEXT_ACTION', 'Próxima ação']] as const).map(([tab, label]) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`relative min-h-11 whitespace-nowrap text-sm font-semibold ${activeTab === tab ? 'text-[var(--atelier-green)]' : 'text-white/50 hover:text-white/80'}`}>{label}{activeTab === tab ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--atelier-green)]" /> : null}</button>)}
         </nav>
         {activeTab === 'CONTACT' ? <section className="grid gap-5 pb-1">
-          <div className="grid gap-5 sm:grid-cols-[74px_minmax(0,1fr)] sm:items-center"><div className="grid h-[74px] w-[74px] place-items-center rounded-full border border-white/15 bg-white/[0.035]" aria-hidden="true"><StorefrontIcon size={35} weight="regular" className="text-white/70" /></div><div><h3 className="text-base font-semibold text-white/90">Detalhes da empresa</h3><p className="mt-1 text-sm text-white/50">{lead.category ?? 'Estética automotiva'}</p>{lead.address ? <p className="mt-2 text-sm text-white/65">{lead.address}</p> : null}</div></div>
+          <div className="grid gap-5 sm:grid-cols-[74px_minmax(0,1fr)] sm:items-center"><div className="grid h-[74px] w-[74px] place-items-center rounded-full border border-white/15 bg-white/[0.035]" aria-hidden="true"><StorefrontIcon size={35} weight="regular" className="text-white/70" /></div><div className="min-w-0"><h3 className="text-base font-semibold text-white/90">Detalhes da empresa</h3><p className="mt-1 text-sm text-white/50">{lead.category ?? 'Estética automotiva'}</p>{lead.address ? <p className="mt-2 break-words text-sm text-white/65">{lead.address}</p> : null}</div></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{contactLinks(lead).map(({ label, href }) => <a key={label} href={href} target={label === 'Ligar' ? undefined : '_blank'} rel="noreferrer" className="group flex min-h-14 items-center gap-3 rounded-lg border border-white/[0.10] bg-white/[0.025] px-3 text-sm font-semibold text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,.04)] hover:border-[var(--atelier-green)]/45 hover:bg-white/[0.05]"><ContactActionIcon label={label} /><span className="min-w-0 flex-1">{label}</span><ArrowSquareOutIcon aria-hidden="true" size={17} weight="regular" className="text-white/35 transition group-hover:text-white/75" /></a>)}</div>
           <div className="grid gap-4 border-t border-white/[0.09] pt-5 md:grid-cols-2">
             <div className="grid gap-2"><label className="grid gap-2 text-xs font-medium text-white/55">Mover para etapa
@@ -216,7 +216,7 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
     );
   };
 
-  return <dialog ref={dialogRef} aria-modal="true" aria-labelledby="lead-detail-title" data-testid="lead-modal-backdrop" onCancel={(event) => { event.preventDefault(); if (confirmingReturn) { if (savingId !== lead.id) setConfirmingReturn(false); } else onClose(); }} onClick={(event) => { if (event.target === event.currentTarget && !confirmingReturn) onClose(); }} className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-center justify-center bg-transparent p-3 text-white backdrop:bg-[#030506]/80 backdrop:backdrop-blur-[6px] open:flex sm:p-8">
+  return <dialog ref={dialogRef} aria-modal="true" aria-labelledby="lead-detail-title" data-testid="lead-modal-backdrop" onCancel={(event) => { event.preventDefault(); if (confirmingReturn) { if (savingId !== lead.id) setConfirmingReturn(false); } else onClose(); }} onClick={(event) => { if (event.target === event.currentTarget && !confirmingReturn) onClose(); }} className="mobile-safe-area fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-center justify-center bg-transparent text-white backdrop:bg-[#030506]/80 backdrop:backdrop-blur-[6px] open:flex">
     <div className="relative flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/[0.14] bg-[#10161b] shadow-[0_28px_100px_rgba(0,0,0,.55)]">
       <div inert={confirmingReturn} className="flex min-h-0 flex-col">
       <header className="flex items-start justify-between gap-5 border-b border-white/[0.09] px-6 py-6 sm:px-8">
@@ -224,7 +224,7 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
         <button ref={closeRef} type="button" aria-label="Fechar detalhes" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/[0.14] text-lg text-white/60 hover:bg-white/[0.06] hover:text-white"><span aria-hidden="true">×</span></button>
       </header>
       {error && !confirmingReturn ? <p role="alert" className="border-b border-red-300/15 bg-red-300/5 px-6 py-3 text-sm text-red-200">{error}</p> : null}
-      <div className="atelier-scrollbar overflow-y-auto overscroll-contain p-5 sm:p-8">{renderLead(lead)}</div>
+      <div className="atelier-scrollbar min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-8">{renderLead(lead)}</div>
       </div>
       {confirmingReturn ? <div className="absolute inset-0 z-10 grid place-items-center bg-[#070b0e]/85 p-4 backdrop-blur-[4px]">
         <section role="alertdialog" aria-modal="true" aria-labelledby="return-confirm-title" aria-describedby="return-confirm-description" className="w-full max-w-md rounded-2xl border border-white/[0.14] bg-[#151c20] p-6 shadow-[0_24px_70px_rgba(0,0,0,.42)] sm:p-7">

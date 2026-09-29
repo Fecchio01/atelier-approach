@@ -7,8 +7,8 @@ test('CRM keeps details private to an accessible modal and preserves lead action
   await page.getByLabel('E-mail').fill(e2eCredentials.email);
   await page.getByLabel('Senha').fill(e2eCredentials.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect.poll(async () => (await page.context().cookies()).some((cookie) => cookie.name.endsWith('authjs.session-token'))).toBe(true);
-  const name = `Auto Brilho ${randomUUID().slice(0, 8)}`;
+  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
+  const name = `Auto Brilho ${randomUUID().slice(0, 8)} Teste`;
   const osmId = `node/modal-${randomUUID()}`;
   const response = await page.request.post('/api/leads', { data: {
     business: { osmId, name, phone: '+55 11 99999-8888', instagram: '@autobrilho', website: 'https://example.com' },
@@ -27,7 +27,9 @@ test('CRM keeps details private to an accessible modal and preserves lead action
     const modal = page.getByRole('dialog', { name });
     await expect(modal).toBeVisible();
     await expect(modal.getByRole('link', { name: 'Instagram', exact: true })).toHaveAttribute('href', 'https://www.instagram.com/autobrilho/');
+    await modal.getByRole('button', { name: 'Histórico', exact: true }).click();
     await expect(modal.getByText('Anotação que pertence apenas aos detalhes.')).toBeVisible();
+    await modal.getByRole('button', { name: 'Próxima ação', exact: true }).click();
     await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
     await expect(modal.getByRole('alert')).toHaveText('Informe o valor da venda e o MRR para fechar o negócio.');
     await page.keyboard.press('Escape');
@@ -35,17 +37,22 @@ test('CRM keeps details private to an accessible modal and preserves lead action
     await expect(card).toBeFocused();
     await card.click();
     await modal.getByLabel('Mover para').selectOption('QUALIFIED');
+    await modal.getByRole('button', { name: 'Salvar alterações' }).click();
     await expect(page.getByRole('region', { name: 'Qualificado', exact: true }).getByRole('button', { name: `Abrir detalhes de ${name}` })).toHaveCount(1);
-    await modal.getByRole('button', { name: 'Fechar detalhes' }).click();
+    await expect(modal).toHaveCount(0);
     await card.click();
     await page.getByTestId('lead-modal-backdrop').click({ position: { x: 5, y: 5 } });
     await expect(modal).toHaveCount(0);
     await card.click();
-    page.once('dialog', (dialog) => dialog.dismiss());
     await modal.getByRole('button', { name: 'Devolver para pesquisa' }).click();
+    const confirmation = page.getByRole('alertdialog', { name: 'Devolver empresa para pesquisa?' });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(confirmation).toBeHidden();
     await expect(modal).toBeVisible();
-    page.once('dialog', (dialog) => dialog.accept());
     await modal.getByRole('button', { name: 'Devolver para pesquisa' }).click();
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('button', { name: 'Confirmar devolução' }).click();
     await expect(modal).toHaveCount(0);
     await expect(card).toHaveCount(0);
   } finally {

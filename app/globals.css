@@ -39,3 +39,5 @@ input, select, textarea { color-scheme: dark; }
 
 .atelier-scrollbar::-webkit-scrollbar { height: 9px; width: 9px; }
 .atelier-scrollbar::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,255,255,.14); }
+.mobile-safe-area { padding: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left)); }
+@media (min-width: 640px) { .mobile-safe-area { padding: 2rem; } }

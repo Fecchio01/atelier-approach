@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { LeadStage } from '@prisma/client';
+import { ArrowsLeftRightIcon } from '@phosphor-icons/react';
 import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage } from '@/lib/funnel';
 import { LeadDetailModal } from './lead-detail-modal';
 import { displayCompanyName } from '@/lib/display-name';
@@ -62,7 +63,8 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
   }
 
   return <>
-    <div role="region" aria-label="Funil CRM" tabIndex={0} className="atelier-scrollbar overflow-x-auto pb-4 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+    <p className="mb-2 flex items-center gap-2 text-xs text-white/40 md:hidden"><ArrowsLeftRightIcon size={15} aria-hidden="true" />Deslize para ver todas as etapas</p>
+    <div role="region" aria-label="Funil CRM" tabIndex={0} className="atelier-scrollbar min-w-0 max-w-full touch-pan-x overscroll-x-contain overflow-x-auto pb-4 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
       <div className="grid grid-cols-7 items-start gap-2.5" style={{ minWidth: '1540px' }}>{mainFunnelStages.map(renderColumn)}</div>
     </div>
     <section className="mt-9 border-t border-white/[0.07] pt-6" aria-label="Outras situações">
