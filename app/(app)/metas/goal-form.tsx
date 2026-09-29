@@ -114,7 +114,7 @@ export function GoalForm({
   const panelTitle = kind === 'WEEKLY' ? 'Metas semanais da equipe' : 'Metas mensais da equipe';
 
   return <form action={formAction} className="space-y-6">
-    <section aria-label={kind === 'WEEKLY' ? 'Ciclo semanal atual' : 'Ciclo mensal atual'} className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(118deg,rgba(25,34,36,0.96),rgba(17,22,27,0.96))] p-5 sm:p-7">
+    <section aria-label={kind === 'WEEKLY' ? 'Ciclo semanal atual' : 'Ciclo mensal atual'} className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(118deg,rgba(25,34,36,0.96),rgba(17,22,27,0.96))] p-4 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex items-start gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.055] text-[var(--atelier-green)]"><CalendarBlankIcon size={22} weight="regular" /></span>
@@ -164,7 +164,7 @@ export function GoalForm({
         <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em]">Marcos da meta</h2>
         <p className="mt-1 text-sm text-white/50">Defina os resultados que o time quer alcançar neste ciclo.</p>
       </div>
-      <button type="submit" disabled={pending} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 py-2.5 text-sm font-semibold text-[#11170b] hover:bg-[#c7ff69] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60">
+      <button type="submit" disabled={pending} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 py-2.5 text-sm font-semibold text-[#11170b] hover:bg-[#c7ff69] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto">
         {pending ? 'Salvando metas…' : 'Salvar metas'}
       </button>
     </div>

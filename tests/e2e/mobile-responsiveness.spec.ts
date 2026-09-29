@@ -153,3 +153,47 @@ test('contains kanban scrolling and keeps lead actions reachable on mobile', asy
     await page.request.delete(`/api/leads/${lead.id}`);
   }
 });
+
+test('keeps goals and reports usable without page overflow on phones', async ({ page }) => {
+  await signIn(page);
+
+  for (const width of [320, 375, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/metas');
+    await expect(page.getByRole('heading', { name: 'Metas da equipe' })).toBeVisible();
+
+    const weeklyTab = page.getByRole('tab', { name: 'Semanal' });
+    const monthlyTab = page.getByRole('tab', { name: 'Mensal' });
+    const weeklyPanel = page.getByRole('tabpanel', { name: 'Semanal' });
+    const monthlyPanel = page.getByRole('tabpanel', { name: 'Mensal' });
+    await expect(weeklyTab).toBeVisible();
+    await expect(monthlyTab).toBeVisible();
+    const weeklyTarget = weeklyPanel.getByLabel('Meta para abordagens', { exact: true });
+    await weeklyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
+    await expect(weeklyTarget).toBeVisible();
+    await expect(weeklyPanel.getByRole('button', { name: 'Salvar metas' })).toBeVisible();
+    await expectNoViewportOverflow(page);
+
+    await monthlyTab.click();
+    await expect(monthlyPanel.getByLabel('Dia de início do ciclo mensal')).toBeVisible();
+    const monthlyTarget = monthlyPanel.getByLabel('Meta para abordagens', { exact: true });
+    await monthlyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
+    await expect(monthlyTarget).toBeVisible();
+    await expectNoViewportOverflow(page);
+
+    await page.goto('/relatorios');
+    await expect(page.getByRole('heading', { name: 'Leituras do CRM, sem previsões.' })).toBeVisible();
+    const reportPeriods = page.getByRole('navigation', { name: 'Período do relatório' });
+    await expect(reportPeriods.getByRole('link', { name: 'Esta semana' })).toBeVisible();
+    await expect(reportPeriods.getByRole('link', { name: 'Ciclo atual' })).toBeVisible();
+    await reportPeriods.getByRole('link', { name: 'Ciclo atual' }).click();
+    await expect(page).toHaveURL(/\/relatorios\?period=month$/);
+    await expect(page.getByRole('article').filter({ hasText: 'Receita vendida' })).toBeVisible();
+    const reportTables = page.getByRole('region', { name: /^Tabela / });
+    await expect(reportTables).toHaveCount(3);
+    for (const reportTable of await reportTables.all()) {
+      await expect.poll(() => reportTable.evaluate((element) => getComputedStyle(element).overflowX)).toBe('auto');
+    }
+    await expectNoViewportOverflow(page);
+  }
+});

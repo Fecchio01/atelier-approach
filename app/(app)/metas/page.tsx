@@ -40,7 +40,7 @@ export default async function GoalsPage() {
   const weeklyGoal = goals.find((goal) => goal.periodKind === 'WEEKLY' && goal.periodStart.getTime() === weeklyPeriod.start.getTime());
   const [weeklyActuals, monthlyActuals] = await getTeamGoalActualsByPeriod([weeklyPeriod, monthlyPeriod], now);
 
-  return <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-12">
+  return <section className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10 lg:py-12">
     <PageHeading
       eyebrow="Planejamento da equipe"
       title="Metas da equipe"

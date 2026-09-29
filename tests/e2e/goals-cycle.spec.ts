@@ -27,10 +27,10 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await page.getByLabel('E-mail').fill(e2eCredentials.email);
     await page.getByLabel('Senha').fill(e2eCredentials.password);
     await page.getByRole('button', { name: 'Entrar' }).click();
-    await expect(page).toHaveURL('http://127.0.0.1:3001/', { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 
     await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
-    await expect(page).toHaveURL('http://127.0.0.1:3001/metas');
+    await expect(page).toHaveURL(/\/metas$/);
 
     const weeklyTab = page.getByRole('tab', { name: 'Semanal' });
     const monthlyTab = page.getByRole('tab', { name: 'Mensal' });
