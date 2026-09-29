@@ -22,6 +22,8 @@ describe('commercial reports', () => {
   beforeEach(async () => {
     mocks.getCurrentUser.mockResolvedValue({ id: 'ana' });
     await prisma.dailyReport.deleteMany();
+    await prisma.goal.deleteMany();
+    await prisma.teamGoalSettings.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.followUp.deleteMany();
     await prisma.lead.deleteMany();
@@ -110,12 +112,38 @@ describe('commercial reports', () => {
   });
 
   test('downloads a PDF for an in-progress monthly cycle', async () => {
+    await prisma.teamGoalSettings.create({ data: { id: 'team', monthlyStartDay: 14 } });
     const response = await GET(new Request('http://localhost/api/reports?format=pdf&period=month&from=2026-09-14T03%3A00%3A00.000Z&to=2026-10-14T03%3A00%3A00.000Z'));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/pdf');
     expect(response.headers.get('content-disposition')).toMatch(/attachment; filename="relatorio-mensal-2026-09-14-2026-10-13\.pdf"/);
     await expectValidPdf(response);
+  });
+
+  test('keeps exporting a saved historical monthly cycle after the configured start day changes', async () => {
+    await prisma.teamGoalSettings.create({ data: { id: 'team', monthlyStartDay: 1 } });
+    await prisma.goal.create({
+      data: {
+        ownerId: '__team__', periodKind: 'MONTHLY',
+        periodStart: new Date('2026-09-14T03:00:00.000Z'), periodEnd: new Date('2026-10-14T03:00:00.000Z')
+      }
+    });
+    const response = await GET(new Request('http://localhost/api/reports?format=pdf&period=month&from=2026-09-14T03%3A00%3A00.000Z&to=2026-10-14T03%3A00%3A00.000Z'));
+
+    expect(response.status).toBe(200);
+    await expectValidPdf(response);
+  });
+
+  test.each([
+    ['misaligned weekly interval', 'week', '2026-09-29T03:00:00.000Z', '2026-10-06T03:00:00.000Z'],
+    ['monthly interval that ignores the configured cycle', 'month', '2026-09-14T03:00:00.000Z', '2026-10-13T03:00:00.000Z'],
+    ['normalized impossible calendar date', 'week', '2026-02-30T03:00:00.000Z', '2026-03-09T03:00:00.000Z']
+  ])('rejects a %s', async (_description, period, from, to) => {
+    if (period === 'month') await prisma.teamGoalSettings.create({ data: { id: 'team', monthlyStartDay: 14 } });
+    const response = await GET(new Request(`http://localhost/api/reports?format=pdf&period=${period}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`));
+
+    expect(response.status).toBe(400);
   });
 
   test('downloads the saved daily snapshot as PDF and does not export an unclosed date', async () => {

@@ -5,6 +5,7 @@ import { createReportPdf, type ReportPdfSection } from '../../../lib/report-pdf'
 import { getMemberProfiles } from '../../../lib/member-profile';
 import { getTeamGoalProgress, getTeamGoalTargets, type GoalMetricKey } from '../../../lib/metrics';
 import { normalizeFunnelStage, stageLabels } from '../../../lib/funnel';
+import { getGoalPeriodWindow } from '../../../lib/goal-periods';
 import { prisma } from '../../../lib/db';
 import type { Channel } from '@prisma/client';
 
@@ -61,9 +62,49 @@ function parseLocalDate(value: string | null) {
 }
 
 function parseInstant(value: string | null) {
-  if (!value || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) return null;
-  const parsed = new Date(value);
+  const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/i);
+  if (!match) return null;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, , zone, , offsetHourText, offsetMinuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  if (calendarDate.getUTCFullYear() !== year || calendarDate.getUTCMonth() !== month - 1 || calendarDate.getUTCDate() !== day) return null;
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  if (zone.toUpperCase() !== 'Z' && (Number(offsetHourText) > 23 || Number(offsetMinuteText) > 59)) return null;
+  const parsed = new Date(match[0]);
   return Number.isNaN(parsed.valueOf()) ? null : parsed;
+}
+
+function sameRange(firstStart: Date, firstEnd: Date, secondStart: Date, secondEnd: Date) {
+  return firstStart.getTime() === secondStart.getTime() && firstEnd.getTime() === secondEnd.getTime();
+}
+
+async function isValidPeriodRange(period: 'week' | 'month', from: Date, to: Date) {
+  if (period === 'week') {
+    const expected = getGoalPeriodWindow('WEEKLY', from, 1);
+    return sameRange(from, to, expected.start, expected.end);
+  }
+
+  const [settings, savedGoal] = await Promise.all([
+    prisma.teamGoalSettings.findUnique({ where: { id: 'team' }, select: { monthlyStartDay: true } }),
+    prisma.goal.findFirst({
+      where: { ownerId: teamOwnerId, periodKind: 'MONTHLY', periodStart: from },
+      select: { periodStart: true, periodEnd: true }
+    })
+  ]);
+  const monthlyStartDay = settings?.monthlyStartDay ?? 1;
+  try {
+    const configured = getGoalPeriodWindow('MONTHLY', from, monthlyStartDay);
+    if (sameRange(from, to, configured.start, configured.end)) return true;
+  } catch {
+    return false;
+  }
+
+  return Boolean(savedGoal && sameRange(from, to, savedGoal.periodStart, savedGoal.periodEnd));
 }
 
 function downloadPdf(bytes: Uint8Array, filename: string) {
@@ -180,8 +221,7 @@ async function exportPdf(searchParams: URLSearchParams) {
   }
   const from = parseInstant(searchParams.get('from'));
   const to = parseInstant(searchParams.get('to'));
-  const maximumPeriodLength = period === 'week' ? 9 : 35;
-  if (!from || !to || from >= to || to.getTime() - from.getTime() > maximumPeriodLength * 24 * 60 * 60 * 1000) {
+  if (!from || !to || from >= to || !await isValidPeriodRange(period, from, to)) {
     return Response.json({ error: 'Informe um período semanal ou mensal válido.' }, { status: 400 });
   }
 
