@@ -99,17 +99,23 @@ test('switches report periods through the period tabs and marks the selected vie
   await page.goto('/relatorios');
   const periodNav = page.getByRole('navigation', { name: 'Período do relatório' });
 
+  const initialDocumentTime = await page.evaluate(() => performance.timeOrigin);
   await periodNav.getByRole('link', { name: 'Ciclo atual' }).click();
   await expect(page).toHaveURL(/\/relatorios\?period=month$/);
+  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(initialDocumentTime);
   await expect(periodNav.getByRole('link', { name: 'Ciclo atual' })).toHaveAttribute('aria-current', 'page');
 
+  const monthlyDocumentTime = await page.evaluate(() => performance.timeOrigin);
   await periodNav.getByRole('link', { name: 'Diário' }).click();
   await expect(page.getByRole('heading', { name: 'Relatório diário' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(monthlyDocumentTime);
   const dailyPeriodNav = page.getByRole('navigation', { name: 'Período do relatório' });
   await expect(dailyPeriodNav.getByRole('link', { name: 'Diário' })).toHaveAttribute('aria-current', 'page');
 
+  const dailyDocumentTime = await page.evaluate(() => performance.timeOrigin);
   await dailyPeriodNav.getByRole('link', { name: 'Esta semana' }).click();
   await expect(page).toHaveURL(/\/relatorios\?period=week$/);
+  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(dailyDocumentTime);
   await expect(page.getByRole('navigation', { name: 'Período do relatório' }).getByRole('link', { name: 'Esta semana' })).toHaveAttribute('aria-current', 'page');
 });
 
