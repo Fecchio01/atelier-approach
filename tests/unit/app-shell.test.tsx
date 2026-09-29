@@ -31,4 +31,28 @@ describe('AppShell brand navigation', () => {
     const primaryNavigation = markup.match(/<nav aria-label="Navegação principal" class="[^"]*">([\s\S]*?)<\/nav>/);
     expect(primaryNavigation?.[1]?.match(/<svg\b/g)).toHaveLength(5);
   });
+
+  test('renders a compact mobile header and keeps the desktop navigation separate', () => {
+    vi.stubGlobal('React', React);
+    const markup = renderToStaticMarkup(
+      React.createElement(AppShell, {
+        user: { name: 'Carlos Almeida', email: 'carlos@example.com' },
+        onSignOut: async () => undefined,
+        children: React.createElement('div', null, 'Conteúdo')
+      })
+    );
+    const mobileHeader = markup.match(/<header\b[^>]*>[\s\S]*?<\/header>/)?.[0];
+    const mobileDialog = markup.match(/<dialog\b[^>]*>[\s\S]*?<\/dialog>/)?.[0];
+    const desktopSidebar = markup.match(/<aside\b[^>]*>[\s\S]*?<\/aside>/)?.[0];
+    const desktopNavigation = desktopSidebar?.match(/<nav aria-label="Navegação principal"[^>]*>[\s\S]*?<\/nav>/)?.[0];
+
+    expect(mobileHeader).toContain('aria-label="Abrir menu"');
+    expect(mobileHeader).toContain('aria-label="Meu perfil"');
+    expect(mobileDialog).toContain('aria-label="Navegação principal no menu mobile"');
+    expect(mobileDialog).toContain('Sair da conta');
+    expect(desktopSidebar).toContain('aria-label="Navegação principal"');
+    expect(desktopSidebar).toContain('Sair da conta');
+    expect(desktopSidebar?.match(/<a\b[^>]*aria-current=/g)).toHaveLength(1);
+    expect(desktopNavigation?.match(/href="\/(?:crm|pesquisa|metas|relatorios)?"/g)).toHaveLength(5);
+  });
 });

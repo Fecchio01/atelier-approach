@@ -3,23 +3,8 @@
 import type React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  BuildingsIcon,
-  ChartBarIcon,
-  FunnelIcon,
-  SignOutIcon,
-  SquaresFourIcon,
-  TargetIcon,
-  UserCircleIcon
-} from '@phosphor-icons/react';
-
-const routes = [
-  { href: '/', label: 'Painel', Icon: SquaresFourIcon },
-  { href: '/crm', label: 'Funil', Icon: FunnelIcon },
-  { href: '/pesquisa', label: 'Empresas', Icon: BuildingsIcon },
-  { href: '/metas', label: 'Metas', Icon: TargetIcon },
-  { href: '/relatorios', label: 'Relatórios', Icon: ChartBarIcon }
-];
+import { SignOutIcon } from '@phosphor-icons/react';
+import { appRoutes as routes, MobileNavigation } from './mobile-navigation';
 
 function AtelierMark({ className = 'size-9' }: { className?: string }) {
   return <svg className={`${className} shrink-0 text-[var(--atelier-green)]`} viewBox="0 0 40 40" role="img" aria-label="Marca Atelier Approach">
@@ -60,22 +45,13 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
       </div>
     </aside>
     <div className="min-w-0">
-      <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#090d10]/80 backdrop-blur-xl md:hidden">
-        <div className="flex items-center justify-between gap-3 px-5 py-4">
-          <Link href="/" onClick={rememberSearchPosition} className="flex shrink-0 items-center gap-2 font-semibold tracking-[-0.03em]"><AtelierMark className="size-7" /><span>Atelier <span className="text-[var(--atelier-green)]">Approach</span></span></Link>
-          <nav aria-label="Navegação principal" className="flex max-w-[62vw] gap-1 overflow-x-auto text-xs">
-            {routes.map((route) => {
-              const Icon = route.Icon;
-              const active = route.href === '/' ? pathname === '/' : pathname.startsWith(route.href);
-              return <Link key={route.href} href={route.href} scroll={route.href === '/pesquisa' ? false : undefined} onClick={rememberSearchPosition} aria-current={active ? 'page' : undefined} className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 ${active ? 'text-[var(--atelier-green)]' : 'text-white/65'}`}>
-                <Icon size={14} weight="regular" aria-hidden="true" />
-                {route.label}
-              </Link>;
-            })}
-          </nav>
-          <Link href="/configuracoes" aria-label="Meu perfil" onClick={rememberSearchPosition} className="shrink-0 rounded-lg p-2 text-[var(--atelier-green)]"><UserCircleIcon size={22} /></Link>
-        </div>
-      </header>
+      <MobileNavigation
+        pathname={pathname}
+        user={user}
+        onSignOut={onSignOut}
+        onNavigate={rememberSearchPosition}
+        brandMark={<AtelierMark className="size-7" />}
+      />
       {children}
     </div>
   </main>;
