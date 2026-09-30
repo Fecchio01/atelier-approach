@@ -13,8 +13,12 @@ export function googleMapsSearchUrl({ name, address, category, latitude, longitu
   const searchableName = hasBusinessName ? name : null;
   const addressParts = address?.split(',').map((part) => part.trim()).filter(Boolean) ?? [];
   if (searchableName && addressParts[0]?.localeCompare(searchableName, 'pt-BR', { sensitivity: 'base' }) === 0) addressParts.shift();
-  const query = searchableName
+  const query = searchableName && addressParts.length
     ? [searchableName, addressParts.join(', '), 'Brasil'].filter(Boolean).join(', ')
-    : hasCoordinates ? `${latitude},${longitude}` : addressParts.join(', ') || category || '';
+    : addressParts.length
+      ? [...addressParts, 'Brasil'].join(', ')
+      : hasCoordinates
+        ? `${latitude},${longitude}`
+        : searchableName || category || '';
   return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : null;
 }

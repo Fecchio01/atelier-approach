@@ -4,14 +4,15 @@ import { e2eCredentials } from './credentials';
 
 test.skip(process.env.RUN_LIVE_SEARCH_E2E !== '1', 'Requires live Overture data');
 
-test('real search shows named Overture places and maps searches by identity, then loads new places', async ({ page }) => {
+test('mobile search shows Overture places and searches Maps by business/address before loading more', async ({ page }) => {
   test.setTimeout(180_000);
+  await page.setViewportSize({ width: 390, height: 844 });
 
   await page.goto('/login');
   await page.getByLabel('E-mail').fill(e2eCredentials.email);
   await page.getByLabel('Senha').fill(e2eCredentials.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page).toHaveURL('http://127.0.0.1:3001/');
+  await expect(page).toHaveURL('http://127.0.0.1:3001/', { timeout: 15_000 });
 
   await page.goto('/pesquisa');
   const firstResponsePromise = page.waitForResponse((response) => response.url().includes('/api/search?') && response.request().method() === 'GET', { timeout: 100_000 });
@@ -39,8 +40,15 @@ test('real search shows named Overture places and maps searches by identity, the
     const mapLink = page.getByRole('link', { name: `Abrir ${business.name} no Google Maps` }).first();
     await expect(mapLink).toBeVisible();
     const mapUrl = new URL((await mapLink.getAttribute('href'))!);
-    expect(mapUrl.searchParams.get('query')).toContain(business.name);
-    expect(mapUrl.searchParams.get('query')).not.toBe(`${business.latitude},${business.longitude}`);
+    expect(mapUrl.origin).toBe('https://www.google.com');
+    expect(mapUrl.pathname).toBe('/maps/search/');
+    const query = mapUrl.searchParams.get('query') ?? '';
+    if (business.address) {
+      expect(query).toContain(business.name);
+      expect(query).not.toBe(`${business.latitude},${business.longitude}`);
+    } else {
+      expect(query).toBe(`${business.latitude},${business.longitude}`);
+    }
   }
 
   const nextResponsePromise = page.waitForResponse((response) => response.url().includes(`/api/search?searchId=${first.searchId}`), { timeout: 100_000 });

@@ -87,6 +87,9 @@ test('keeps dashboard, search, and profile usable without page overflow on phone
     await expect.poll(() => searchButton.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(200);
     await searchButton.click();
     await expect(page.getByRole('heading', { name: /Centro Automotivo com um nome comercial/ })).toBeVisible();
+    const googleMapsLink = page.getByRole('link', { name: /Abrir .* no Google Maps/ });
+    const googleMapsUrl = new URL((await googleMapsLink.getAttribute('href'))!);
+    expect(googleMapsUrl.searchParams.get('query')).toBe('Centro Automotivo com um nome comercial muito comprido para testar a quebra de linha em celulares, Rua de teste, 123, bairro com nome comprido, cidade brasileira, Brasil');
     await expect(page.getByRole('button', { name: 'Marcar como abordada' })).toBeVisible();
     await expectNoViewportOverflow(page);
 
