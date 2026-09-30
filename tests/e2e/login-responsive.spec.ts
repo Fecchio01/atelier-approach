@@ -21,6 +21,45 @@ test('mobile login keeps the product story and form usable on narrow screens', a
   }
 });
 
+test('mobile login shows immediate feedback and blocks repeat taps while authentication is pending', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/login');
+  await page.getByLabel('E-mail').fill('login-pending@atelier.local');
+  await page.getByLabel('Senha', { exact: true }).fill('senha-incorreta');
+
+  let releaseRequest!: () => void;
+  let reportRequestStarted!: () => void;
+  const requestGate = new Promise<void>((resolve) => { releaseRequest = resolve; });
+  const requestStarted = new Promise<void>((resolve) => { reportRequestStarted = resolve; });
+
+  await page.route('**/login', async (route) => {
+    if (route.request().method() === 'POST') {
+      reportRequestStarted();
+      await requestGate;
+    }
+    await route.continue();
+  });
+
+  const submitButton = page.locator('form button[type="submit"]');
+  const submitRequest = submitButton.click().catch((error: unknown) => error);
+  await requestStarted;
+
+  let feedbackError: unknown;
+  try {
+    await expect(submitButton).toHaveText('Entrando...', { timeout: 1_500 });
+    await expect(submitButton).toBeDisabled();
+  } catch (error) {
+    feedbackError = error;
+  } finally {
+    releaseRequest();
+  }
+
+  const submitResult = await submitRequest;
+  if (submitResult instanceof Error) throw submitResult;
+  await expect(page).toHaveURL(/\/login\?error=credentials/);
+  expect(feedbackError).toBeUndefined();
+});
+
 test('desktop login retains the split hero and authentication panel', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/login');

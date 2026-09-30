@@ -1,8 +1,9 @@
 import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
-import { ArrowRightIcon, ChartLineUpIcon, MagnifyingGlassIcon, SquaresFourIcon } from '@phosphor-icons/react/dist/ssr';
+import { ChartLineUpIcon, MagnifyingGlassIcon, SquaresFourIcon } from '@phosphor-icons/react/dist/ssr';
 
 import { signIn } from '@/lib/auth';
+import { LoginSubmitButton } from '@/components/login-submit-button';
 
 const steps = [
   { icon: MagnifyingGlassIcon, title: 'Encontre', description: 'Pesquise empresas por região e nicho.' },
@@ -75,7 +76,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <form action={authenticate} className="mt-6 space-y-4 lg:mt-9 lg:space-y-5">
             <label className="block text-sm font-medium" htmlFor="email">E-mail<input className="mt-2 block min-h-[52px] w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 text-base text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)] lg:min-h-12 lg:text-sm" id="email" name="email" type="email" autoComplete="email" placeholder="voce@empresa.com" required /></label>
             <label className="block text-sm font-medium" htmlFor="password">Senha<input className="mt-2 block min-h-[52px] w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 text-base text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)] lg:min-h-12 lg:text-sm" id="password" name="password" type="password" autoComplete="current-password" placeholder="Sua senha" required /></label>
-            <button className="group flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] hover:bg-[#c9ff72] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--atelier-green)] lg:min-h-12" type="submit">Entrar <ArrowRightIcon size={18} className="transition-transform group-hover:translate-x-1" /></button>
+            <LoginSubmitButton />
           </form>
           <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-5 text-white/40 lg:mt-8 lg:pt-6">Seu perfil e a troca de senha ficam disponíveis dentro da plataforma.</p>
         </div>
