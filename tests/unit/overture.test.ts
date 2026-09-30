@@ -1,19 +1,24 @@
 import { describe, expect, test } from 'vitest';
 import { DuckDBInstance } from '@duckdb/node-api';
 
-import { buildDuckDbExtensionDirectorySetupSql, buildOvertureQuery, buildStacFileQuery, mergeBusinessSources, normalizeOverturePlaces, planOvertureSearchAreas, searchOvertureBusinesses, splitOvertureSearchArea } from '../../lib/overture';
+import { buildDuckDbInstanceConfig, buildOvertureQuery, buildStacFileQuery, mergeBusinessSources, normalizeOverturePlaces, planOvertureSearchAreas, searchOvertureBusinesses, splitOvertureSearchArea } from '../../lib/overture';
 
 describe('Overture automotive places', () => {
-  test('configures DuckDB extensions in Vercel writable temporary storage', async () => {
-    const instance = await DuckDBInstance.create(':memory:');
+  test('configures DuckDB home and extensions in Vercel writable temporary storage at startup', async () => {
+    const instance = await DuckDBInstance.create(':memory:', buildDuckDbInstanceConfig('/tmp/atelier-approach/duckdb'));
     const connection = await instance.connect();
 
     try {
-      await connection.run(buildDuckDbExtensionDirectorySetupSql('/tmp/atelier-approach/duckdb/extensions'));
-      const reader = await connection.runAndReadAll("SELECT current_setting('extension_directory') AS extension_directory");
+      const reader = await connection.runAndReadAll(`
+        SELECT current_setting('home_directory') AS home_directory,
+          current_setting('extension_directory') AS extension_directory
+      `);
 
       expect(reader.getRowObjectsJS()).toEqual([
-        { extension_directory: '/tmp/atelier-approach/duckdb/extensions' }
+        {
+          home_directory: '/tmp/atelier-approach/duckdb',
+          extension_directory: '/tmp/atelier-approach/duckdb/extensions'
+        }
       ]);
     } finally {
       connection.closeSync();

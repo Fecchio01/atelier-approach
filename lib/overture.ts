@@ -1,4 +1,5 @@
 import { DuckDBInstance } from '@duckdb/node-api';
+import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -198,11 +199,15 @@ export function buildStacFileQuery(bounds: SearchBounds, release: string) {
   `;
 }
 
-export function buildDuckDbExtensionDirectorySetupSql(
-  extensionDirectory = join(tmpdir(), 'atelier-approach', 'duckdb', 'extensions')
+export function buildDuckDbInstanceConfig(
+  runtimeDirectory = join(tmpdir(), 'atelier-approach', 'duckdb')
 ) {
-  const escapedDirectory = extensionDirectory.replaceAll('\\', '/').replaceAll("'", "''");
-  return `SET extension_directory = '${escapedDirectory}';`;
+  const normalizedDirectory = runtimeDirectory.replaceAll('\\', '/');
+  return {
+    threads: '2',
+    home_directory: normalizedDirectory,
+    extension_directory: `${normalizedDirectory}/extensions`
+  };
 }
 
 export function buildOvertureQuery(bounds: SearchBounds, release: string, files: string[]) {
@@ -326,13 +331,13 @@ async function getLatestRelease() {
 }
 
 async function executeDuckDbQuery(sql: string): Promise<OvertureRow[]> {
-  duckDbPromise ??= DuckDBInstance.fromCache(':memory:', { threads: '2' });
+  duckDbPromise ??= createDuckDbInstance();
   const instance = await duckDbPromise;
   const connection = await instance.connect();
   let timeout: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    await connection.run(`${buildDuckDbExtensionDirectorySetupSql()} INSTALL httpfs; LOAD httpfs; INSTALL spatial; LOAD spatial; SET s3_region='us-west-2';`);
+    await connection.run("INSTALL httpfs; LOAD httpfs; INSTALL spatial; LOAD spatial; SET s3_region='us-west-2';");
     const queryPromise = connection.runAndReadAll(sql);
     const queryTimeout = new Promise<never>((_, reject) => {
       timeout = setTimeout(() => {
@@ -346,6 +351,12 @@ async function executeDuckDbQuery(sql: string): Promise<OvertureRow[]> {
     if (timeout) clearTimeout(timeout);
     connection.closeSync();
   }
+}
+
+async function createDuckDbInstance() {
+  const config = buildDuckDbInstanceConfig();
+  await mkdir(config.extension_directory, { recursive: true });
+  return DuckDBInstance.fromCache(':memory:', config);
 }
 
 function removeExpiredQueries() {
