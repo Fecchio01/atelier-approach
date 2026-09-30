@@ -46,24 +46,39 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       </div>
     </section>
 
-    <section className="relative flex min-h-dvh items-center justify-center overflow-hidden px-6 py-12 sm:px-10 lg:min-h-0 lg:px-[clamp(2.5rem,6vw,7rem)]" aria-labelledby="login-title">
+    <section className="relative flex min-h-dvh items-start justify-center overflow-hidden px-5 py-8 sm:items-center sm:px-10 sm:py-12 lg:min-h-0 lg:px-[clamp(2.5rem,6vw,7rem)]" aria-labelledby="login-title">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_0%,rgba(182,255,54,.1),transparent_45%)] lg:hidden" />
-      <div className="w-full max-w-[440px]">
-        <div className="mb-12 flex items-center gap-3 lg:hidden"><span className="flex size-10 items-center justify-center rounded-xl border border-[var(--atelier-green)]/35 bg-[var(--atelier-green)]/10 text-xl font-black text-[var(--atelier-green)]">A</span><span className="text-lg font-semibold tracking-[-0.04em]">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span></div>
-        <div className="mb-10 flex items-center gap-2 text-xs font-medium text-white/55"><span className="size-2 rounded-full bg-[var(--atelier-green)] shadow-[0_0_18px_rgba(182,255,54,.7)]" /> Acesso à equipe Atelier</div>
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--atelier-green)]">Bem-vindo de volta</p>
-        <h2 id="login-title" className="mt-3 text-4xl font-semibold tracking-[-0.055em] sm:text-5xl">Entrar na plataforma</h2>
-        <p className="mt-4 max-w-[37ch] text-sm leading-6 text-white/55">Use seu e-mail e sua senha para continuar de onde parou.</p>
+      <div className="relative w-full max-w-[440px]">
+        <div className="mb-6 flex items-center gap-3 lg:hidden"><span className="flex size-10 items-center justify-center rounded-xl border border-[var(--atelier-green)]/35 bg-[var(--atelier-green)]/10 text-xl font-black text-[var(--atelier-green)]">A</span><span className="text-lg font-semibold tracking-[-0.04em]">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span></div>
 
-        {params.error === 'credentials' && <p role="alert" className="mt-7 rounded-xl border border-red-400/25 bg-red-400/10 px-4 py-3 text-sm text-red-100">E-mail ou senha não conferem. Tente novamente.</p>}
-        {params.password === 'updated' && <p role="status" className="mt-7 rounded-xl border border-[var(--atelier-green)]/25 bg-[var(--atelier-green)]/10 px-4 py-3 text-sm text-[var(--atelier-green)]">Senha atualizada. Entre com a nova senha.</p>}
+        <div className="mb-6 lg:hidden">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--atelier-green)]">Pesquisa · CRM · Resultados</p>
+          <h1 className="mt-3 max-w-[15ch] text-balance text-[clamp(1.85rem,8vw,2.35rem)] font-semibold leading-[1.04] tracking-[-0.065em]">Seu próximo negócio começa aqui.</h1>
+          <p className="mt-2 max-w-[42ch] text-sm leading-5 text-white/55">Da primeira pesquisa ao fechamento, acompanhe cada oportunidade com clareza.</p>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {steps.map((step) => <div key={step.title} className="min-w-0 rounded-xl border border-white/10 bg-white/[0.025] px-2 py-2.5">
+              <step.icon size={17} weight="duotone" className="text-[var(--atelier-green)]" />
+              <h2 className="mt-1.5 truncate text-[11px] font-semibold text-white/85">{step.title}</h2>
+            </div>)}
+          </div>
+        </div>
 
-        <form action={authenticate} className="mt-9 space-y-5">
-          <label className="block text-sm font-medium" htmlFor="email">E-mail<input className="mt-2 block min-h-12 w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)]" id="email" name="email" type="email" autoComplete="email" placeholder="voce@empresa.com" required /></label>
-          <label className="block text-sm font-medium" htmlFor="password">Senha<input className="mt-2 block min-h-12 w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)]" id="password" name="password" type="password" autoComplete="current-password" placeholder="Sua senha" required /></label>
-          <button className="group flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] hover:bg-[#c9ff72] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--atelier-green)]" type="submit">Entrar <ArrowRightIcon size={18} className="transition-transform group-hover:translate-x-1" /></button>
-        </form>
-        <p className="mt-8 border-t border-white/10 pt-6 text-xs leading-5 text-white/40">Seu perfil e a troca de senha ficam disponíveis dentro da plataforma.</p>
+        <div className="rounded-2xl border border-white/10 bg-[#11161b]/75 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-7 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+          <div className="mb-5 flex items-center gap-2 text-xs font-medium text-white/55 lg:mb-10"><span className="size-2 rounded-full bg-[var(--atelier-green)] shadow-[0_0_18px_rgba(182,255,54,.7)]" /> Acesso à equipe Atelier</div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--atelier-green)]">Bem-vindo de volta</p>
+          <h2 id="login-title" className="mt-3 text-[clamp(1.75rem,7vw,2.2rem)] font-semibold tracking-[-0.055em] lg:text-5xl">Entrar na plataforma</h2>
+          <p className="mt-3 max-w-[37ch] text-sm leading-5 text-white/55 lg:mt-4 lg:leading-6">Use seu e-mail e sua senha para continuar de onde parou.</p>
+
+          {params.error === 'credentials' && <p role="alert" className="mt-5 rounded-xl border border-red-400/25 bg-red-400/10 px-4 py-3 text-sm text-red-100 lg:mt-7">E-mail ou senha não conferem. Tente novamente.</p>}
+          {params.password === 'updated' && <p role="status" className="mt-5 rounded-xl border border-[var(--atelier-green)]/25 bg-[var(--atelier-green)]/10 px-4 py-3 text-sm text-[var(--atelier-green)] lg:mt-7">Senha atualizada. Entre com a nova senha.</p>}
+
+          <form action={authenticate} className="mt-6 space-y-4 lg:mt-9 lg:space-y-5">
+            <label className="block text-sm font-medium" htmlFor="email">E-mail<input className="mt-2 block min-h-[52px] w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 text-base text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)] lg:min-h-12 lg:text-sm" id="email" name="email" type="email" autoComplete="email" placeholder="voce@empresa.com" required /></label>
+            <label className="block text-sm font-medium" htmlFor="password">Senha<input className="mt-2 block min-h-[52px] w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 text-base text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)] lg:min-h-12 lg:text-sm" id="password" name="password" type="password" autoComplete="current-password" placeholder="Sua senha" required /></label>
+            <button className="group flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] hover:bg-[#c9ff72] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--atelier-green)] lg:min-h-12" type="submit">Entrar <ArrowRightIcon size={18} className="transition-transform group-hover:translate-x-1" /></button>
+          </form>
+          <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-5 text-white/40 lg:mt-8 lg:pt-6">Seu perfil e a troca de senha ficam disponíveis dentro da plataforma.</p>
+        </div>
       </div>
     </section>
   </main>;
