@@ -23,6 +23,15 @@ test('mobile search shows Overture places and searches Maps by business/address 
   expect(first.businesses.length).toBeGreaterThanOrEqual(5);
   expect(first.hasMore).toBe(true);
   expect(first.businesses.every((business: { source: string }) => business.source === 'Overture')).toBe(true);
+  expect(new Set(first.businesses.map((business: { osmId: string }) => business.osmId)).size).toBe(first.businesses.length);
+  for (const business of first.businesses) {
+    expect(business.name.trim()).not.toBe('');
+    expect(business.name).not.toMatch(/nome comercial não informado|^(car wash|oficina mecânica|lavagem automotiva)$/i);
+    expect(business.latitude).toBeGreaterThan(-34);
+    expect(business.latitude).toBeLessThan(6);
+    expect(business.longitude).toBeGreaterThan(-74);
+    expect(business.longitude).toBeLessThan(-34);
+  }
   const businessWithSite = first.businesses.find((business: { website: string | null }) => business.website);
   expect(businessWithSite).toBeTruthy();
   const siteLink = page.getByRole('link', { name: `Abrir site de ${businessWithSite.name}` }).first();
