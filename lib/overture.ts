@@ -1,4 +1,6 @@
 import { DuckDBInstance } from '@duckdb/node-api';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { isGenericBusinessName } from './osm';
 import type { ExternalBusiness } from './osm';
@@ -196,6 +198,13 @@ export function buildStacFileQuery(bounds: SearchBounds, release: string) {
   `;
 }
 
+export function buildDuckDbExtensionDirectorySetupSql(
+  extensionDirectory = join(tmpdir(), 'atelier-approach', 'duckdb', 'extensions')
+) {
+  const escapedDirectory = extensionDirectory.replaceAll('\\', '/').replaceAll("'", "''");
+  return `SET extension_directory = '${escapedDirectory}';`;
+}
+
 export function buildOvertureQuery(bounds: SearchBounds, release: string, files: string[]) {
   if (!/^\d{4}-\d{2}-\d{2}\.\d+$/.test(release)) throw new Error('Versão de dados Overture inválida.');
   validateBounds(bounds);
@@ -323,7 +332,7 @@ async function executeDuckDbQuery(sql: string): Promise<OvertureRow[]> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    await connection.run("INSTALL httpfs; LOAD httpfs; INSTALL spatial; LOAD spatial; SET s3_region='us-west-2';");
+    await connection.run(`${buildDuckDbExtensionDirectorySetupSql()} INSTALL httpfs; LOAD httpfs; INSTALL spatial; LOAD spatial; SET s3_region='us-west-2';`);
     const queryPromise = connection.runAndReadAll(sql);
     const queryTimeout = new Promise<never>((_, reject) => {
       timeout = setTimeout(() => {

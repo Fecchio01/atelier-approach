@@ -95,6 +95,7 @@ describe('GET /api/search', () => {
   });
 
   test('does not disguise Overture failures by returning OpenStreetMap businesses', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     mocks.startSearch.mockResolvedValue({
       businesses: [business('osm-fallback', 'Empresa que não deve aparecer', { source: 'OpenStreetMap' })],
       searchId: 'osm-fallback',
@@ -102,11 +103,32 @@ describe('GET /api/search', () => {
     });
     mocks.searchOvertureArea.mockRejectedValue(new Error('Overture unavailable'));
 
-    const response = await GET(request());
+    try {
+      const response = await GET(request());
 
-    expect(response.status).toBe(503);
-    expect(mocks.startSearch).not.toHaveBeenCalled();
-    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('Overture') });
+      expect(response.status).toBe(503);
+      expect(mocks.startSearch).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('Overture') });
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  test('logs the failing Overture area and original error for production diagnosis', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mocks.searchOvertureArea.mockRejectedValue(new Error('extension directory is read-only'));
+
+    try {
+      const response = await GET(request());
+
+      expect(response.status).toBe(503);
+      expect(log).toHaveBeenCalledWith('[api/search] Overture area query failed', {
+        area: FIRST_AREA,
+        error: expect.objectContaining({ name: 'Error', message: 'extension directory is read-only' })
+      });
+    } finally {
+      log.mockRestore();
+    }
   });
 
   test('reports when region bounds cannot be resolved instead of switching data sources', async () => {

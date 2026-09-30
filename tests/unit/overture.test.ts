@@ -1,8 +1,26 @@
 import { describe, expect, test } from 'vitest';
+import { DuckDBInstance } from '@duckdb/node-api';
 
-import { buildOvertureQuery, buildStacFileQuery, mergeBusinessSources, normalizeOverturePlaces, planOvertureSearchAreas, searchOvertureBusinesses, splitOvertureSearchArea } from '../../lib/overture';
+import { buildDuckDbExtensionDirectorySetupSql, buildOvertureQuery, buildStacFileQuery, mergeBusinessSources, normalizeOverturePlaces, planOvertureSearchAreas, searchOvertureBusinesses, splitOvertureSearchArea } from '../../lib/overture';
 
 describe('Overture automotive places', () => {
+  test('configures DuckDB extensions in Vercel writable temporary storage', async () => {
+    const instance = await DuckDBInstance.create(':memory:');
+    const connection = await instance.connect();
+
+    try {
+      await connection.run(buildDuckDbExtensionDirectorySetupSql('/tmp/atelier-approach/duckdb/extensions'));
+      const reader = await connection.runAndReadAll("SELECT current_setting('extension_directory') AS extension_directory");
+
+      expect(reader.getRowObjectsJS()).toEqual([
+        { extension_directory: '/tmp/atelier-approach/duckdb/extensions' }
+      ]);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
   test('starts a national search around major cities and keeps other areas available', () => {
     const areas = planOvertureSearchAreas({ west: -73.99, south: -33.75, east: -34.79, north: 5.27 }, true);
 

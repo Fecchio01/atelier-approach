@@ -163,8 +163,14 @@ async function consumeOverturePage(savedSearch: SavedSearch) {
         const children = splitOvertureSearchArea(area);
         savedSearch.overtureAreas.splice(Math.min(8, savedSearch.overtureAreas.length), 0, ...children);
       }
-    } catch {
+    } catch (error) {
       failedAreaQueries += 1;
+      console.error('[api/search] Overture area query failed', {
+        area,
+        error: error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : { message: String(error) }
+      });
       savedSearch.overtureAreas.unshift(...splitOvertureSearchArea(area));
     }
   }
