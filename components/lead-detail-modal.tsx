@@ -32,11 +32,14 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const returnButtonRef = useRef<HTMLButtonElement>(null);
+  const discardButtonRef = useRef<HTMLButtonElement>(null);
   const confirmCancelRef = useRef<HTMLButtonElement>(null);
   const wasConfirmingRef = useRef(false);
+  const confirmationFocusTarget = useRef<'RETURN' | 'DISCARD'>('RETURN');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReturn, setConfirmingReturn] = useState(false);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [followUpAt, setFollowUpAt] = useState<Record<string, string>>({});
   const [saleValues, setSaleValues] = useState<Record<string, string>>({});
   const [mrrValues, setMrrValues] = useState<Record<string, string>>({});
@@ -60,14 +63,15 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
   }, [lead.id, lead.stage]);
 
   useEffect(() => {
-    if (confirmingReturn) {
+    if (confirmingReturn || confirmingDiscard) {
       confirmCancelRef.current?.focus();
       wasConfirmingRef.current = true;
     } else if (wasConfirmingRef.current) {
-      returnButtonRef.current?.focus();
+      const target = confirmationFocusTarget.current === 'DISCARD' ? discardButtonRef : returnButtonRef;
+      target.current?.focus();
       wasConfirmingRef.current = false;
     }
-  }, [confirmingReturn]);
+  }, [confirmingReturn, confirmingDiscard]);
 
   async function updateLead(id: string, details: Record<string, unknown>) {
     setSavingId(id);
@@ -132,9 +136,15 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
     await updateLead(id, { activity: { channel, note } });
   }
 
-  async function discardLead(id: string) {
-    if (!window.confirm('Descartar esta empresa do funil?')) return;
+  function discardLead() {
+    confirmationFocusTarget.current = 'DISCARD';
+    setError(null);
+    setConfirmingDiscard(true);
+  }
+
+  async function confirmDiscardLead(id: string) {
     await updateLead(id, { stage: 'DISCARDED' });
+    setConfirmingDiscard(false);
   }
 
   async function restoreToResearch(id: string) {
@@ -210,20 +220,20 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
           </div>
           <button type="button" disabled={savingId === lead.id} onClick={() => closeLead(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">Fechar negócio</button>
         </div>
-        {lead.stage !== 'DISCARDED' ? <button type="button" disabled={savingId === lead.id} onClick={() => discardLead(lead.id)} className="min-h-11 rounded-lg border border-red-300/45 px-3 text-sm text-red-200 disabled:opacity-60 md:col-span-2">Descartar empresa</button> : null}
+        {lead.stage !== 'DISCARDED' ? <button ref={discardButtonRef} type="button" disabled={savingId === lead.id} onClick={discardLead} className="min-h-11 rounded-lg border border-red-300/45 px-3 text-sm text-red-200 disabled:opacity-60 md:col-span-2">Descartar empresa</button> : null}
         </section> : null}
       </div>
     );
   };
 
-  return <dialog ref={dialogRef} aria-modal="true" aria-labelledby="lead-detail-title" data-testid="lead-modal-backdrop" onCancel={(event) => { event.preventDefault(); if (confirmingReturn) { if (savingId !== lead.id) setConfirmingReturn(false); } else onClose(); }} onClick={(event) => { if (event.target === event.currentTarget && !confirmingReturn) onClose(); }} className="mobile-safe-area fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-center justify-center bg-transparent text-white backdrop:bg-[#030506]/80 backdrop:backdrop-blur-[6px] open:flex">
+  return <dialog ref={dialogRef} aria-modal="true" aria-labelledby="lead-detail-title" data-testid="lead-modal-backdrop" onCancel={(event) => { event.preventDefault(); if (confirmingReturn || confirmingDiscard) { if (savingId !== lead.id) { setConfirmingReturn(false); setConfirmingDiscard(false); } } else onClose(); }} onClick={(event) => { if (event.target === event.currentTarget && !confirmingReturn && !confirmingDiscard) onClose(); }} className="mobile-safe-area fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-center justify-center bg-transparent text-white backdrop:bg-[#030506]/80 backdrop:backdrop-blur-[6px] open:flex">
     <div className="relative flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/[0.14] bg-[#10161b] shadow-[0_28px_100px_rgba(0,0,0,.55)]">
-      <div inert={confirmingReturn} className="flex min-h-0 flex-col">
+      <div inert={confirmingReturn || confirmingDiscard} className="flex min-h-0 flex-col">
       <header className="flex items-start justify-between gap-5 border-b border-white/[0.09] px-6 py-6 sm:px-8">
         <div className="min-w-0"><p className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50"><span className="h-2 w-2 rounded-full bg-[var(--atelier-green)]" />{stageLabels[normalizeFunnelStage(lead.stage)]}</p><h2 id="lead-detail-title" className="break-words text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">{displayCompanyName(lead.name)}</h2><p className="mt-2 text-xs text-white/40">Detalhes, contatos e próxima ação</p></div>
         <button ref={closeRef} type="button" aria-label="Fechar detalhes" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/[0.14] text-lg text-white/60 hover:bg-white/[0.06] hover:text-white"><span aria-hidden="true">×</span></button>
       </header>
-      {error && !confirmingReturn ? <p role="alert" className="border-b border-red-300/15 bg-red-300/5 px-6 py-3 text-sm text-red-200">{error}</p> : null}
+      {error && !confirmingReturn && !confirmingDiscard ? <p role="alert" className="border-b border-red-300/15 bg-red-300/5 px-6 py-3 text-sm text-red-200">{error}</p> : null}
       <div className="atelier-scrollbar min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-8">{renderLead(lead)}</div>
       </div>
       {confirmingReturn ? <div className="absolute inset-0 z-10 grid place-items-center bg-[#070b0e]/85 p-4 backdrop-blur-[4px]">
@@ -235,6 +245,18 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
           <div className="mt-6 grid gap-2 sm:grid-cols-2">
             <button ref={confirmCancelRef} type="button" disabled={savingId === lead.id} onClick={() => { setConfirmingReturn(false); setError(null); }} className="min-h-11 rounded-lg border border-white/[0.17] px-4 text-sm font-semibold text-white/75 hover:bg-white/[0.06] active:scale-[0.98] disabled:opacity-50">Cancelar</button>
             <button type="button" disabled={savingId === lead.id} onClick={() => restoreToResearch(lead.id)} className="min-h-11 rounded-lg border border-red-300/45 bg-red-300/10 px-4 text-sm font-semibold text-red-100 hover:bg-red-300/15 active:scale-[0.98] disabled:opacity-50">{savingId === lead.id ? 'Devolvendo…' : 'Confirmar devolução'}</button>
+          </div>
+        </section>
+      </div> : null}
+      {confirmingDiscard ? <div className="absolute inset-0 z-10 grid place-items-center bg-[#070b0e]/85 p-4 backdrop-blur-[4px]">
+        <section role="alertdialog" aria-modal="true" aria-labelledby="discard-confirm-title" aria-describedby="discard-confirm-description" className="w-full max-w-md rounded-2xl border border-white/[0.14] bg-[#151c20] p-6 shadow-[0_24px_70px_rgba(0,0,0,.42)] sm:p-7">
+          <div className="mb-5 grid h-11 w-11 place-items-center rounded-xl border border-red-300/25 bg-red-300/[0.07] text-red-200"><TrashIcon size={22} weight="regular" aria-hidden="true" /></div>
+          <h3 id="discard-confirm-title" className="text-lg font-semibold tracking-[-0.025em]">Descartar empresa do funil?</h3>
+          <p id="discard-confirm-description" className="mt-2 text-sm leading-relaxed text-white/60">{displayCompanyName(lead.name)} sairá das etapas ativas e ficará na Lixeira. O registro e o histórico serão preservados; ela não voltará para a pesquisa.</p>
+          {error ? <p role="alert" className="mt-4 rounded-lg border border-red-300/30 bg-red-300/[0.07] px-3 py-2 text-sm text-red-200">{error}</p> : null}
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+            <button ref={confirmCancelRef} type="button" disabled={savingId === lead.id} onClick={() => { setConfirmingDiscard(false); setError(null); }} className="min-h-11 rounded-lg border border-white/[0.17] px-4 text-sm font-semibold text-white/75 hover:bg-white/[0.06] active:scale-[0.98] disabled:opacity-50">Cancelar</button>
+            <button type="button" disabled={savingId === lead.id} onClick={() => confirmDiscardLead(lead.id)} className="min-h-11 rounded-lg border border-red-300/45 bg-red-300/10 px-4 text-sm font-semibold text-red-100 hover:bg-red-300/15 active:scale-[0.98] disabled:opacity-50">{savingId === lead.id ? 'Descartando…' : 'Confirmar descarte'}</button>
           </div>
         </section>
       </div> : null}
