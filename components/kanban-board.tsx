@@ -77,26 +77,28 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
         <span className={`rounded-md px-2 py-0.5 text-[11px] tabular-nums ${stage === 'WON' ? 'bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]' : 'bg-white/5 text-white/45'}`}>{stageLeads.length}</span>
       </header>
       {description ? <p className="mb-3 px-1.5 text-xs leading-relaxed text-white/45">{description}</p> : null}
-      <div className="grid gap-3">
-        {stageLeads.map((lead) => {
-          const latest = lead.activities[0];
-          const channels = [[lead.whatsapp, 'WhatsApp'], [lead.instagram, 'Instagram'], [lead.website, 'Site'], [lead.phone, 'Telefone']].filter(([value]) => Boolean(value));
-          return <button key={lead.id} id={`lead-${lead.id}`} data-lead-id={lead.id} type="button" aria-label={`Abrir detalhes de ${displayCompanyName(lead.name)}`} onClick={() => setSelectedLeadId(lead.id)} className="group grid min-h-[84px] w-full gap-3 rounded-lg border border-white/[0.075] bg-[#151b20] p-3 text-left shadow-[0_10px_24px_rgba(0,0,0,.12)] hover:border-white/20 hover:bg-[#192127] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
-            <span className="line-clamp-2 break-words text-[13px] font-semibold leading-snug text-white/90">{displayCompanyName(lead.name)}</span>
-            <span className="flex items-center justify-between gap-2 text-[10px] text-white/40">
-              <span className="flex min-w-0 items-center gap-1.5"><span className={`h-2 w-2 shrink-0 rounded-full ${channels.length ? 'bg-[var(--atelier-green)]' : 'bg-white/35'}`} />{latest ? <time dateTime={latest.createdAt}>Há atividade</time> : 'Sem contato'}</span>
-              <span aria-label="Canais disponíveis" className="shrink-0 text-white/45">{channels.length ? channels.length === 1 ? channels[0][1] : `${channels.length} canais` : ''}</span>
-            </span>
-          </button>;
-        })}
-        {!stageLeads.length ? <p className="rounded-xl border border-dashed border-white/[0.07] px-3 py-8 text-center text-xs text-white/25">Nenhuma empresa</p> : null}
+      <div data-testid="crm-stage-lead-list" className="atelier-scrollbar min-h-0 max-h-[clamp(16rem,65dvh,36rem)] overflow-y-auto overscroll-y-contain">
+        <div className="grid gap-3">
+          {stageLeads.map((lead) => {
+            const latest = lead.activities[0];
+            const channels = [[lead.whatsapp, 'WhatsApp'], [lead.instagram, 'Instagram'], [lead.website, 'Site'], [lead.phone, 'Telefone']].filter(([value]) => Boolean(value));
+            return <button key={lead.id} id={`lead-${lead.id}`} data-lead-id={lead.id} type="button" aria-label={`Abrir detalhes de ${displayCompanyName(lead.name)}`} onClick={() => setSelectedLeadId(lead.id)} className="group grid min-h-[84px] w-full gap-3 rounded-lg border border-white/[0.075] bg-[#151b20] p-3 text-left shadow-[0_10px_24px_rgba(0,0,0,.12)] hover:border-white/20 hover:bg-[#192127] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
+              <span className="line-clamp-2 break-words text-[13px] font-semibold leading-snug text-white/90">{displayCompanyName(lead.name)}</span>
+              <span className="flex items-center justify-between gap-2 text-[10px] text-white/40">
+                <span className="flex min-w-0 items-center gap-1.5"><span className={`h-2 w-2 shrink-0 rounded-full ${channels.length ? 'bg-[var(--atelier-green)]' : 'bg-white/35'}`} />{latest ? <time dateTime={latest.createdAt}>Há atividade</time> : 'Sem contato'}</span>
+                <span aria-label="Canais disponíveis" className="shrink-0 text-white/45">{channels.length ? channels.length === 1 ? channels[0][1] : `${channels.length} canais` : ''}</span>
+              </span>
+            </button>;
+          })}
+          {!stageLeads.length ? <p className="rounded-xl border border-dashed border-white/[0.07] px-3 py-8 text-center text-xs text-white/25">Nenhuma empresa</p> : null}
+        </div>
       </div>
     </section>;
   }
 
   return <>
     <p className="mb-2 flex items-center gap-2 text-xs text-white/40 md:hidden"><ArrowsLeftRightIcon size={15} aria-hidden="true" />Deslize para ver todas as etapas</p>
-    <div role="region" aria-label="Funil CRM" tabIndex={0} className="atelier-scrollbar min-w-0 max-w-full touch-pan-x overscroll-x-contain overflow-x-auto pb-4 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+    <div role="region" aria-label="Funil CRM" tabIndex={0} className="atelier-scrollbar min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto pb-4 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
       <div className="grid grid-cols-7 items-start gap-2.5" style={{ minWidth: '1540px' }}>{mainFunnelStages.map((stage) => renderColumn(stage))}</div>
     </div>
     <section className="mt-9 border-t border-white/[0.07] pt-6" aria-label="Outras situações">

@@ -89,6 +89,53 @@ for (const viewport of [
   { label: 'mobile', width: 390, height: 844 },
   { label: 'desktop', width: 1440, height: 900 }
 ]) {
+  test(`keeps the ${viewport.label} stage list independently scrollable and the trash reachable`, async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await signIn(page);
+
+    const suffix = randomUUID();
+    const leadIds: string[] = [];
+    try {
+      for (let index = 1; index <= 10; index += 1) {
+        leadIds.push(await createApproach(page, `Rolagem CRM ${index} ${suffix}`, `overture/scroll-${suffix}-${index}`));
+      }
+
+      await page.goto('/crm');
+      const approached = page.getByRole('region', { name: 'Abordado', exact: true });
+      const leadList = approached.getByTestId('crm-stage-lead-list');
+      await expect(approached.locator('[data-lead-id]')).toHaveCount(10);
+      await expect.poll(() => leadList.evaluate((element) => {
+        return element.scrollHeight > element.clientHeight;
+      })).toBe(true);
+
+      const lastLead = approached.locator('[data-lead-id]').last();
+      await lastLead.scrollIntoViewIfNeeded();
+      await expect.poll(() => leadList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      await lastLead.click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.keyboard.press('Escape');
+
+      if (viewport.label === 'mobile') {
+        const board = page.getByRole('region', { name: 'Funil CRM' });
+        await expect.poll(() => board.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+        await expect.poll(() => board.evaluate((element) => getComputedStyle(element).touchAction)).toBe('auto');
+      }
+
+      const trash = page.getByRole('region', { name: 'Lixeira', exact: true });
+      await trash.scrollIntoViewIfNeeded();
+      await expect(trash).toBeVisible();
+      await expect(approached.locator('[data-lead-id]')).toHaveCount(10);
+    } finally {
+      await deleteTestLeads(leadIds);
+    }
+  });
+}
+
+for (const viewport of [
+  { label: 'mobile', width: 390, height: 844 },
+  { label: 'desktop', width: 1440, height: 900 }
+]) {
   test(`discard confirmation moves a lead to the persistent trash on ${viewport.label}`, async ({ page }) => {
     test.setTimeout(60_000);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
