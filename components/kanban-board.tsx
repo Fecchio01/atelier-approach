@@ -77,7 +77,7 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
         <span className={`rounded-md px-2 py-0.5 text-[11px] tabular-nums ${stage === 'WON' ? 'bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]' : 'bg-white/5 text-white/45'}`}>{stageLeads.length}</span>
       </header>
       {description ? <p className="mb-3 px-1.5 text-xs leading-relaxed text-white/45">{description}</p> : null}
-      <div data-testid="crm-stage-lead-list" className="atelier-scrollbar min-h-0 max-h-[clamp(16rem,65dvh,36rem)] overflow-y-auto overscroll-y-contain">
+      <div data-testid="crm-stage-lead-list" className="atelier-scrollbar min-h-0 max-h-[clamp(16rem,65dvh,36rem)] overflow-y-auto overscroll-y-contain scroll-p-3 p-2">
         <div className="grid gap-3">
           {stageLeads.map((lead) => {
             const latest = lead.activities[0];

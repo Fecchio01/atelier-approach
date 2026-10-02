@@ -163,7 +163,47 @@ for (const viewport of [
         return element.scrollHeight > element.clientHeight;
       })).toBe(true);
 
+      const assertKeyboardFocusFitsScrollport = async (card: ReturnType<typeof approached.locator>) => {
+        const geometry = await card.evaluate((element) => {
+          const scrollport = element.closest('[data-testid="crm-stage-lead-list"]');
+          if (!scrollport) throw new Error('CRM lead card has no scrollport.');
+          const style = getComputedStyle(element);
+          const cardRect = element.getBoundingClientRect();
+          const portRect = scrollport.getBoundingClientRect();
+          const outline = Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+          return {
+            focusVisible: element.matches(':focus-visible'),
+            outlineWidth: Number.parseFloat(style.outlineWidth),
+            outlineOffset: Number.parseFloat(style.outlineOffset),
+            card: { left: cardRect.left - outline, right: cardRect.right + outline, top: cardRect.top - outline, bottom: cardRect.bottom + outline },
+            port: { left: portRect.left, right: portRect.right, top: portRect.top, bottom: portRect.bottom }
+          };
+        });
+        expect(geometry.focusVisible).toBe(true);
+        expect(geometry.outlineWidth + geometry.outlineOffset).toBeGreaterThan(0);
+        expect(geometry.card.left).toBeGreaterThanOrEqual(geometry.port.left);
+        expect(geometry.card.right).toBeLessThanOrEqual(geometry.port.right);
+        expect(geometry.card.top).toBeGreaterThanOrEqual(geometry.port.top);
+        expect(geometry.card.bottom).toBeLessThanOrEqual(geometry.port.bottom);
+      };
+
+      const focusByKeyboard = async (card: ReturnType<typeof approached.locator>) => {
+        await testPage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        for (let tab = 0; tab < 200; tab += 1) {
+          await testPage.keyboard.press('Tab');
+          if (await card.evaluate((element) => element === document.activeElement)) return;
+        }
+        throw new Error('Could not reach CRM lead card using keyboard navigation.');
+      };
+
+      const firstLead = approached.locator('[data-lead-id]').first();
+      await focusByKeyboard(firstLead);
+      await assertKeyboardFocusFitsScrollport(firstLead);
+
       const lastLead = approached.locator('[data-lead-id]').last();
+      await focusByKeyboard(lastLead);
+      await assertKeyboardFocusFitsScrollport(lastLead);
+
       await lastLead.scrollIntoViewIfNeeded();
       await expect.poll(() => leadList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
       await lastLead.click();

@@ -116,6 +116,8 @@ test('CRM keeps details private to an accessible modal and preserves lead action
     await expect(modal).toHaveCount(0);
     await expect(card).toHaveCount(0);
     await page.reload();
+    await expect(page).toHaveURL(/\/crm(?:\?|$)/);
+    await expect(page.getByRole('region', { name: 'Funil CRM', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: `Abrir detalhes de ${name}` })).toHaveCount(0);
   } finally {
     await page.request.delete(`/api/leads/${lead.id}`);
