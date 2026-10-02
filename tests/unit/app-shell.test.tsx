@@ -6,8 +6,8 @@ vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
 vi.mock('next/link', async () => {
   const { createElement } = await import('react');
   return {
-    default: ({ href, children, scroll: _scroll, ...props }: React.PropsWithChildren<{ href: string; scroll?: boolean }>) =>
-      createElement('a', { href, ...props }, children)
+    default: ({ href, children, scroll: _scroll, prefetch, ...props }: React.PropsWithChildren<{ href: string; scroll?: boolean; prefetch?: boolean }>) =>
+      createElement('a', { href, ...props, 'data-prefetch': String(prefetch) }, children)
   };
 });
 
@@ -54,5 +54,21 @@ describe('AppShell brand navigation', () => {
     expect(desktopSidebar).toContain('Sair da conta');
     expect(desktopSidebar?.match(/<a\b[^>]*aria-current=/g)).toHaveLength(1);
     expect(desktopNavigation?.match(/href="\/(?:crm|pesquisa|metas|relatorios)?"/g)).toHaveLength(5);
+  });
+
+  test('does not prefetch every database-backed destination from desktop and mobile navigation', () => {
+    vi.stubGlobal('React', React);
+    const markup = renderToStaticMarkup(
+      React.createElement(AppShell, {
+        user: { name: 'Carlos Almeida', email: 'carlos@example.com' },
+        onSignOut: async () => undefined,
+        children: React.createElement('div', null, 'Conteúdo')
+      })
+    );
+    const desktopNavigation = markup.match(/<nav aria-label="Navegação principal" class="[^"]*">([\s\S]*?)<\/nav>/)?.[1] ?? '';
+    const mobileNavigation = markup.match(/<nav aria-label="Navegação principal no menu mobile" class="[^"]*">([\s\S]*?)<\/nav>/)?.[1] ?? '';
+
+    expect(desktopNavigation.match(/data-prefetch="false"/g) ?? []).toHaveLength(5);
+    expect(mobileNavigation.match(/data-prefetch="false"/g) ?? []).toHaveLength(5);
   });
 });

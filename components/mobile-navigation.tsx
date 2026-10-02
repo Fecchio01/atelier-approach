@@ -67,7 +67,7 @@ export function MobileNavigation({
   return <>
     <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#090d10]/90 backdrop-blur-xl md:hidden">
       <div className="flex min-h-16 items-center justify-between gap-2 px-4 py-2">
-        <Link href="/" onClick={onNavigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
+        <Link href="/" prefetch={false} onClick={onNavigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
           {brandMark}
           <span className="truncate text-sm">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span>
         </Link>
@@ -82,7 +82,7 @@ export function MobileNavigation({
           >
             {isOpen ? <XIcon size={22} aria-hidden="true" /> : <ListIcon size={22} aria-hidden="true" />}
           </button>
-          <Link href="/configuracoes" aria-label="Meu perfil" onClick={onNavigate} className="flex size-11 items-center justify-center rounded-lg text-[var(--atelier-green)] hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+          <Link href="/configuracoes" prefetch={false} aria-label="Meu perfil" onClick={onNavigate} className="flex size-11 items-center justify-center rounded-lg text-[var(--atelier-green)] hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
             <UserCircleIcon size={23} aria-hidden="true" />
           </Link>
         </div>
@@ -103,7 +103,7 @@ export function MobileNavigation({
       <div className="flex h-full min-h-0">
         <aside data-mobile-navigation-panel className="flex h-full w-[min(20rem,calc(100vw-3.5rem))] min-w-0 flex-col border-r border-white/[0.09] bg-[#0c1114] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[12px_0_40px_rgba(0,0,0,0.24)]">
           <div className="flex min-h-12 items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
-            <Link href="/" onClick={navigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
+            <Link href="/" prefetch={false} onClick={navigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
               {brandMark}
               <span className="truncate text-sm">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span>
             </Link>
@@ -119,6 +119,7 @@ export function MobileNavigation({
               return <Link
                 key={route.href}
                 href={route.href}
+                prefetch={false}
                 scroll={route.href === '/pesquisa' ? false : undefined}
                 onClick={navigate}
                 aria-current={active ? 'page' : undefined}
@@ -131,7 +132,7 @@ export function MobileNavigation({
           </nav>
 
           <div className="mt-auto border-t border-white/[0.08] pt-4">
-            <Link href="/configuracoes" onClick={navigate} aria-current={pathname.startsWith('/configuracoes') ? 'page' : undefined} className="flex min-h-14 items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/[0.05]">
+            <Link href="/configuracoes" prefetch={false} onClick={navigate} aria-current={pathname.startsWith('/configuracoes') ? 'page' : undefined} className="flex min-h-14 items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/[0.05]">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--atelier-green)]/15 text-sm font-semibold text-[var(--atelier-green)]">{initials}</span>
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{user.name}</span><span className="block truncate text-xs text-white/45">Meu perfil · {user.email}</span></span>
             </Link>
