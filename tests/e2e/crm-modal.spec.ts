@@ -12,19 +12,24 @@ test('CRM keeps the original stage when updating a lead fails', async ({ page })
 
   const name = `Falha ${randomUUID().slice(0, 8)} PATCH`;
   const osmId = `node/patch-failure-${randomUUID()}`;
-  const response = await page.request.post('/api/leads', { data: {
-    business: { osmId, name, phone: null, instagram: null, website: null },
-    channel: 'WHATSAPP'
-  } });
-  expect(response.status()).toBe(201);
-  const { lead } = await response.json() as { lead: { id: string; stage: string } };
   const databaseUrl = process.env.TEST_DATABASE_URL;
   if (!databaseUrl || new URL(databaseUrl).searchParams.get('schema') !== 'atelier_test') {
     throw new Error('TEST_DATABASE_URL must point to the isolated atelier_test schema.');
   }
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+  let leadId: string | null = null;
 
   try {
+    const response = await page.request.post('/api/leads', { data: {
+      business: { osmId, name, phone: null, instagram: null, website: null },
+      channel: 'WHATSAPP'
+    } });
+    const payload = await response.json() as { lead?: { id?: string; stage?: string } };
+    leadId = payload.lead?.id ?? null;
+    expect(response.status()).toBe(201);
+    expect(leadId).toBeTruthy();
+    if (!leadId) throw new Error('Lead creation response did not include an ID.');
+    const lead = { id: leadId, stage: payload.lead?.stage };
     expect(lead.stage).toBe('CONTACTED');
     await page.route(`**/api/leads/${lead.id}`, async (route) => {
       if (route.request().method() === 'PATCH') {
@@ -49,8 +54,11 @@ test('CRM keeps the original stage when updating a lead fails', async ({ page })
     await expect(page.getByRole('region', { name: 'Qualificado', exact: true }).getByRole('button', { name: `Abrir detalhes de ${name}` })).toHaveCount(0);
     await expect.poll(async () => (await prisma.lead.findUnique({ where: { id: lead.id }, select: { stage: true } }))?.stage).toBe('CONTACTED');
   } finally {
-    await page.request.delete(`/api/leads/${lead.id}`);
-    await prisma.$disconnect();
+    try {
+      if (leadId) await prisma.lead.deleteMany({ where: { id: leadId } });
+    } finally {
+      await prisma.$disconnect();
+    }
   }
 });
 
