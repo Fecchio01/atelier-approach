@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { PrismaClient } from '@prisma/client';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import { e2eCredentials } from './credentials';
 
@@ -91,15 +91,18 @@ for (const viewport of [
 ]) {
   test(`keeps the ${viewport.label} stage list independently scrollable and the trash reachable`, async ({ browser, page }) => {
     test.setTimeout(60_000);
-    const touchContext = viewport.label === 'mobile'
-      ? await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, isMobile: true, hasTouch: true })
-      : undefined;
-    const testPage = touchContext ? await touchContext.newPage() : page;
-    if (!touchContext) await testPage.setViewportSize({ width: viewport.width, height: viewport.height });
-
+    let touchContext: BrowserContext | undefined;
+    let testPage = page;
     const suffix = randomUUID();
     const leadIds: string[] = [];
     try {
+      if (viewport.label === 'mobile') {
+        touchContext = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, isMobile: true, hasTouch: true });
+        testPage = await touchContext.newPage();
+      } else {
+        await testPage.setViewportSize({ width: viewport.width, height: viewport.height });
+      }
+
       await signIn(testPage);
       for (let index = 1; index <= 10; index += 1) {
         leadIds.push(await createApproach(testPage, `Rolagem CRM ${index} ${suffix}`, `overture/scroll-${suffix}-${index}`));
@@ -175,6 +178,7 @@ for (const viewport of [
         await swipe(horizontalStartX, horizontalY, horizontalEndX, horizontalY);
         await expect.poll(() => board.evaluate((element) => element.scrollLeft)).toBeGreaterThan(boardScrollBeforeVertical);
         await expect.poll(() => leadList.evaluate((element) => element.scrollTop)).toBe(listScrollBeforeHorizontal);
+        await expect.poll(() => board.evaluate((element) => getComputedStyle(element).touchAction)).toBe('auto');
         await touchSession.detach();
       }
 
@@ -183,8 +187,11 @@ for (const viewport of [
       await expect(trash).toBeVisible();
       await expect(approached.locator('[data-lead-id]')).toHaveCount(10);
     } finally {
-      await deleteTestLeads(leadIds);
-      await touchContext?.close();
+      try {
+        await deleteTestLeads(leadIds);
+      } finally {
+        await touchContext?.close();
+      }
     }
   });
 }
