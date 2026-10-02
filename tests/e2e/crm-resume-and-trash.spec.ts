@@ -89,20 +89,24 @@ for (const viewport of [
   { label: 'mobile', width: 390, height: 844 },
   { label: 'desktop', width: 1440, height: 900 }
 ]) {
-  test(`keeps the ${viewport.label} stage list independently scrollable and the trash reachable`, async ({ page }) => {
+  test(`keeps the ${viewport.label} stage list independently scrollable and the trash reachable`, async ({ browser, page }) => {
     test.setTimeout(60_000);
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await signIn(page);
+    const touchContext = viewport.label === 'mobile'
+      ? await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, isMobile: true, hasTouch: true })
+      : undefined;
+    const testPage = touchContext ? await touchContext.newPage() : page;
+    if (!touchContext) await testPage.setViewportSize({ width: viewport.width, height: viewport.height });
 
     const suffix = randomUUID();
     const leadIds: string[] = [];
     try {
+      await signIn(testPage);
       for (let index = 1; index <= 10; index += 1) {
-        leadIds.push(await createApproach(page, `Rolagem CRM ${index} ${suffix}`, `overture/scroll-${suffix}-${index}`));
+        leadIds.push(await createApproach(testPage, `Rolagem CRM ${index} ${suffix}`, `overture/scroll-${suffix}-${index}`));
       }
 
-      await page.goto('/crm');
-      const approached = page.getByRole('region', { name: 'Abordado', exact: true });
+      await testPage.goto('/crm');
+      const approached = testPage.getByRole('region', { name: 'Abordado', exact: true });
       const leadList = approached.getByTestId('crm-stage-lead-list');
       await expect(approached.locator('[data-lead-id]')).toHaveCount(10);
       await expect.poll(() => leadList.evaluate((element) => {
@@ -113,21 +117,74 @@ for (const viewport of [
       await lastLead.scrollIntoViewIfNeeded();
       await expect.poll(() => leadList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
       await lastLead.click();
-      await expect(page.getByRole('dialog')).toBeVisible();
-      await page.keyboard.press('Escape');
+      await expect(testPage.getByRole('dialog')).toBeVisible();
+      await testPage.keyboard.press('Escape');
 
       if (viewport.label === 'mobile') {
-        const board = page.getByRole('region', { name: 'Funil CRM' });
+        const board = testPage.getByRole('region', { name: 'Funil CRM' });
         await expect.poll(() => board.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-        await expect.poll(() => board.evaluate((element) => getComputedStyle(element).touchAction)).toBe('auto');
+
+        const touchSession = await touchContext!.newCDPSession(testPage);
+        await testPage.evaluate(() => {
+          document.addEventListener('touchstart', (event) => {
+            (window as Window & { __crmTouchTrusted?: boolean }).__crmTouchTrusted = event.isTrusted;
+          }, { once: true });
+        });
+        const swipe = async (startX: number, startY: number, endX: number, endY: number) => {
+          await touchSession.send('Input.dispatchTouchEvent', {
+            type: 'touchStart',
+            touchPoints: [{ x: startX, y: startY, id: 1 }]
+          });
+          for (let step = 1; step <= 6; step += 1) {
+            const progress = step / 6;
+            await touchSession.send('Input.dispatchTouchEvent', {
+              type: 'touchMove',
+              touchPoints: [{ x: startX + (endX - startX) * progress, y: startY + (endY - startY) * progress, id: 1 }]
+            });
+            await testPage.waitForTimeout(20);
+          }
+          await touchSession.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        };
+
+        await board.evaluate((element) => { element.scrollLeft = 0; });
+        await leadList.evaluate((element) => { element.scrollTop = 0; });
+        const boardScrollBeforeVertical = await board.evaluate((element) => element.scrollLeft);
+        const listScrollBefore = await leadList.evaluate((element) => element.scrollTop);
+        const listBox = await leadList.boundingBox();
+        const boardBox = await board.boundingBox();
+        expect(listBox).not.toBeNull();
+        expect(boardBox).not.toBeNull();
+
+        const visibleLeft = Math.max(boardBox!.x + 20, listBox!.x + 20);
+        const visibleRight = Math.min(boardBox!.x + boardBox!.width - 20, listBox!.x + listBox!.width - 20);
+        expect(visibleRight).toBeGreaterThan(visibleLeft);
+        const touchX = (visibleLeft + visibleRight) / 2;
+        const verticalStartY = Math.min(listBox!.y + listBox!.height * 0.75, viewport.height - 35);
+        const verticalEndY = Math.max(listBox!.y + 20, verticalStartY - 150);
+        expect(verticalStartY - verticalEndY).toBeGreaterThan(80);
+
+        await swipe(touchX, verticalStartY, touchX, verticalEndY);
+        await expect.poll(() => testPage.evaluate(() => (window as Window & { __crmTouchTrusted?: boolean }).__crmTouchTrusted)).toBe(true);
+        await expect.poll(() => leadList.evaluate((element) => element.scrollTop)).toBeGreaterThan(listScrollBefore);
+        await expect.poll(() => board.evaluate((element) => element.scrollLeft)).toBe(boardScrollBeforeVertical);
+
+        const listScrollBeforeHorizontal = await leadList.evaluate((element) => element.scrollTop);
+        const horizontalStartX = Math.min(boardBox!.x + boardBox!.width - 30, listBox!.x + listBox!.width - 30);
+        const horizontalEndX = Math.max(boardBox!.x + 20, horizontalStartX - 180);
+        const horizontalY = Math.min(listBox!.y + listBox!.height / 2, viewport.height - 35);
+        await swipe(horizontalStartX, horizontalY, horizontalEndX, horizontalY);
+        await expect.poll(() => board.evaluate((element) => element.scrollLeft)).toBeGreaterThan(boardScrollBeforeVertical);
+        await expect.poll(() => leadList.evaluate((element) => element.scrollTop)).toBe(listScrollBeforeHorizontal);
+        await touchSession.detach();
       }
 
-      const trash = page.getByRole('region', { name: 'Lixeira', exact: true });
+      const trash = testPage.getByRole('region', { name: 'Lixeira', exact: true });
       await trash.scrollIntoViewIfNeeded();
       await expect(trash).toBeVisible();
       await expect(approached.locator('[data-lead-id]')).toHaveCount(10);
     } finally {
       await deleteTestLeads(leadIds);
+      await touchContext?.close();
     }
   });
 }
