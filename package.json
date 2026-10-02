@@ -6,7 +6,7 @@
     "postinstall": "node scripts/copy-pdfjs-assets.mjs",
     "predev": "node scripts/copy-pdfjs-assets.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/copy-pdfjs-assets.mjs",
+    "prebuild": "node scripts/copy-pdfjs-assets.mjs && prisma generate",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
