@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "node scripts/copy-pdfjs-assets.mjs",
+    "predev": "node scripts/copy-pdfjs-assets.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-pdfjs-assets.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
+    "pree2e": "node scripts/copy-pdfjs-assets.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -18,6 +22,7 @@
     "next": "^15.5.25",
     "next-auth": "^5.0.0-beta.29",
     "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "5.4.394",
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },

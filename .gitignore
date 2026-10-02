@@ -1,6 +1,7 @@
 .superpowers/
 .worktrees/
 node_modules/
+/public/pdfjs/
 .next/
 .next-e2e/
 .next-local/

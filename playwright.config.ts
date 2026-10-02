@@ -19,7 +19,7 @@ export default defineConfig({
     baseURL: e2eBaseUrl
   },
   webServer: {
-    command: 'next dev -p 3001',
+    command: 'npm run dev -- -p 3001',
     url: e2eBaseUrl,
     reuseExistingServer: false,
     env: {
