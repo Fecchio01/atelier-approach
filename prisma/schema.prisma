@@ -52,82 +52,82 @@ enum GoalPeriodKind {
 }
 
 model Lead {
-  id        String     @id @default(cuid())
-  osmId     String     @unique
-  name      String?
-  phone     String?
-  website   String?
-  instagram String?
-  whatsapp  String?
-  address   String?
-  category  String?
-  latitude  Float?
-  longitude Float?
-  syncedAt  DateTime?
-  stage     LeadStage  @default(NEW)
-  saleValue Decimal?
-  mrr       Decimal?
-  wonAt     DateTime?
-  wonById   String?
-  activities Activity[]
-  followUps  FollowUp[]
+  id           String         @id @default(cuid())
+  osmId        String         @unique
+  name         String?
+  phone        String?
+  website      String?
+  instagram    String?
+  whatsapp     String?
+  address      String?
+  category     String?
+  latitude     Float?
+  longitude    Float?
+  syncedAt     DateTime?
+  stage        LeadStage      @default(NEW)
+  saleValue    Decimal?
+  mrr          Decimal?
+  wonAt        DateTime?
+  wonById      String?
+  activities   Activity[]
+  followUps    FollowUp[]
   stageHistory StageHistory[]
-  saleEvents SaleEvent[]
+  saleEvents   SaleEvent[]
 }
 
 model Activity {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   leadId    String
   actorId   String
   type      ActivityType @default(CONTACT)
   channel   Channel?
   note      String
-  createdAt DateTime @default(now())
-  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  lead      Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId])
   @@index([actorId])
 }
 
 model StageHistory {
-  id        String    @id @default(cuid())
+  id        String     @id @default(cuid())
   leadId    String
   actorId   String
   fromStage LeadStage?
   toStage   LeadStage
-  createdAt DateTime  @default(now())
-  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  lead      Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId, createdAt])
 }
 
 model SaleEvent {
-  id        String   @id @default(cuid())
-  leadId    String
-  actorId   String
-  saleValue Decimal
-  mrr       Decimal
+  id         String   @id @default(cuid())
+  leadId     String
+  actorId    String
+  saleValue  Decimal
+  mrr        Decimal
   occurredAt DateTime @default(now())
-  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId, occurredAt])
   @@index([occurredAt])
 }
 
 model FollowUp {
-  id        String        @id @default(cuid())
-  leadId    String
-  dueDate   DateTime
-  ownerId   String
-  state     FollowUpState @default(PENDING)
-  note      String
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  completedAt DateTime?
+  id            String        @id @default(cuid())
+  leadId        String
+  dueDate       DateTime
+  ownerId       String
+  state         FollowUpState @default(PENDING)
+  note          String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  completedAt   DateTime?
   completedById String?
-  cancelledAt DateTime?
+  cancelledAt   DateTime?
   cancelledById String?
-  lead      Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead          Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId])
   @@index([ownerId, dueDate])
@@ -147,6 +147,7 @@ model Goal {
   mrrTarget                Float?
   followUpsCompletedTarget Int?
   conversionRateTarget     Float?
+  customGoals              Json           @default("[]")
   createdAt                DateTime       @default(now())
   updatedAt                DateTime       @updatedAt
 
@@ -170,21 +171,21 @@ model DailyReport {
 }
 
 model MemberProfile {
-  id        String   @id
-  name      String
-  email     String
-  avatarUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String            @id
+  name       String
+  email      String
+  avatarUrl  String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
   credential MemberCredential?
 }
 
 model MemberCredential {
-  id           String   @id @default(cuid())
-  memberId     String   @unique
-  email        String   @unique
+  id           String        @id @default(cuid())
+  memberId     String        @unique
+  email        String        @unique
   passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   member       MemberProfile @relation(fields: [memberId], references: [id], onDelete: Cascade)
 }

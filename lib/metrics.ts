@@ -2,6 +2,7 @@ import type { ActivityType, GoalPeriodKind, LeadStage, Prisma } from '@prisma/cl
 import { prisma } from './db';
 import { isInterestStage, isMeetingStage } from './funnel';
 import { isSameLocalDay, type GoalPeriodWindow } from './goal-periods';
+import type { CustomGoalMetric } from './custom-goals';
 
 export type MetricActivity = { actorId: string; type?: ActivityType; createdAt: Date; note?: string };
 export type MetricStageEvent = { actorId: string; toStage: LeadStage; createdAt: Date };
@@ -221,7 +222,8 @@ export async function getTeamGoalActualsByPeriod(
 export async function upsertTeamGoal(
   period: GoalPeriodWindow,
   targets: TeamGoalTargets,
-  database: Prisma.TransactionClient | typeof prisma = prisma
+  database: Prisma.TransactionClient | typeof prisma = prisma,
+  customGoals?: CustomGoalMetric[]
 ) {
   const targetFields = {
     approachesTarget: targets.approaches,
@@ -233,11 +235,14 @@ export async function upsertTeamGoal(
     followUpsCompletedTarget: targets.followUpsCompleted,
     conversionRateTarget: targets.conversionRate
   };
+  const customGoalData = customGoals === undefined
+    ? {}
+    : { customGoals: customGoals as Prisma.InputJsonValue };
   const unique = { ownerId: TEAM_GOAL_OWNER, periodKind: period.kind as GoalPeriodKind, periodStart: period.start };
   return database.goal.upsert({
     where: { ownerId_periodKind_periodStart: unique },
-    create: { ...unique, periodEnd: period.end, ...targetFields },
-    update: { periodEnd: period.end, ...targetFields }
+    create: { ...unique, periodEnd: period.end, ...targetFields, ...customGoalData },
+    update: { periodEnd: period.end, ...targetFields, ...customGoalData }
   });
 }
 

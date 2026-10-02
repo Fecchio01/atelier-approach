@@ -169,6 +169,23 @@ describe('getDashboardMetrics', () => {
     expect(await prisma.goal.count()).toBe(1);
   });
 
+  test('saves custom goal target and manual progress on the selected team cycle', async () => {
+    const period = { kind: 'WEEKLY' as const, start: new Date('2026-09-21T03:00:00.000Z'), end: new Date('2026-09-28T03:00:00.000Z') };
+    await prisma.goal.deleteMany();
+
+    const customGoals = [{ id: 'metric-1', name: 'Carros', unit: 'unidades', target: 3, current: 1, icon: 'car' }];
+    const saved = await upsertTeamGoal(period, {
+      approaches: 9, interests: null, meetings: null, sales: null,
+      revenue: null, mrr: null, followUpsCompleted: null, conversionRate: null
+    }, undefined, customGoals);
+
+    expect(saved).toMatchObject({
+      ownerId: '__team__',
+      approachesTarget: 9,
+      customGoals: [{ id: 'metric-1', name: 'Carros', unit: 'unidades', target: 3, current: 1, icon: 'car' }]
+    });
+  });
+
   test('keeps legacy personal goals stored separately from team goal writes', async () => {
     const period = { kind: 'WEEKLY' as const, start: new Date('2026-09-14T03:00:00.000Z'), end: new Date('2026-09-21T03:00:00.000Z') };
     await prisma.goal.deleteMany();
