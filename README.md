@@ -11,12 +11,12 @@ MVP interno para pesquisar empresas no OpenStreetMap, registrar abordagens em um
 
 1. Instale as dependências com `npm install`.
 2. Copie `.env.example` para `.env` e preencha os valores abaixo.
-3. Configure `DATABASE_URL` com a string de conexão do banco Supabase. O esquema `atelier` já foi criado no projeto.
+3. Configure `DATABASE_URL` com o pool transacional Supavisor da Supabase (porta `6543`), `pgbouncer=true` e `connection_limit=1`, adequado às funções serverless da Vercel. O esquema `atelier` já foi criado no projeto.
 4. Gere o cliente Prisma com `npx prisma generate`.
 5. Inicie com `npm run dev`.
 
 ```env
-DATABASE_URL="postgresql://atelier_app.PROJECT_REF:PASSWORD@POOLER_HOST:5432/postgres?schema=atelier&sslmode=require"
+DATABASE_URL="postgresql://atelier_app.PROJECT_REF:PASSWORD@POOLER_HOST:6543/postgres?schema=atelier&sslmode=require&pgbouncer=true&connection_limit=1"
 TEST_DATABASE_URL="postgresql://atelier_app.PROJECT_REF:PASSWORD@POOLER_HOST:5432/postgres?schema=atelier_test&sslmode=require"
 AUTH_SECRET="gere-um-segredo-longo-e-aleatorio"
 AUTH_INTERNAL_EMAIL="equipe@exemplo.com"
