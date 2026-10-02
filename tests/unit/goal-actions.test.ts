@@ -31,6 +31,18 @@ describe('team goal actions', () => {
     await expect(saveMonthlyGoal(initialGoalActionState, new FormData())).resolves.toMatchObject({ status: 'error' });
   });
 
+  test('does not persist weekly or monthly goals when no user is authenticated', async () => {
+    mocks.getCurrentUser.mockResolvedValue(null);
+    const monthly = new FormData();
+    monthly.set('monthlyStartDay', '14');
+
+    await expect(saveWeeklyGoal(initialGoalActionState, new FormData())).resolves.toMatchObject({ status: 'error' });
+    await expect(saveMonthlyGoal(initialGoalActionState, monthly)).resolves.toMatchObject({ status: 'error' });
+    expect(mocks.upsertTeamGoal).not.toHaveBeenCalled();
+    expect(mocks.saveMonthlyStartDay).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   test('returns inline errors for weekly and monthly persistence failures', async () => {
     mocks.upsertTeamGoal.mockRejectedValue(new Error('write failed'));
     mocks.transaction.mockRejectedValue(new Error('transaction failed'));

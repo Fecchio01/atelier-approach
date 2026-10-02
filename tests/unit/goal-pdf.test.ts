@@ -44,6 +44,17 @@ describe('PDF goal text suggestions', () => {
     expect(parseGoalDocumentText('Abordagens: 8 / 20\nCarros: 1 / 3')).toEqual({ targets: {}, customGoals: [] });
   });
 
+  test('does not convert negative targets or progress into positive suggestions', () => {
+    expect(parseGoalDocumentText('Abordagens: meta -20\nCarros: meta -3 carros\nCarros entregues: atual -1, meta 3 carros')).toEqual({ targets: {}, customGoals: [] });
+  });
+
+  test('does not mistake a custom label containing a metric alias for a fixed CRM metric', () => {
+    expect(parseGoalDocumentText('Custo por venda: meta R$ 5')).toEqual({
+      targets: {},
+      customGoals: [{ name: 'Custo por venda', unit: 'R$', target: 5, current: 0 }]
+    });
+  });
+
   test('returns an empty draft for blank or non-goal text', () => {
     expect(parseGoalDocumentText('   \nPlano comercial\nResultados do time')).toEqual({ targets: {}, customGoals: [] });
   });

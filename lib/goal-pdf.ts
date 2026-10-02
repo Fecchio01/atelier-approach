@@ -20,9 +20,10 @@ const metricAliases: Record<GoalMetricKey, string[]> = {
 };
 
 const numberSource = String.raw`(?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?)`;
-const numberPattern = new RegExp(String.raw`(?:R\$\s*)?${numberSource}\s*%?`, 'gi');
-const targetPattern = new RegExp(String.raw`\b(?:meta|alvo|objetivo|target|goal)\b[^\d\n]{0,32}((?:R\$\s*)?${numberSource}\s*%?)`, 'i');
-const currentPattern = new RegExp(String.raw`\b(?:atual|realizado|progresso)\b[^\d\n]{0,24}((?:R\$\s*)?${numberSource}\s*%?)`, 'i');
+const signedNumberSource = String.raw`[-−+]?${numberSource}`;
+const numberPattern = new RegExp(String.raw`(?:R\$\s*)?${signedNumberSource}\s*%?`, 'gi');
+const targetPattern = new RegExp(String.raw`\b(?:meta|alvo|objetivo|target|goal)\b[^\d\n+\-−$]{0,32}((?:R\$\s*)?${signedNumberSource}\s*%?)`, 'i');
+const currentPattern = new RegExp(String.raw`\b(?:atual|realizado|progresso)\b[^\d\n+\-−$]{0,24}((?:R\$\s*)?${signedNumberSource}\s*%?)`, 'i');
 
 function normalizeLabel(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -59,11 +60,22 @@ function findExplicitValue(line: string, pattern: RegExp) {
   return { raw, value: numberValue(raw), start, end: start + raw.length };
 }
 
-function matchingMetric(line: string): GoalMetricKey | null | undefined {
-  const normalized = normalizeLabel(line);
+function metricLabel(line: string, firstNumber: PdfNumber) {
+  let label = line.slice(0, firstNumber.start);
+  const separator = label.indexOf(':');
+  if (separator >= 0) label = label.slice(0, separator);
+  label = label.replace(/^\s*[-•*\d.)]+\s*/, '')
+    .replace(/(?:^|\s)(?:meta|alvo|objetivo|target|goal)\s*$/i, '')
+    .replace(/^(?:meta|alvo|objetivo|target|goal)(?:\s+(?:de|para))?\s+/i, '')
+    .trim();
+  return normalizeLabel(label);
+}
+
+function matchingMetric(line: string, firstNumber: PdfNumber): GoalMetricKey | null | undefined {
+  const normalized = metricLabel(line, firstNumber);
   const matches = (Object.entries(metricAliases) as Array<[GoalMetricKey, string[]]>).flatMap(([key, aliases]) =>
-    aliases.filter((alias) => new RegExp(`\\b${alias.replace(/\s+/g, '\\s+')}\\b`).test(normalized)).map((alias) => ({ key, alias }))
-  ).sort((left, right) => right.alias.length - left.alias.length);
+    aliases.filter((alias) => alias === normalized).map((alias) => ({ key, alias }))
+  );
   if (!matches.length) return undefined;
   const mostSpecific = matches.filter((match) => match.alias.length === matches[0].alias.length);
   return new Set(mostSpecific.map((match) => match.key)).size > 1 ? null : matches[0].key;
@@ -93,7 +105,8 @@ function customUnit(line: string, target: PdfNumber) {
 }
 
 function hasUnambiguousTarget(numbers: PdfNumber[], target: PdfNumber | undefined, current: PdfNumber | undefined) {
-  if (target && Number.isFinite(target.value) && target.value > 0) {
+  if (target && Number.isFinite(target.value) && target.value > 0
+    && (!current || Number.isFinite(current.value) && current.value >= 0)) {
     return numbers.length === (current ? 2 : 1) ? target : undefined;
   }
   if (!target && !current && numbers.length === 1 && numbers[0].value > 0) return numbers[0];
@@ -112,7 +125,7 @@ export function parseGoalDocumentText(text: string): GoalPdfDraft {
     const target = hasUnambiguousTarget(numbers, explicitTarget, explicitCurrent);
     if (!target) continue;
 
-    const metric = matchingMetric(line);
+    const metric = matchingMetric(line, numbers[0]);
     if (metric === null) continue;
     if (metric) {
       if (conflictingMetrics.has(metric)) continue;

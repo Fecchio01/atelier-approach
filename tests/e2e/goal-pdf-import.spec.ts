@@ -28,8 +28,8 @@ test('imports, reviews, edits, and persists PDF goals independently in weekly an
     await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
     await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
 
-    const weeklyPanel = page.getByRole('tabpanel', { name: 'Semanal' });
-    const monthlyPanel = page.getByRole('tabpanel', { name: 'Mensal' });
+    const weeklyPanel = page.locator('#goal-panel-weekly');
+    const monthlyPanel = page.locator('#goal-panel-monthly');
     const weeklyFile = weeklyPanel.locator('input[type="file"]');
     await weeklyFile.setInputFiles({ name: 'metas-semana.pdf', mimeType: 'application/pdf', buffer: pdfBuffer });
     await expect(weeklyPanel.getByLabel('Meta sugerida 1')).toHaveValue('25');
@@ -63,7 +63,7 @@ test('imports, reviews, edits, and persists PDF goals independently in weekly an
     expect(monthlyGoal?.customGoals).toMatchObject([{ name: 'Carros', target: 3, current: 1 }]);
 
     await page.reload();
-    const reloadedWeeklyPanel = page.getByRole('tabpanel', { name: 'Semanal' });
+    const reloadedWeeklyPanel = page.locator('#goal-panel-weekly');
     await reloadedWeeklyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
     await expect(reloadedWeeklyPanel.getByRole('spinbutton', { name: 'Meta para abordagens' })).toHaveValue('41');
     await expect(reloadedWeeklyPanel.getByLabel('Meta do indicador 1')).toHaveValue('5');
