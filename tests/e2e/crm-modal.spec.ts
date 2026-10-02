@@ -55,6 +55,8 @@ test('CRM keeps details private to an accessible modal and preserves lead action
     await confirmation.getByRole('button', { name: 'Confirmar devolução' }).click();
     await expect(modal).toHaveCount(0);
     await expect(card).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('button', { name: `Abrir detalhes de ${name}` })).toHaveCount(0);
   } finally {
     await page.request.delete(`/api/leads/${lead.id}`);
   }

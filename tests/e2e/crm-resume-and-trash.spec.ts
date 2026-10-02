@@ -50,9 +50,12 @@ for (const viewport of [
 
     const suffix = randomUUID();
     const leadIds: string[] = [];
+    const leadNames: string[] = [];
     try {
       for (let index = 1; index <= 7; index += 1) {
-        leadIds.push(await createApproach(page, `Lote inicial ${index} ${suffix}`, `overture/resume-${suffix}-${index}`));
+        const name = `Lote inicial ${index} E2E-${suffix}`;
+        leadNames.push(name);
+        leadIds.push(await createApproach(page, name, `overture/resume-${suffix}-${index}`));
       }
 
       await page.goto('/crm');
@@ -70,7 +73,9 @@ for (const viewport of [
       });
 
       for (let index = 8; index <= 10; index += 1) {
-        leadIds.push(await createApproach(page, `Lote novo ${index} ${suffix}`, `overture/resume-${suffix}-${index}`));
+        const name = `Lote novo ${index} E2E-${suffix}`;
+        leadNames.push(name);
+        leadIds.push(await createApproach(page, name, `overture/resume-${suffix}-${index}`));
       }
 
       await page.evaluate(() => {
@@ -79,6 +84,48 @@ for (const viewport of [
       });
 
       await expect(approached.locator('[data-lead-id]')).toHaveCount(10, { timeout: 10_000 });
+
+      const qualifiedName = leadNames[0];
+      await approached.getByRole('button', { name: `Abrir detalhes de ${qualifiedName}` }).click();
+      const modal = page.getByRole('dialog', { name: qualifiedName });
+      await modal.getByLabel('Mover para').selectOption('QUALIFIED');
+      await modal.getByRole('button', { name: 'Salvar alterações' }).click();
+
+      const qualified = page.getByRole('region', { name: 'Qualificado', exact: true });
+      await expect(approached.locator('[data-lead-id]')).toHaveCount(9);
+      await expect(qualified.getByRole('button', { name: `Abrir detalhes de ${qualifiedName}` })).toHaveCount(1);
+
+      await page.goto('/metas');
+      await expect(page).toHaveURL(/\/metas(?:\?|$)/);
+      await page.goto('/crm');
+      await page.reload();
+
+      const board = page.getByRole('region', { name: 'Funil CRM' });
+      const reloadedApproached = page.getByRole('region', { name: 'Abordado', exact: true });
+      const reloadedQualified = page.getByRole('region', { name: 'Qualificado', exact: true });
+      await expect(reloadedApproached.locator('[data-lead-id]')).toHaveCount(9);
+      await expect(reloadedQualified.locator('[data-lead-id]')).toHaveCount(1);
+      for (const name of leadNames) {
+        await expect(board.getByRole('button', { name: `Abrir detalhes de ${name}` })).toHaveCount(1);
+      }
+
+      const databaseUrl = process.env.TEST_DATABASE_URL;
+      if (!databaseUrl || new URL(databaseUrl).searchParams.get('schema') !== 'atelier_test') {
+        throw new Error('TEST_DATABASE_URL must point to the isolated atelier_test schema.');
+      }
+      const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+      try {
+        const persistedLeads = await prisma.lead.findMany({
+          where: { id: { in: leadIds } },
+          select: { id: true, stage: true }
+        });
+        expect(persistedLeads).toHaveLength(10);
+        expect(persistedLeads.filter((lead) => lead.stage === 'CONTACTED')).toHaveLength(9);
+        expect(persistedLeads.filter((lead) => lead.stage === 'QUALIFIED')).toHaveLength(1);
+        expect(persistedLeads.find((lead) => lead.id === leadIds[0])?.stage).toBe('QUALIFIED');
+      } finally {
+        await prisma.$disconnect();
+      }
     } finally {
       await deleteTestLeads(leadIds);
     }
@@ -236,6 +283,10 @@ for (const viewport of [
         data: { business: { osmId: `overture/discard-${suffix}`, name }, channel: 'WHATSAPP' }
       });
       expect(duplicate.status()).toBe(409);
+
+      await page.reload();
+      await expect(page.getByRole('region', { name: 'Lixeira', exact: true }).getByRole('button', { name: `Abrir detalhes de ${name}` })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Abordado', exact: true }).getByRole('button', { name: `Abrir detalhes de ${name}` })).toHaveCount(0);
     } finally {
       await deleteTestLeads([id]);
     }
