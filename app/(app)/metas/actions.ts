@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { getCurrentUser } from '@/lib/auth';
+import { parseCustomGoalMetrics } from '@/lib/custom-goals';
 import { parseGoalTargets, type GoalTargetFormValues } from '@/lib/goal-input';
 import { getGoalPeriodWindow } from '@/lib/goal-periods';
 import { saveMonthlyStartDay, upsertTeamGoal, type GoalMetricKey } from '@/lib/metrics';
@@ -14,6 +15,11 @@ const teamOwnerId = '__team__';
 
 function targetsFromForm(formData: FormData): GoalTargetFormValues {
   return Object.fromEntries(metricKeys.map((key) => [key, formData.get(key)?.toString() ?? '']));
+}
+
+function customGoalsFromForm(formData: FormData) {
+  if (!formData.has('customGoals')) return { ok: true as const, goals: undefined };
+  return parseCustomGoalMetrics(formData.get('customGoals')?.toString() ?? '');
 }
 
 async function revalidateGoals() {
@@ -29,10 +35,12 @@ export async function saveWeeklyGoal(_previous: GoalActionState, formData: FormD
 
     const parsed = parseGoalTargets(targetsFromForm(formData));
     if (!parsed.ok) return { status: 'error', message: parsed.message };
+    const parsedCustomGoals = customGoalsFromForm(formData);
+    if (!parsedCustomGoals.ok) return { status: 'error', message: parsedCustomGoals.message };
 
     const now = new Date();
     const period = getGoalPeriodWindow('WEEKLY', now, 1);
-    await upsertTeamGoal(period, parsed.targets);
+    await upsertTeamGoal(period, parsed.targets, undefined, parsedCustomGoals.goals);
     await revalidateGoals();
     return { status: 'saved', message: 'Meta semanal da equipe salva.' };
   } catch {
@@ -47,6 +55,8 @@ export async function saveMonthlyGoal(_previous: GoalActionState, formData: Form
 
     const parsed = parseGoalTargets(targetsFromForm(formData));
     if (!parsed.ok) return { status: 'error', message: parsed.message };
+    const parsedCustomGoals = customGoalsFromForm(formData);
+    if (!parsedCustomGoals.ok) return { status: 'error', message: parsedCustomGoals.message };
 
     const monthlyStartDay = Number(formData.get('monthlyStartDay'));
     if (!Number.isInteger(monthlyStartDay) || monthlyStartDay < 1 || monthlyStartDay > 31) {
@@ -72,7 +82,7 @@ export async function saveMonthlyGoal(_previous: GoalActionState, formData: Form
       const period = getGoalPeriodWindow('MONTHLY', now, monthlyStartDay, activeStart);
 
       await saveMonthlyStartDay(monthlyStartDay, transaction);
-      await upsertTeamGoal(period, parsed.targets, transaction);
+      await upsertTeamGoal(period, parsed.targets, transaction, parsedCustomGoals.goals);
     });
 
     await revalidateGoals();

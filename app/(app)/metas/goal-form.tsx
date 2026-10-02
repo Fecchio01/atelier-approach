@@ -3,10 +3,14 @@
 import { useActionState, useState } from 'react';
 import { ArrowsClockwiseIcon, CalendarBlankIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, XIcon } from '@phosphor-icons/react';
 
+import { applyGoalSuggestions } from '@/lib/goal-import-state';
+import type { CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { saveMonthlyGoal, saveWeeklyGoal } from './actions';
 import { initialGoalActionState, type GoalActionState } from './goal-form-state';
+import { CustomGoalMetrics } from './custom-goal-metrics';
+import { GoalImporter } from './goal-importer';
 
 type GoalRecord = {
   approachesTarget: number | null;
@@ -17,6 +21,7 @@ type GoalRecord = {
   mrrTarget: number | null;
   followUpsCompletedTarget: number | null;
   conversionRateTarget: number | null;
+  customGoals: CustomGoalMetric[];
 } | null;
 
 const metricGroups = [
@@ -102,6 +107,7 @@ export function GoalForm({
   const action = kind === 'WEEKLY' ? saveWeeklyGoal : saveMonthlyGoal;
   const [state, formAction, pending] = useActionState<GoalActionState, FormData>(action, initialGoalActionState);
   const [draft, setDraft] = useState(() => goalDraftFromRecord(goal));
+  const [customGoals, setCustomGoals] = useState(() => goal?.customGoals ?? []);
   const [editingField, setEditingField] = useState<GoalTargetField | null>(null);
   const [monthlyStartDayDraft, setMonthlyStartDayDraft] = useState(String(monthlyStartDay));
   const numericStartDay = Number(monthlyStartDayDraft);
@@ -113,7 +119,15 @@ export function GoalForm({
   const daysLabel = progress.daysLeft === 1 ? '1 dia restante' : `${progress.daysLeft} dias restantes`;
   const panelTitle = kind === 'WEEKLY' ? 'Metas semanais da equipe' : 'Metas mensais da equipe';
 
+  function applyImportedSuggestions(suggestions: Parameters<typeof applyGoalSuggestions>[2]) {
+    const merged = applyGoalSuggestions(draft, customGoals, suggestions);
+    setDraft((current) => ({ ...current, ...merged.targets }));
+    setCustomGoals(merged.customGoals);
+  }
+
   return <form action={formAction} className="space-y-6">
+    <input type="hidden" name="customGoals" value={JSON.stringify(customGoals)} />
+    <GoalImporter onApply={applyImportedSuggestions} />
     <section aria-label={kind === 'WEEKLY' ? 'Ciclo semanal atual' : 'Ciclo mensal atual'} className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(118deg,rgba(25,34,36,0.96),rgba(17,22,27,0.96))] p-4 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex items-start gap-3">
@@ -247,6 +261,8 @@ export function GoalForm({
         </div>
       </section>)}
     </div>
+
+    <CustomGoalMetrics goals={customGoals} onChange={setCustomGoals} />
 
     <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.07] pt-5">
       <p role="status" aria-live="polite" className={`text-sm ${state.status === 'error' ? 'text-red-300' : state.status === 'saved' ? 'text-[var(--atelier-green)]' : 'text-white/45'}`}>

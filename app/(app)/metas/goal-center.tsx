@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import type { CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import type { GoalPeriodWindow } from '@/lib/goal-periods';
 import { GoalForm } from './goal-form';
@@ -15,6 +16,7 @@ type GoalRecord = {
   mrrTarget: number | null;
   followUpsCompletedTarget: number | null;
   conversionRateTarget: number | null;
+  customGoals: CustomGoalMetric[];
 } | null;
 
 export function GoalCenter({

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { PageHeading } from '@/components/ui';
+import { parseCustomGoalMetrics } from '@/lib/custom-goals';
 import { prisma } from '@/lib/db';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { getTeamGoalActualsByPeriod } from '@/lib/metrics';
@@ -25,7 +26,7 @@ export default async function GoalsPage() {
         periodKind: true, periodStart: true, periodEnd: true,
         approachesTarget: true, interestsTarget: true, meetingsTarget: true,
         salesTarget: true, revenueTarget: true, mrrTarget: true,
-        followUpsCompletedTarget: true, conversionRateTarget: true
+        followUpsCompletedTarget: true, conversionRateTarget: true, customGoals: true
       },
       orderBy: { periodStart: 'desc' }
     })
@@ -38,6 +39,11 @@ export default async function GoalsPage() {
     ? { kind: 'MONTHLY', start: savedMonthlyGoal.periodStart, end: savedMonthlyGoal.periodEnd }
     : getGoalPeriodWindow('MONTHLY', now, monthlyStartDay);
   const weeklyGoal = goals.find((goal) => goal.periodKind === 'WEEKLY' && goal.periodStart.getTime() === weeklyPeriod.start.getTime());
+  const withParsedCustomGoals = (goal: (typeof goals)[number] | undefined) => {
+    if (!goal) return null;
+    const parsed = parseCustomGoalMetrics(goal.customGoals);
+    return { ...goal, customGoals: parsed.ok ? parsed.goals : [] };
+  };
   const [weeklyActuals, monthlyActuals] = await getTeamGoalActualsByPeriod([weeklyPeriod, monthlyPeriod], now);
 
   return <section className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10 lg:py-12">
@@ -50,8 +56,8 @@ export default async function GoalsPage() {
     <GoalCenter
       weeklyPeriod={weeklyPeriod}
       monthlyPeriod={monthlyPeriod}
-      weeklyGoal={weeklyGoal ?? null}
-      monthlyGoal={savedMonthlyGoal ?? null}
+      weeklyGoal={withParsedCustomGoals(weeklyGoal)}
+      monthlyGoal={withParsedCustomGoals(savedMonthlyGoal)}
       monthlyStartDay={monthlyStartDay}
       now={now}
       weeklyActuals={weeklyActuals}

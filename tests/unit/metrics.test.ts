@@ -173,7 +173,7 @@ describe('getDashboardMetrics', () => {
     const period = { kind: 'WEEKLY' as const, start: new Date('2026-09-21T03:00:00.000Z'), end: new Date('2026-09-28T03:00:00.000Z') };
     await prisma.goal.deleteMany();
 
-    const customGoals = [{ id: 'metric-1', name: 'Carros', unit: 'unidades', target: 3, current: 1, icon: 'car' }];
+    const customGoals = [{ id: 'metric-1', name: 'Carros', unit: 'unidades', target: 3, current: 1, icon: 'car' as const }];
     const saved = await upsertTeamGoal(period, {
       approaches: 9, interests: null, meetings: null, sales: null,
       revenue: null, mrr: null, followUpsCompleted: null, conversionRate: null

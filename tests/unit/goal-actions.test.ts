@@ -49,4 +49,51 @@ describe('team goal actions', () => {
     await expect(saveWeeklyGoal(initialGoalActionState, invalid)).resolves.toMatchObject({ status: 'error' });
     expect(mocks.upsertTeamGoal).not.toHaveBeenCalled();
   });
+
+  test('rejects malformed custom-goal JSON before either cycle is written', async () => {
+    const weekly = new FormData();
+    weekly.set('customGoals', '{broken');
+    const monthly = new FormData();
+    monthly.set('monthlyStartDay', '14');
+    monthly.set('customGoals', JSON.stringify([{ id: 'x', name: 'Carros', target: -1, current: 0 }]));
+
+    await expect(saveWeeklyGoal(initialGoalActionState, weekly)).resolves.toMatchObject({ status: 'error' });
+    await expect(saveMonthlyGoal(initialGoalActionState, monthly)).resolves.toMatchObject({ status: 'error' });
+    expect(mocks.upsertTeamGoal).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  test('saves reviewed custom metrics with weekly fixed targets in the same upsert', async () => {
+    const form = new FormData();
+    form.set('approaches', '20');
+    form.set('customGoals', JSON.stringify([{ id: 'car-goal', name: 'Carros', unit: 'veículos', target: 3, current: 1, icon: 'car' }]));
+
+    await expect(saveWeeklyGoal(initialGoalActionState, form)).resolves.toMatchObject({ status: 'saved' });
+    expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'WEEKLY' }),
+      expect.objectContaining({ approaches: 20 }),
+      undefined,
+      [{ id: 'car-goal', name: 'Carros', unit: 'veículos', target: 3, current: 1, icon: 'car' }]
+    );
+  });
+
+  test('saves monthly custom metrics and cycle settings inside the same transaction', async () => {
+    const transaction = {
+      goal: { findFirst: vi.fn().mockResolvedValue(null) },
+      teamGoalSettings: { findUnique: vi.fn().mockResolvedValue(null) }
+    };
+    mocks.transaction.mockImplementation(async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction));
+    const form = new FormData();
+    form.set('monthlyStartDay', '14');
+    form.set('customGoals', JSON.stringify([{ id: 'car-goal', name: 'Carros', target: 3, current: 1, icon: 'car' }]));
+
+    await expect(saveMonthlyGoal(initialGoalActionState, form)).resolves.toMatchObject({ status: 'saved' });
+    expect(mocks.saveMonthlyStartDay).toHaveBeenCalledWith(14, transaction);
+    expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'MONTHLY' }),
+      expect.any(Object),
+      transaction,
+      [{ id: 'car-goal', name: 'Carros', target: 3, current: 1, icon: 'car' }]
+    );
+  });
 });
