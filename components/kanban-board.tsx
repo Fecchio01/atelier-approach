@@ -98,8 +98,8 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
 
   return <>
     <p className="mb-2 flex items-center gap-2 text-xs text-white/40 md:hidden"><ArrowsLeftRightIcon size={15} aria-hidden="true" />Deslize para ver todas as etapas</p>
-    <section data-testid="crm-main-funnel-scrollport" role="region" aria-label="Etapas principais do funil" tabIndex={0} className="atelier-scrollbar max-h-[min(68dvh,42rem)] overflow-y-auto overscroll-y-contain rounded-2xl border border-white/[0.1] bg-[#0d1216]/55 p-2.5 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] md:p-3">
-      <div role="region" aria-label="Funil CRM" tabIndex={0} className="atelier-scrollbar min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto pb-1 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+    <section data-testid="crm-main-funnel-scrollport" role="region" aria-label="Etapas principais do funil" tabIndex={0} className="atelier-scrollbar h-[min(68vh,42rem)] max-h-[min(68dvh,42rem)] overflow-y-auto overscroll-y-contain rounded-2xl border border-white/[0.1] bg-[#0d1216]/55 p-2.5 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] md:h-auto md:p-3">
+      <div role="region" aria-label="Funil CRM" tabIndex={0} className="atelier-scrollbar min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto overflow-y-hidden pb-1 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
         <div className="grid grid-cols-7 items-start gap-2.5" style={{ minWidth: '1540px' }}>{mainFunnelStages.map((stage) => renderColumn(stage))}</div>
       </div>
     </section>
