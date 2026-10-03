@@ -73,10 +73,10 @@
 
 **Files:**
 - Modify: `lib/metrics.ts` — reuniões derivadas exclusivamente de `MEETING`; classificar e ordenar lembretes pendentes futuros.
-- Modify: `lib/reports.ts` — usar semântica de reunião atual nos dados semanais/mensais; manter follow-ups separados.
 - Modify: `app/(app)/page.tsx` — consultar os próximos follow-ups pendentes e apresentar a terceira lista.
 - Modify: `app/(app)/relatorios/page.tsx` — rotular o indicador só como “Reuniões”, separando-o de follow-ups concluídos.
 - Modify: `app/(app)/metas/goal-form.tsx` — renomear o indicador fixo “Reuniões e retornos” para “Reuniões”.
+- Modify: `components/team-goal-progress.tsx`, `components/daily-report-view.tsx` — usar “Reuniões” sem agrupar retornos nos indicadores de equipe e relatório diário.
 - Modify: `tests/unit/metrics.test.ts`, `tests/unit/reports.test.ts`, `tests/e2e/crm-to-dashboard.spec.ts`, `tests/e2e/mobile-responsiveness.spec.ts`.
 
 **Interfaces:**
@@ -86,7 +86,7 @@
 
 - [ ] **Step 1: Escrever testes que falham para reuniões e lembretes** — em `metrics.test.ts`, garantir que `MEETING` soma reunião e `FOLLOW_UP` não; verificar os cinco próximos ordenados, excluindo concluídos/cancelados e cobrindo limites de dia em `America/Sao_Paulo`. Em `reports.test.ts`, atualizar o caso de `FOLLOW_UP` histórico para zero reuniões, adicionar transição `MEETING` e confirmar que snapshot diário fechado não muda. Em E2E, substituir o rótulo “Reuniões / retornos” e exigir seção “Próximos”.
 - [ ] **Step 2: Confirmar a falha** — executar `npx vitest run tests/unit/metrics.test.ts tests/unit/reports.test.ts`; os asserts de semântica e `upcoming` devem falhar antes da implementação.
-- [ ] **Step 3: Implementar projeções** — adicionar `upcoming` ao resultado puro de métricas, ordenar por `dueDate`, e ajustar a consulta do painel para carregar até cinco pendentes futuros mais próximos sem misturar concluídos/cancelados.
+- [ ] **Step 3: Implementar projeções** — adicionar `upcoming` ao resultado puro de métricas, ordenar por `dueDate`, e ajustar a consulta do painel para carregar até cinco pendentes futuros mais próximos sem misturar concluídos/cancelados. Os relatórios semanais/mensais já delegam a classificação de reuniões a `isMeetingStage`, cuja semântica foi atualizada na Task 1; verificar por testes sem duplicar a lógica em `lib/reports.ts`.
 - [ ] **Step 4: Atualizar a apresentação** — adicionar lista “Próximos” ao painel, com nome, responsável e data; corrigir rótulos no painel, relatório e meta fixa para “Reuniões” e manter “Follow-ups concluídos” separado.
 - [ ] **Step 5: Verificar a tarefa** — executar os testes unitários acima e `npx playwright test tests/e2e/crm-to-dashboard.spec.ts tests/e2e/mobile-responsiveness.spec.ts`; verificar limites de data em `America/Sao_Paulo`, layout móvel e que relatórios diários fechados não mudam.
 - [ ] **Step 6: Commit e push** — salvar apenas métricas, páginas e testes desta tarefa em `feat: separate meeting reports and upcoming followups` e enviar a branch.
