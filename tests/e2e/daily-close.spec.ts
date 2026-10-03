@@ -94,7 +94,7 @@ test('reopens a closed day, preserves CRM activities, and allows a fresh close',
   await expect(page.getByRole('link', { name: 'Baixar PDF' })).toBeVisible();
 });
 
-test('switches report periods through the period tabs and marks the selected view', async ({ page }) => {
+test('switches report periods without reloading the document and marks the selected view', async ({ page }) => {
   await signIn(page);
   await page.goto('/relatorios');
   const periodNav = page.getByRole('navigation', { name: 'Período do relatório' });
@@ -102,21 +102,63 @@ test('switches report periods through the period tabs and marks the selected vie
   const initialDocumentTime = await page.evaluate(() => performance.timeOrigin);
   await periodNav.getByRole('link', { name: 'Ciclo atual' }).click();
   await expect(page).toHaveURL(/\/relatorios\?period=month$/);
-  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(initialDocumentTime);
+  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).toBe(initialDocumentTime);
   await expect(periodNav.getByRole('link', { name: 'Ciclo atual' })).toHaveAttribute('aria-current', 'page');
 
   const monthlyDocumentTime = await page.evaluate(() => performance.timeOrigin);
   await periodNav.getByRole('link', { name: 'Diário' }).click();
   await expect(page.getByRole('heading', { name: 'Relatório diário' })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(monthlyDocumentTime);
+  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).toBe(monthlyDocumentTime);
   const dailyPeriodNav = page.getByRole('navigation', { name: 'Período do relatório' });
   await expect(dailyPeriodNav.getByRole('link', { name: 'Diário' })).toHaveAttribute('aria-current', 'page');
 
   const dailyDocumentTime = await page.evaluate(() => performance.timeOrigin);
   await dailyPeriodNav.getByRole('link', { name: 'Esta semana' }).click();
   await expect(page).toHaveURL(/\/relatorios\?period=week$/);
-  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(dailyDocumentTime);
+  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).toBe(dailyDocumentTime);
   await expect(page.getByRole('navigation', { name: 'Período do relatório' }).getByRole('link', { name: 'Esta semana' })).toHaveAttribute('aria-current', 'page');
+});
+
+test('locks report period tabs during navigation and unlocks them when the report arrives', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/relatorios?period=month');
+
+  let releaseNavigation!: () => void;
+  let markRequestStarted!: () => void;
+  const navigationGate = new Promise<void>((resolve) => { releaseNavigation = resolve; });
+  const requestStarted = new Promise<void>((resolve) => { markRequestStarted = resolve; });
+  let heldRequests = 0;
+  await page.route('**/relatorios?period=day&date=*', async (route) => {
+    heldRequests += 1;
+    if (heldRequests === 1) {
+      markRequestStarted();
+      await navigationGate;
+    }
+    await route.continue();
+  });
+
+  const periodNav = page.getByRole('navigation', { name: 'Período do relatório' });
+  const initialDocumentTime = await page.evaluate(() => performance.timeOrigin);
+  await periodNav.getByRole('link', { name: 'Diário' }).click();
+  await requestStarted;
+
+  const loadingPeriodNav = page.getByRole('navigation', { name: 'Período do relatório' });
+  await expect(loadingPeriodNav.getByRole('link', { name: 'Diário' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(loadingPeriodNav.getByRole('link', { name: 'Esta semana' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByRole('status').filter({ hasText: 'Abrindo relatório diário' })).toBeVisible();
+
+  const redundantWeekRequest = page.waitForRequest((request) => new URL(request.url()).searchParams.get('period') === 'week', { timeout: 500 });
+  await loadingPeriodNav.getByRole('link', { name: 'Esta semana' }).evaluate((element) => (element as HTMLAnchorElement).click());
+  await expect(redundantWeekRequest).rejects.toThrow();
+  await expect(page).toHaveURL(/\/relatorios\?period=month$/);
+
+  releaseNavigation();
+  await expect(page.getByRole('heading', { name: 'Relatório diário' })).toBeVisible();
+  await expect(page.evaluate(() => performance.timeOrigin)).resolves.toBe(initialDocumentTime);
+  const dailyPeriodNav = page.getByRole('navigation', { name: 'Período do relatório' });
+  await expect(dailyPeriodNav.getByRole('link', { name: 'Diário' })).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByRole('status').filter({ hasText: 'Abrindo relatório diário' })).toHaveCount(0);
+  expect(heldRequests).toBe(1);
 });
 
 test('closes and browses the daily archive on mobile without horizontal overflow', async ({ page }) => {

@@ -77,7 +77,7 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
         <span className={`rounded-md px-2 py-0.5 text-[11px] tabular-nums ${stage === 'WON' ? 'bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]' : 'bg-white/5 text-white/45'}`}>{stageLeads.length}</span>
       </header>
       {description ? <p className="mb-3 px-1.5 text-xs leading-relaxed text-white/45">{description}</p> : null}
-      <div data-testid="crm-stage-lead-list" className="atelier-scrollbar min-h-0 max-h-[clamp(16rem,65dvh,36rem)] overflow-y-auto overscroll-y-contain scroll-p-3 p-2">
+      <div data-testid="crm-stage-lead-list" className="min-h-0 p-2">
         <div className="grid gap-3">
           {stageLeads.map((lead) => {
             const latest = lead.activities[0];
@@ -98,9 +98,11 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
 
   return <>
     <p className="mb-2 flex items-center gap-2 text-xs text-white/40 md:hidden"><ArrowsLeftRightIcon size={15} aria-hidden="true" />Deslize para ver todas as etapas</p>
-    <div role="region" aria-label="Funil CRM" tabIndex={0} className="atelier-scrollbar min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto pb-4 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
-      <div className="grid grid-cols-7 items-start gap-2.5" style={{ minWidth: '1540px' }}>{mainFunnelStages.map((stage) => renderColumn(stage))}</div>
-    </div>
+    <section data-testid="crm-main-funnel-scrollport" role="region" aria-label="Etapas principais do funil" tabIndex={0} className="atelier-scrollbar max-h-[min(68dvh,42rem)] overflow-y-auto overscroll-y-contain rounded-2xl border border-white/[0.1] bg-[#0d1216]/55 p-2.5 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] md:p-3">
+      <div role="region" aria-label="Funil CRM" tabIndex={0} className="atelier-scrollbar min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto pb-1 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+        <div className="grid grid-cols-7 items-start gap-2.5" style={{ minWidth: '1540px' }}>{mainFunnelStages.map((stage) => renderColumn(stage))}</div>
+      </div>
+    </section>
     <section className="mt-9 border-t border-white/[0.07] pt-6" aria-label="Outras situações">
       <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.15em] text-white/35">Outras situações</h2>
       <div className="grid gap-4 md:grid-cols-2">{renderColumn('NO_RESPONSE')}</div>

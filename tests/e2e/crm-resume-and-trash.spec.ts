@@ -136,7 +136,7 @@ for (const viewport of [
   { label: 'mobile', width: 390, height: 844 },
   { label: 'desktop', width: 1440, height: 900 }
 ]) {
-  test(`keeps the ${viewport.label} stage list independently scrollable and the trash reachable`, async ({ browser, page }) => {
+  test(`bounds the ${viewport.label} main funnel scroll and keeps lower CRM sections reachable`, async ({ browser, page }) => {
     test.setTimeout(60_000);
     let touchContext: BrowserContext | undefined;
     let testPage = page;
@@ -157,34 +157,52 @@ for (const viewport of [
 
       await testPage.goto('/crm');
       const approached = testPage.getByRole('region', { name: 'Abordado', exact: true });
+      const mainFunnel = testPage.getByRole('region', { name: 'Etapas principais do funil' });
       const leadList = approached.getByTestId('crm-stage-lead-list');
       await expect(approached.locator('[data-lead-id]')).toHaveCount(10);
-      await expect.poll(() => leadList.evaluate((element) => {
+      await expect.poll(() => mainFunnel.evaluate((element) => {
         return element.scrollHeight > element.clientHeight;
       })).toBe(true);
+      await expect.poll(() => leadList.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(false);
+
+      const cardFitsWithinFunnel = async (card: ReturnType<typeof approached.locator>) => card.evaluate((element) => {
+        const scrollport = element.closest('[data-testid="crm-main-funnel-scrollport"]');
+        if (!scrollport) throw new Error('CRM stage has no bounded main-funnel scrollport.');
+        const cardRect = element.getBoundingClientRect();
+        const portRect = scrollport.getBoundingClientRect();
+        return cardRect.top >= portRect.top && cardRect.bottom <= portRect.bottom;
+      });
+
+      const fifthLead = approached.locator('[data-lead-id]').nth(4);
+      const sixthLead = approached.locator('[data-lead-id]').nth(5);
+      await expect.poll(() => cardFitsWithinFunnel(fifthLead)).toBe(true);
+      await expect.poll(() => cardFitsWithinFunnel(sixthLead)).toBe(false);
 
       const assertKeyboardFocusFitsScrollport = async (card: ReturnType<typeof approached.locator>) => {
         const geometry = await card.evaluate((element) => {
-          const scrollport = element.closest('[data-testid="crm-stage-lead-list"]');
-          if (!scrollport) throw new Error('CRM lead card has no scrollport.');
+          const verticalScrollport = element.closest('[data-testid="crm-main-funnel-scrollport"]');
+          const horizontalScrollport = element.closest('[aria-label="Funil CRM"]');
+          if (!verticalScrollport || !horizontalScrollport) throw new Error('CRM lead card has no funnel scrollports.');
           const style = getComputedStyle(element);
           const cardRect = element.getBoundingClientRect();
-          const portRect = scrollport.getBoundingClientRect();
+          const verticalPortRect = verticalScrollport.getBoundingClientRect();
+          const horizontalPortRect = horizontalScrollport.getBoundingClientRect();
           const outline = Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
           return {
             focusVisible: element.matches(':focus-visible'),
             outlineWidth: Number.parseFloat(style.outlineWidth),
             outlineOffset: Number.parseFloat(style.outlineOffset),
             card: { left: cardRect.left - outline, right: cardRect.right + outline, top: cardRect.top - outline, bottom: cardRect.bottom + outline },
-            port: { left: portRect.left, right: portRect.right, top: portRect.top, bottom: portRect.bottom }
+            horizontalPort: { left: horizontalPortRect.left, right: horizontalPortRect.right },
+            verticalPort: { top: verticalPortRect.top, bottom: verticalPortRect.bottom }
           };
         });
         expect(geometry.focusVisible).toBe(true);
         expect(geometry.outlineWidth + geometry.outlineOffset).toBeGreaterThan(0);
-        expect(geometry.card.left).toBeGreaterThanOrEqual(geometry.port.left);
-        expect(geometry.card.right).toBeLessThanOrEqual(geometry.port.right);
-        expect(geometry.card.top).toBeGreaterThanOrEqual(geometry.port.top);
-        expect(geometry.card.bottom).toBeLessThanOrEqual(geometry.port.bottom);
+        expect(geometry.card.left).toBeGreaterThanOrEqual(geometry.horizontalPort.left - 6);
+        expect(geometry.card.right).toBeLessThanOrEqual(geometry.horizontalPort.right + 6);
+        expect(geometry.card.top).toBeGreaterThanOrEqual(geometry.verticalPort.top - 6);
+        expect(geometry.card.bottom).toBeLessThanOrEqual(geometry.verticalPort.bottom + 6);
       };
 
       const focusByKeyboard = async (card: ReturnType<typeof approached.locator>) => {
@@ -198,14 +216,21 @@ for (const viewport of [
 
       const firstLead = approached.locator('[data-lead-id]').first();
       await focusByKeyboard(firstLead);
+      await firstLead.scrollIntoViewIfNeeded();
       await assertKeyboardFocusFitsScrollport(firstLead);
 
       const lastLead = approached.locator('[data-lead-id]').last();
       await focusByKeyboard(lastLead);
-      await assertKeyboardFocusFitsScrollport(lastLead);
-
       await lastLead.scrollIntoViewIfNeeded();
-      await expect.poll(() => leadList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      await assertKeyboardFocusFitsScrollport(lastLead);
+      const lastLeadInFunnel = await cardFitsWithinFunnel(lastLead);
+      expect(lastLeadInFunnel).toBe(true);
+
+      await mainFunnel.evaluate((element) => { element.scrollTop = 0; });
+      await expect.poll(() => cardFitsWithinFunnel(lastLead)).toBe(false);
+      await lastLead.scrollIntoViewIfNeeded();
+      await expect.poll(() => mainFunnel.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      await expect.poll(() => cardFitsWithinFunnel(lastLead)).toBe(true);
       await lastLead.click();
       await expect(testPage.getByRole('dialog')).toBeVisible();
       await testPage.keyboard.press('Escape');
@@ -236,42 +261,46 @@ for (const viewport of [
           await touchSession.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         };
 
+        await mainFunnel.evaluate((element) => { element.scrollTop = 0; });
         await board.evaluate((element) => { element.scrollLeft = 0; });
-        await leadList.evaluate((element) => { element.scrollTop = 0; });
         const boardScrollBeforeVertical = await board.evaluate((element) => element.scrollLeft);
-        const listScrollBefore = await leadList.evaluate((element) => element.scrollTop);
-        const listBox = await leadList.boundingBox();
+        const funnelScrollBefore = await mainFunnel.evaluate((element) => element.scrollTop);
+        const funnelBox = await mainFunnel.boundingBox();
         const boardBox = await board.boundingBox();
-        expect(listBox).not.toBeNull();
+        expect(funnelBox).not.toBeNull();
         expect(boardBox).not.toBeNull();
 
-        const visibleLeft = Math.max(boardBox!.x + 20, listBox!.x + 20);
-        const visibleRight = Math.min(boardBox!.x + boardBox!.width - 20, listBox!.x + listBox!.width - 20);
+        const visibleLeft = Math.max(boardBox!.x + 20, funnelBox!.x + 20);
+        const visibleRight = Math.min(boardBox!.x + boardBox!.width - 20, funnelBox!.x + funnelBox!.width - 20);
         expect(visibleRight).toBeGreaterThan(visibleLeft);
         const touchX = (visibleLeft + visibleRight) / 2;
-        const verticalStartY = Math.min(listBox!.y + listBox!.height * 0.75, viewport.height - 35);
-        const verticalEndY = Math.max(listBox!.y + 20, verticalStartY - 150);
+        const verticalStartY = Math.min(funnelBox!.y + funnelBox!.height * 0.75, viewport.height - 35);
+        const verticalEndY = Math.max(funnelBox!.y + 20, verticalStartY - 150);
         expect(verticalStartY - verticalEndY).toBeGreaterThan(80);
 
         await swipe(touchX, verticalStartY, touchX, verticalEndY);
         await expect.poll(() => testPage.evaluate(() => (window as Window & { __crmTouchTrusted?: boolean }).__crmTouchTrusted)).toBe(true);
-        await expect.poll(() => leadList.evaluate((element) => element.scrollTop)).toBeGreaterThan(listScrollBefore);
+        await expect.poll(() => mainFunnel.evaluate((element) => element.scrollTop)).toBeGreaterThan(funnelScrollBefore);
         await expect.poll(() => board.evaluate((element) => element.scrollLeft)).toBe(boardScrollBeforeVertical);
 
-        const listScrollBeforeHorizontal = await leadList.evaluate((element) => element.scrollTop);
-        const horizontalStartX = Math.min(boardBox!.x + boardBox!.width - 30, listBox!.x + listBox!.width - 30);
+        const funnelScrollBeforeHorizontal = await mainFunnel.evaluate((element) => element.scrollTop);
+        const horizontalStartX = Math.min(boardBox!.x + boardBox!.width - 30, funnelBox!.x + funnelBox!.width - 30);
         const horizontalEndX = Math.max(boardBox!.x + 20, horizontalStartX - 180);
-        const horizontalY = Math.min(listBox!.y + listBox!.height / 2, viewport.height - 35);
+        const horizontalY = Math.min(funnelBox!.y + funnelBox!.height / 2, viewport.height - 35);
         await swipe(horizontalStartX, horizontalY, horizontalEndX, horizontalY);
         await expect.poll(() => board.evaluate((element) => element.scrollLeft)).toBeGreaterThan(boardScrollBeforeVertical);
-        await expect.poll(() => leadList.evaluate((element) => element.scrollTop)).toBe(listScrollBeforeHorizontal);
+        await expect.poll(() => mainFunnel.evaluate((element) => element.scrollTop)).toBe(funnelScrollBeforeHorizontal);
         await expect.poll(() => board.evaluate((element) => getComputedStyle(element).touchAction)).toBe('auto');
         await touchSession.detach();
       }
 
       const trash = testPage.getByRole('region', { name: 'Lixeira', exact: true });
+      const pageScrollBeforeTrash = await testPage.evaluate(() => window.scrollY);
+      const funnelScrollBeforeTrash = await mainFunnel.evaluate((element) => element.scrollTop);
       await trash.scrollIntoViewIfNeeded();
       await expect(trash).toBeVisible();
+      await expect.poll(() => testPage.evaluate(() => window.scrollY)).toBeGreaterThan(pageScrollBeforeTrash);
+      await expect.poll(() => mainFunnel.evaluate((element) => element.scrollTop)).toBe(funnelScrollBeforeTrash);
       await expect(approached.locator('[data-lead-id]')).toHaveCount(10);
     } finally {
       try {

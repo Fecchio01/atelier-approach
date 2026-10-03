@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SignOutIcon } from '@phosphor-icons/react';
 import { appRoutes as routes, MobileNavigation } from './mobile-navigation';
+import { ReportPeriodNavigationProvider } from './report-period-navigation-state';
 
 function AtelierMark({ className = 'size-9' }: { className?: string }) {
   return <svg className={`${className} shrink-0 text-[var(--atelier-green)]`} viewBox="0 0 40 40" role="img" aria-label="Marca Atelier Approach">
@@ -52,7 +53,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
         onNavigate={rememberSearchPosition}
         brandMark={<AtelierMark className="size-7" />}
       />
-      {children}
+      <ReportPeriodNavigationProvider>{children}</ReportPeriodNavigationProvider>
     </div>
   </main>;
 }
