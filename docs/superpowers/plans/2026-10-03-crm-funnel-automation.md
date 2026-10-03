@@ -35,20 +35,18 @@
 - Modify: `prisma/schema.prisma` — enum `LeadStage`, enum `ActivityType` e default de `Lead.stage`.
 - Create: `prisma/migrations/20261003000000_crm_funnel_meetings_sale_financial_audit/migration.sql` — adicionar os valores de enum `MEETING` e `SALE_FINANCIALS_UPDATED` e mudar somente o default de `Lead.stage` para `CONTACTED`.
 - Modify: `lib/funnel.ts` — estágios operacionais, normalização legada e classificação de reunião.
-- Modify: `components/kanban-board.tsx` — renderizar as sete etapas operacionais sem a coluna “Novo”, incluindo “Reunião”.
-- Modify: `app/(app)/page.tsx` — normalizar também as contagens agregadas do funil do painel.
 - Modify: `app/api/leads/[id]/route.ts` — rejeitar `NEW` como destino sem rejeitar registros persistidos com esse valor.
-- Test: `tests/unit/funnel.test.ts`, `tests/unit/goal-migrations.test.ts`, `tests/unit/lead-routes.test.ts`, `tests/unit/metrics.test.ts`, `tests/e2e/funnel-labels.spec.ts`.
+- Test: `tests/unit/funnel.test.ts`, `tests/unit/goal-migrations.test.ts`, `tests/unit/lead-routes.test.ts`, `tests/unit/metrics.test.ts`, `tests/unit/reports.test.ts`, `tests/e2e/funnel-labels.spec.ts`.
 
 **Interfaces:**
 - Produz: `mainFunnelStages` contém `CONTACTED`, `IN_CONVERSATION`, `QUALIFIED`, `PROPOSAL`, `MEETING`, `FOLLOW_UP`, `WON`, nessa ordem.
 - Produz: `normalizeFunnelStage('NEW')` retorna `CONTACTED`; `normalizeFunnelStage('INTEREST')` continua retornando `IN_CONVERSATION`; `isMeetingStage` só retorna verdadeiro para `MEETING`.
 - Produz: novas criações continuam usando `CONTACTED`; a migração não atualiza linhas existentes nem remove valores do enum.
 
-- [ ] **Step 1: Escrever testes que falham para a nova lista e compatibilidade legada** — atualizar `orders the seven operational funnel stages`, adicionar testes de normalização/contabilização de `NEW` como `CONTACTED`, `INTEREST` como `IN_CONVERSATION`, reunião apenas em `MEETING`, rejeição de destino `NEW` e assertions SQL para os dois valores de enum e o default.
-- [ ] **Step 2: Confirmar a falha** — executar `npx vitest run tests/unit/funnel.test.ts tests/unit/goal-migrations.test.ts tests/unit/lead-routes.test.ts`; os novos testes devem falhar pela lista, semântica de reunião, aceitação de `NEW` e ausência da migração.
-- [ ] **Step 3: Implementar o contrato** — atualizar schema e criar a migração sem `UPDATE` de dados; ajustar `lib/funnel.ts`, kanban, contagem agregada do painel e validação de destino da rota.
-- [ ] **Step 4: Verificar a tarefa** — executar `npx vitest run tests/unit/funnel.test.ts tests/unit/goal-migrations.test.ts tests/unit/lead-routes.test.ts tests/unit/metrics.test.ts`, `npx prisma generate`, `npm run typecheck` e `npx playwright test tests/e2e/funnel-labels.spec.ts` com a migração aplicada ao banco isolado `atelier_test`; tudo deve passar e a UI não deve mostrar “Novo”.
+- [ ] **Step 1: Escrever testes que falham para a nova lista e compatibilidade legada** — atualizar `orders the seven operational funnel stages`, adicionar testes de normalização/contabilização de `NEW` como `CONTACTED`, `INTEREST` como `IN_CONVERSATION`, reunião apenas em `MEETING`, rejeição de destino `NEW`, atualizar o fixture de reunião do relatório para `MEETING` e adicionar assertions SQL para os dois valores de enum e o default.
+- [ ] **Step 2: Confirmar a falha** — executar `npx vitest run tests/unit/funnel.test.ts tests/unit/goal-migrations.test.ts tests/unit/lead-routes.test.ts tests/unit/reports.test.ts`; os novos testes devem falhar pela lista, semântica de reunião, aceitação de `NEW` e ausência da migração.
+- [ ] **Step 3: Implementar o contrato** — atualizar schema e criar a migração sem `UPDATE` de dados; ajustar `lib/funnel.ts` e validação de destino da rota. Kanban e contagens já consomem `mainFunnelStages`/`normalizeFunnelStage`, então seguem a mudança sem alterações próprias.
+- [ ] **Step 4: Verificar a tarefa** — executar `npx vitest run tests/unit/funnel.test.ts tests/unit/goal-migrations.test.ts tests/unit/lead-routes.test.ts tests/unit/metrics.test.ts tests/unit/reports.test.ts`, `npx prisma generate`, `npm run typecheck` e `npx playwright test tests/e2e/funnel-labels.spec.ts` com a migração aplicada ao banco isolado `atelier_test`; tudo deve passar e a UI não deve mostrar “Novo”.
 - [ ] **Step 5: Commit e push** — salvar apenas os arquivos desta tarefa em um commit `feat: separate meeting stage and normalize legacy leads` e enviar a branch de trabalho.
 
 ### Task 2: Fechamento de venda sem bloqueio e complemento auditável
