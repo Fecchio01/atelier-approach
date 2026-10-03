@@ -55,9 +55,9 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
     if (unit !== undefined && unit !== null && (typeof unit !== 'string' || unit.trim().length > maxUnitLength)) {
       return { ok: false, message: `A unidade deve ter até ${maxUnitLength} caracteres.` };
     }
-    if (typeof target !== 'number' || !Number.isFinite(target) || target <= 0
+    if (typeof target !== 'number' || !Number.isFinite(target) || target < 0
       || typeof current !== 'number' || !Number.isFinite(current) || current < 0) {
-      return { ok: false, message: 'A meta deve ser positiva e o progresso não pode ser negativo.' };
+      return { ok: false, message: 'A meta e o progresso não podem ser negativos.' };
     }
     if (icon !== undefined && (typeof icon !== 'string' || !iconSet.has(icon))) {
       return { ok: false, message: 'Escolha um dos ícones disponíveis para a meta.' };

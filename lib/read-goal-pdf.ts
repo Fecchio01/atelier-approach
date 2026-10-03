@@ -15,6 +15,63 @@ async function loadPdfJs() {
   return (await import(/* webpackIgnore: true */ moduleUrl)) as typeof import('pdfjs-dist/legacy/build/pdf.mjs');
 }
 
+type PdfTextItem = {
+  str: string;
+  hasEOL?: boolean;
+  transform?: number[];
+  width?: number;
+};
+
+function isPdfTextItem(item: unknown): item is PdfTextItem {
+  return typeof item === 'object' && item !== null
+    && 'str' in item && typeof item.str === 'string';
+}
+
+function extractPageText(items: unknown[]) {
+  const lines: string[] = [];
+  let line: Array<{ text: string; x: number; width: number }> = [];
+  let baseline: number | undefined;
+
+  const flushLine = () => {
+    if (!line.length) return;
+    line.sort((left, right) => left.x - right.x);
+    let text = '';
+    let previousEnd: number | undefined;
+    for (const item of line) {
+      if (text && previousEnd !== undefined) {
+        const gap = item.x - previousEnd;
+        text += gap >= 24 ? '\t' : ' ';
+      }
+      text += item.text;
+      previousEnd = item.x + item.width;
+    }
+    if (text.trim()) lines.push(text.trim());
+    line = [];
+    baseline = undefined;
+  };
+
+  for (const rawItem of items) {
+    if (!isPdfTextItem(rawItem)) continue;
+    const item = rawItem;
+    if (item.str.trim()) {
+      const x = item.transform?.[4];
+      const y = item.transform?.[5];
+      if (typeof x === 'number' && typeof y === 'number') {
+        if (baseline !== undefined && Math.abs(y - baseline) > 2) flushLine();
+        baseline ??= y;
+        line.push({ text: item.str.trim(), x, width: typeof item.width === 'number' ? item.width : 0 });
+      } else {
+        flushLine();
+        lines.push(item.str.trim());
+      }
+    }
+    if (item.hasEOL) flushLine();
+  }
+
+  flushLine();
+  return lines.join('\n');
+}
+
 export async function readGoalPdfText(file: File): Promise<string> {
   if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
     throw new GoalPdfReadError('Selecione um arquivo PDF.');
@@ -39,10 +96,7 @@ export async function readGoalPdfText(file: File): Promise<string> {
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
-      const pageText = content.items.flatMap((item) => {
-        if (typeof item !== 'object' || item === null || !('str' in item) || typeof item.str !== 'string') return [];
-        return [`${item.str}${'hasEOL' in item && item.hasEOL ? '\n' : ' '}`];
-      }).join('').trim();
+      const pageText = extractPageText(content.items).trim();
       totalLength += pageText.length;
       if (totalLength > MAX_GOAL_PDF_TEXT_LENGTH) {
         throw new GoalPdfReadError('O PDF tem texto demais para processar. Divida o arquivo e tente novamente.');

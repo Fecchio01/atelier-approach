@@ -23,10 +23,11 @@ export function applyGoalSuggestions(
   for (const suggestion of suggestions) {
     const target = Number(suggestion.target.replace(',', '.'));
     const current = Number(suggestion.current.replace(',', '.'));
-    if (!suggestion.name.trim() || !Number.isFinite(target) || target <= 0
+    if (!suggestion.name.trim() || !Number.isFinite(target) || target < 0
       || !Number.isFinite(current) || current < 0) continue;
 
     if (suggestion.destination !== 'custom') {
+      if (target === 0) continue;
       targets[suggestion.destination] = String(target);
       continue;
     }

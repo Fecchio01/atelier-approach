@@ -117,7 +117,7 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-[10px] text-white/45">Meta
-                <input aria-label={`Meta sugerida ${index + 1}`} type="number" inputMode="decimal" min="0.01" step="any" value={row.target} onChange={(event) => updateRow(row.id, { target: event.target.value })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
+                <input aria-label={`Meta sugerida ${index + 1}`} type="number" inputMode="decimal" min="0" step="any" value={row.target} onChange={(event) => updateRow(row.id, { target: event.target.value })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
               </label>
               <label className="grid gap-1 text-[10px] text-white/45">Progresso inicial
                 <input aria-label={`Progresso sugerido ${index + 1}`} type="number" inputMode="decimal" min="0" step="any" value={row.current} onChange={(event) => updateRow(row.id, { current: event.target.value })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />

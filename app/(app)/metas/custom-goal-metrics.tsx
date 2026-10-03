@@ -58,9 +58,11 @@ export function CustomGoalMetrics({
       {goals.map((goal, index) => {
         const icon = goal.icon && customGoalIcons.includes(goal.icon) ? goal.icon : 'target';
         const { Icon } = iconDetails[icon];
-        const targetValid = Number.isFinite(goal.target) && goal.target > 0;
+        const targetValid = Number.isFinite(goal.target) && goal.target >= 0;
         const currentValid = Number.isFinite(goal.current) && goal.current >= 0;
-        const percent = targetValid && currentValid ? Math.min(100, Math.max(0, Math.round(goal.current / goal.target * 100))) : 0;
+        const percent = targetValid && currentValid
+          ? goal.target === 0 ? (goal.current === 0 ? 100 : 0) : Math.min(100, Math.max(0, Math.round(goal.current / goal.target * 100)))
+          : 0;
 
         return <article key={goal.id} className="min-w-0 rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
           <div className="flex items-start gap-3">
@@ -83,7 +85,7 @@ export function CustomGoalMetrics({
               <div className="grid grid-cols-2 gap-2">
                 <label className="grid min-w-0 gap-1 text-[11px] text-white/45">
                   Meta
-                  <input aria-label={`Meta do indicador ${index + 1}`} type="number" inputMode="decimal" min="0.01" step="any" value={targetValid ? goal.target : ''} onChange={(event) => updateGoal(goal.id, { target: event.target.value === '' ? Number.NaN : Number(event.target.value) })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
+                  <input aria-label={`Meta do indicador ${index + 1}`} type="number" inputMode="decimal" min="0" step="any" value={targetValid ? goal.target : ''} onChange={(event) => updateGoal(goal.id, { target: event.target.value === '' ? Number.NaN : Number(event.target.value) })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
                 </label>
                 <label className="grid min-w-0 gap-1 text-[11px] text-white/45">
                   Progresso

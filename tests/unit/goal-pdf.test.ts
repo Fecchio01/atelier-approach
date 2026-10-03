@@ -69,6 +69,41 @@ describe('PDF goal text suggestions', () => {
     await expect(readGoalPdfText(file)).resolves.toContain('Abordagens: 500');
   });
 
+  test('imports metric rows from a visually column-aligned weekly goals PDF', async () => {
+    const document = await PDFDocument.create();
+    const page = document.addPage();
+    const font = await document.embedFont(StandardFonts.Helvetica);
+    const columns = [56, 195, 261];
+    const drawRow = (y: number, cells: [string, string, string]) => {
+      cells.forEach((cell, index) => page.drawText(cell, { x: columns[index], y, font, size: 10 }));
+    };
+
+    drawRow(760, ['INDICADOR', 'META', 'CRITERIO DE CONTAGEM']);
+    drawRow(735, ['Empresas aprovadas', '50', '10 por dia útil; nicho e região corretos']);
+    drawRow(710, ['Conversas humanas', '10', 'Conversas iniciadas com decisores']);
+    drawRow(685, ['Dores confirmadas', '3', 'Necessidade e impacto registrados']);
+    drawRow(660, ['Oportunidade real', '1', 'Empresa dentro do perfil comercial']);
+    drawRow(635, ['Repetições / fora do perfil', '0', '10 registros conferidos; nenhuma repetição permitida']);
+    drawRow(610, ['Follow-ups vencidos', '100%', 'Todos os retornos feitos no prazo']);
+    page.drawText('DISTRIBUIÇÃO DIÁRIA', { x: 48, y: 585, font, size: 10 });
+    page.drawText('ATELIER OS · PLANEJAMENTO COMERCIAL', { x: 48, y: 22, font, size: 10 });
+    page.drawText('01', { x: 539, y: 22, font, size: 10 });
+    const file = new File([(await document.save()).slice().buffer as ArrayBuffer], 'metas-semanais.pdf', { type: 'application/pdf' });
+
+    const text = await readGoalPdfText(file);
+    expect(parseGoalDocumentText(text)).toEqual({
+      targets: {},
+      customGoals: [
+        { name: 'Empresas aprovadas', target: 50, current: 0 },
+        { name: 'Conversas humanas', target: 10, current: 0 },
+        { name: 'Dores confirmadas', target: 3, current: 0 },
+        { name: 'Oportunidade real', target: 1, current: 0 },
+        { name: 'Repetições / fora do perfil', target: 0, current: 0 },
+        { name: 'Follow-ups vencidos', unit: '%', target: 100, current: 0 }
+      ]
+    });
+  });
+
   test('rejects a file larger than the local parsing limit before reading it', async () => {
     const file = { name: 'metas.pdf', type: 'application/pdf', size: MAX_GOAL_PDF_BYTES + 1 } as File;
     await expect(readGoalPdfText(file)).rejects.toThrow('no máximo 10 MB');

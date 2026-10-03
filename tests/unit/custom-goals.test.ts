@@ -17,6 +17,13 @@ describe('custom team goals', () => {
     });
   });
 
+  test('accepts a zero target for a goal that must remain at zero', () => {
+    expect(parseCustomGoalMetrics([{ id: 'zero-limit', name: 'Repetições', target: 0, current: 0, icon: 'target' }])).toEqual({
+      ok: true,
+      goals: [{ id: 'zero-limit', name: 'Repetições', target: 0, current: 0, icon: 'target' }]
+    });
+  });
+
   test('rejects repeated identifiers so an edited card cannot overwrite another', () => {
     expect(parseCustomGoalMetrics([
       { id: 'same', name: 'Meta A', target: 1, current: 0, icon: 'target' },
@@ -25,7 +32,7 @@ describe('custom team goals', () => {
   });
 
   test.each([
-    [{ id: 'a', name: 'Meta', target: 0, current: 0, icon: 'target' }],
+    [{ id: 'a', name: 'Meta', target: -1, current: 0, icon: 'target' }],
     [{ id: 'a', name: 'Meta', target: 1, current: -1, icon: 'target' }],
     [{ id: 'a', name: 'Meta', target: Number.POSITIVE_INFINITY, current: 0, icon: 'target' }]
   ])('rejects non-positive, negative or non-finite values: %j', (goal) => {

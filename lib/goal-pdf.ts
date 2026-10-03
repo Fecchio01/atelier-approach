@@ -29,6 +29,17 @@ function normalizeLabel(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function isGoalTableHeader(cells: string[]) {
+  const first = normalizeLabel(cells[0] ?? '');
+  const second = normalizeLabel(cells[1] ?? '');
+  return /^(indicador|metrica|metric|goal|objetivo)$/.test(first)
+    && /^(meta|alvo|objetivo|target|goal)$/.test(second);
+}
+
+function isPlainGoalValue(value: string) {
+  return /^(?:R\$\s*)?[-−+]?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?\s*%?$/i.test(value.trim());
+}
+
 function numberValue(value: string) {
   const cleaned = value.replace(/R\$/i, '').replace(/%/g, '').replace(/\s/g, '');
   if (!cleaned) return Number.NaN;
@@ -105,19 +116,45 @@ function customUnit(line: string, target: PdfNumber) {
 }
 
 function hasUnambiguousTarget(numbers: PdfNumber[], target: PdfNumber | undefined, current: PdfNumber | undefined) {
-  if (target && Number.isFinite(target.value) && target.value > 0
+  if (target && Number.isFinite(target.value) && target.value >= 0
     && (!current || Number.isFinite(current.value) && current.value >= 0)) {
     return numbers.length === (current ? 2 : 1) ? target : undefined;
   }
-  if (!target && !current && numbers.length === 1 && numbers[0].value > 0) return numbers[0];
+  if (!target && !current && numbers.length === 1 && numbers[0].value >= 0) return numbers[0];
   return undefined;
 }
 
 export function parseGoalDocumentText(text: string): GoalPdfDraft {
   const draft: GoalPdfDraft = { targets: {}, customGoals: [] };
   const conflictingMetrics = new Set<GoalMetricKey>();
+  const sourceLines: string[] = [];
+  let readingGoalTable = false;
 
-  for (const line of text.split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
+  for (const rawLine of text.split(/\r?\n/)) {
+    const cells = rawLine.split('\t').map((cell) => cell.trim());
+    if (cells.length >= 2 && isGoalTableHeader(cells)) {
+      readingGoalTable = true;
+      continue;
+    }
+    if (!readingGoalTable) {
+      sourceLines.push(rawLine);
+      continue;
+    }
+    if (!rawLine.includes('\t') && /^(distribuicao diaria|regras de qualidade|observacoes)$/i.test(normalizeLabel(rawLine))) {
+      readingGoalTable = false;
+      continue;
+    }
+    if (cells.length >= 2 && rawLine.includes('\t')) {
+      const label = cells[0];
+      const target = cells[1];
+      if (label && isPlainGoalValue(target)) sourceLines.push(`${label}: meta ${target}`);
+      continue;
+    }
+    // Wrapped descriptions inside a table are not goal rows. Ignore them so
+    // numbers in criteria cannot be mistaken for targets.
+  }
+
+  for (const line of sourceLines.map((value) => value.trim()).filter(Boolean)) {
     const numbers = findNumbers(line);
     if (!numbers.length) continue;
     const explicitTarget = findExplicitValue(line, targetPattern);
@@ -128,6 +165,7 @@ export function parseGoalDocumentText(text: string): GoalPdfDraft {
     const metric = matchingMetric(line, numbers[0]);
     if (metric === null) continue;
     if (metric) {
+      if (target.value === 0) continue;
       if (conflictingMetrics.has(metric)) continue;
       const previous = draft.targets[metric];
       if (previous !== undefined && previous !== target.value) {

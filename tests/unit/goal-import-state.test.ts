@@ -28,4 +28,16 @@ describe('reviewed goal suggestions', () => {
 
     expect(applyGoalSuggestions({}, [], suggestions)).toEqual({ targets: {}, customGoals: [] });
   });
+
+  test('preserves zero-target custom goals but does not set fixed CRM targets to zero', () => {
+    const result = applyGoalSuggestions({}, [], [
+      { id: 'zero-limit', name: 'Repetições / fora do perfil', target: '0', current: '0', destination: 'custom', icon: 'target' },
+      { id: 'zero-fixed', name: 'Abordagens', target: '0', current: '0', destination: 'approaches', icon: 'target' }
+    ]);
+
+    expect(result).toEqual({
+      targets: {},
+      customGoals: [{ id: 'zero-limit', name: 'Repetições / fora do perfil', target: 0, current: 0, icon: 'target' }]
+    });
+  });
 });
