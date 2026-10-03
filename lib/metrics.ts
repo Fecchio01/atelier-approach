@@ -111,8 +111,10 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
       if ((activity.type === 'CONTACT' || !activity.type) && inRange(activity.createdAt, range)) member(activity.actorId).approaches += 1;
     }
     const history = lead.stageHistory?.length ? lead.stageHistory : (lead.activities ?? []).flatMap((activity) => {
-      const match = activity.note?.match(/\b(?:INTEREST|IN_CONVERSATION|MEETING|FOLLOW_UP)\b/);
-      return match ? [{ actorId: activity.actorId, toStage: match[0] as LeadStage, createdAt: activity.createdAt }] : [];
+      if (activity.type && activity.type !== 'STAGE_CHANGE') return [];
+      // Untyped legacy records are accepted only with the system's exact transition note.
+      const match = activity.note?.match(/^Etapa alterada para (INTEREST|IN_CONVERSATION|MEETING|FOLLOW_UP)\.$/);
+      return match ? [{ actorId: activity.actorId, toStage: match[1] as LeadStage, createdAt: activity.createdAt }] : [];
     });
     for (const event of history) {
       if (!inRange(event.createdAt, range)) continue;

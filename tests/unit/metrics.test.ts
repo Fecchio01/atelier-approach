@@ -59,12 +59,25 @@ describe('dashboard follow-up query and presentation', () => {
 });
 
 describe('getDashboardMetrics', () => {
-  test('counts a legacy explicit MEETING note separately from FOLLOW_UP', () => {
+  test.each([
+    ['CONTACT', 'Marcar MEETING na próxima semana'],
+    ['CONTACT', 'Etapa alterada para MEETING.'],
+    ['STAGE_CHANGE', 'Marcar MEETING na próxima semana'],
+    [undefined, 'Marcar MEETING na próxima semana']
+  ] as const)('does not infer a meeting from %s activity with note %s', (type, note) => {
+    const metrics = getDashboardMetrics([{
+      id: 'meeting-mention', stage: 'CONTACTED', saleValue: null, mrr: null, followUps: [],
+      activities: [{ actorId: 'ana', type, createdAt: new Date('2026-09-09T10:00:00Z'), note }]
+    }], { start: new Date('2026-09-07T03:00:00Z'), end: new Date('2026-09-14T03:00:00Z') });
+    expect(metrics.goalActuals.meetings).toBe(0);
+  });
+
+  test.each(['STAGE_CHANGE', undefined] as const)('counts a legacy explicit MEETING transition with type %s separately from FOLLOW_UP', (type) => {
     const metrics = getDashboardMetrics([{
       id: 'legacy-meeting', stage: 'FOLLOW_UP', saleValue: null, mrr: null, followUps: [],
       activities: [
-        { actorId: 'ana', type: 'STAGE_CHANGE', createdAt: new Date('2026-09-09T10:00:00Z'), note: 'Etapa alterada para MEETING.' },
-        { actorId: 'ana', type: 'STAGE_CHANGE', createdAt: new Date('2026-09-09T11:00:00Z'), note: 'Etapa alterada para FOLLOW_UP.' }
+        { actorId: 'ana', type, createdAt: new Date('2026-09-09T10:00:00Z'), note: 'Etapa alterada para MEETING.' },
+        { actorId: 'ana', type, createdAt: new Date('2026-09-09T11:00:00Z'), note: 'Etapa alterada para FOLLOW_UP.' }
       ]
     }], { start: new Date('2026-09-07T03:00:00Z'), end: new Date('2026-09-14T03:00:00Z') });
     expect(metrics.goalActuals).toMatchObject({ meetings: 1, followUpsCompleted: 0 });
