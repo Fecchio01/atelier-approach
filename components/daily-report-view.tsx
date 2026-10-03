@@ -78,7 +78,7 @@ export function DailyReportView({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           <Metric label="Abordagens" value={summary!.approaches} />
           <Metric label="Interesses" value={summary!.interests} />
-          <Metric label="Reuniões / retornos" value={summary!.meetings} />
+          <Metric label="Reuniões" value={summary!.meetings} />
           <Metric label="Vendas" value={summary!.sales} />
           <Metric label="Receita vendida" value={money(summary!.revenue)} />
           <Metric label="MRR" value={money(summary!.mrr)} />

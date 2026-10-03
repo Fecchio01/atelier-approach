@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 
 const mocks = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
@@ -13,10 +13,55 @@ async function expectValidPdf(response: Response) {
 
 import { buildRecommendations, buildReport, getRecentReportRange } from '../../lib/reports';
 import { prisma } from '../../lib/db';
-import { closeCurrentDailyReport } from '../../lib/daily-reports';
+import { closeCurrentDailyReport, getDailyReportForDate } from '../../lib/daily-reports';
 import { GET } from '../../app/api/reports/route';
 import * as reportModule from '../../lib/reports';
 import * as reportRouteModule from '../../app/api/reports/route';
+
+describe('meeting and follow-up projections without database writes', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  test.each(['week', 'month'] as const)('separates explicit meetings from historical follow-ups in %s reports', async (period) => {
+    vi.spyOn(prisma.lead, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.activity, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.saleEvent, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.followUp, 'findMany').mockResolvedValue([
+      { state: 'COMPLETED', dueDate: new Date('2026-09-09T12:00:00Z'), completedAt: new Date('2026-09-10T12:00:00Z') }
+    ] as never);
+    const history = vi.spyOn(prisma.stageHistory, 'findMany').mockResolvedValue([
+      { actorId: 'ana', toStage: 'FOLLOW_UP' }
+    ] as never);
+    const range = getRecentReportRange(period, new Date('2026-09-12T12:00:00Z'));
+    const legacyReport = await buildReport(range);
+    expect(legacyReport.goalActuals).toMatchObject({ meetings: 0, followUpsCompleted: 1 });
+    expect(legacyReport.members).toEqual([]);
+
+    history.mockResolvedValue([
+      { actorId: 'ana', toStage: 'FOLLOW_UP' },
+      { actorId: 'bia', toStage: 'MEETING' }
+    ] as never);
+    const report = await buildReport(range);
+    expect(report.goalActuals).toMatchObject({ meetings: 1, followUpsCompleted: 1 });
+    expect(report.members).toEqual([{ memberId: 'bia', approaches: 0, interests: 0, meetings: 1, wins: 0, sales: 0, mrr: 0 }]);
+  });
+
+  test('keeps a saved daily meeting snapshot unchanged when closing the date again', async () => {
+    const reference = new Date('2026-09-12T12:00:00Z');
+    const saved = {
+      id: 'saved-day', dayStart: new Date('2026-09-12T03:00:00Z'), dayEnd: new Date('2026-09-13T03:00:00Z'),
+      closedAt: reference, closedById: 'ana',
+      snapshot: { summary: { meetings: 7, followUpsCompleted: 2 }, actions: [] }
+    };
+    vi.spyOn(prisma.dailyReport, 'findUnique').mockResolvedValue(saved as never);
+    const builder = vi.spyOn(reportModule, 'buildDailyReportSnapshot');
+    const write = vi.spyOn(prisma.dailyReport, 'createMany');
+    expect((await getDailyReportForDate(reference))?.snapshot).toEqual(saved.snapshot);
+    const result = await closeCurrentDailyReport('bia', reference);
+    expect(result).toMatchObject({ created: false, report: { snapshot: saved.snapshot } });
+    expect(builder).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+  });
+});
 
 describe('commercial reports', () => {
   beforeEach(async () => {

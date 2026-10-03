@@ -1,9 +1,99 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import * as React from 'react';
+
+vi.mock('../../lib/auth', () => ({ getCurrentUser: vi.fn(async () => ({ id: 'ana', name: 'Ana' })) }));
+vi.mock('../../lib/member-profile', () => ({ getMemberProfiles: vi.fn(async () => [{ id: 'ana', name: 'Ana' }]) }));
+vi.mock('../../lib/daily-reports', () => ({ getDailyReportForDate: vi.fn(async () => null) }));
+vi.mock('../../components/daily-close-control', () => ({ DailyCloseControl: () => null }));
+vi.mock('../../components/team-goal-progress', () => ({ TeamGoalProgress: () => null }));
+vi.mock('@phosphor-icons/react/dist/ssr', () => {
+  const Icon = () => null;
+  return { ArrowRightIcon: Icon, ArrowSquareOutIcon: Icon, CalendarCheckIcon: Icon, ChartBarIcon: Icon,
+    CheckCircleIcon: Icon, CurrencyDollarIcon: Icon, FunnelIcon: Icon, MagnifyingGlassIcon: Icon,
+    PaperPlaneTiltIcon: Icon, TargetIcon: Icon, UserIcon: Icon, UsersThreeIcon: Icon };
+});
 
 import { getDashboardMetrics, upsertTeamGoal } from '../../lib/metrics';
 import { prisma } from '../../lib/db';
 
+describe('dashboard follow-up query and presentation', () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  test('loads five future pending reminders independently of all period completions', async () => {
+    vi.stubGlobal('React', React);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-12T12:00:00Z'));
+    vi.spyOn(prisma.teamGoalSettings, 'findUnique').mockResolvedValue(null);
+    vi.spyOn(prisma.goal, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.lead, 'findMany').mockResolvedValue([
+      { id: 'lead', stage: 'FOLLOW_UP', saleValue: null, mrr: null, wonAt: null, wonById: null }
+    ] as never);
+    vi.spyOn(prisma.activity, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.stageHistory, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.saleEvent, 'findMany').mockResolvedValue([]);
+    const completion = { leadId: 'lead', ownerId: 'ana', state: 'COMPLETED', dueDate: new Date('2026-09-10T12:00:00Z'), completedAt: new Date('2026-09-12T10:00:00Z') };
+    const followUps = vi.spyOn(prisma.followUp, 'findMany')
+      .mockResolvedValueOnce(Array.from({ length: 8 }, (_, index) => ({ ...completion, id: `done-${index}` })) as never)
+      .mockResolvedValueOnce([{
+        id: 'upcoming', leadId: 'lead', ownerId: 'ana', state: 'PENDING',
+        dueDate: new Date('2026-09-13T03:00:00Z'), completedAt: null, lead: { id: 'lead', name: 'Oficina Futura' }
+      }] as never);
+    const { default: Home } = await import('../../app/(app)/page');
+    const html = renderToStaticMarkup(await Home({ searchParams: Promise.resolve({ period: 'week' }) }));
+    expect(followUps.mock.calls[0][0]).not.toHaveProperty('take');
+    expect(followUps.mock.calls[0][0]).toMatchObject({ where: { OR: [
+      { state: 'PENDING', dueDate: { lt: new Date('2026-09-13T03:00:00Z') } },
+      { state: 'COMPLETED', completedAt: { gte: expect.any(Date), lt: expect.any(Date) } }
+    ] } });
+    expect(followUps.mock.calls[1][0]).toMatchObject({
+      where: { state: 'PENDING', dueDate: { gte: new Date('2026-09-13T03:00:00Z') } },
+      orderBy: [{ dueDate: 'asc' }, { id: 'asc' }], take: 5
+    });
+    expect(html).toContain('Próximos');
+    expect(html).toContain('Oficina Futura');
+    expect(html).toContain('Ana · Retorno em 13/09/2026');
+    expect(html).toMatch(/Follow-ups concluídos<\/p><p[^>]*>8<\/p>/);
+    expect(html).not.toContain('Reuniões / retornos');
+  });
+});
+
 describe('getDashboardMetrics', () => {
+  test('counts a legacy explicit MEETING note separately from FOLLOW_UP', () => {
+    const metrics = getDashboardMetrics([{
+      id: 'legacy-meeting', stage: 'FOLLOW_UP', saleValue: null, mrr: null, followUps: [],
+      activities: [
+        { actorId: 'ana', type: 'STAGE_CHANGE', createdAt: new Date('2026-09-09T10:00:00Z'), note: 'Etapa alterada para MEETING.' },
+        { actorId: 'ana', type: 'STAGE_CHANGE', createdAt: new Date('2026-09-09T11:00:00Z'), note: 'Etapa alterada para FOLLOW_UP.' }
+      ]
+    }], { start: new Date('2026-09-07T03:00:00Z'), end: new Date('2026-09-14T03:00:00Z') });
+    expect(metrics.goalActuals).toMatchObject({ meetings: 1, followUpsCompleted: 0 });
+  });
+
+  test('limits upcoming pending follow-ups to five ordered items across São Paulo midnight', () => {
+    const pending = (id: string, dueDate: string) => ({ id, ownerId: 'ana', state: 'PENDING' as const, dueDate: new Date(dueDate) });
+    const metrics = getDashboardMetrics([{
+      id: 'upcoming-lead', stage: 'FOLLOW_UP', saleValue: null, mrr: null, activities: [],
+      followUps: [
+        pending('sixth', '2026-09-18T03:00:00Z'),
+        pending('tomorrow', '2026-09-13T03:00:00Z'),
+        pending('fifth', '2026-09-17T03:00:00Z'),
+        pending('third', '2026-09-15T03:00:00Z'),
+        pending('second', '2026-09-14T03:00:00Z'),
+        pending('fourth', '2026-09-16T03:00:00Z'),
+        pending('today-end', '2026-09-13T02:59:59.999Z'),
+        pending('today-start', '2026-09-12T03:00:00Z'),
+        pending('yesterday-end', '2026-09-12T02:59:59.999Z'),
+        { ...pending('completed', '2026-09-13T03:00:00Z'), state: 'COMPLETED', completedAt: new Date('2026-09-12T12:00:00Z') },
+        { ...pending('cancelled', '2026-09-13T03:00:00Z'), state: 'CANCELLED' }
+      ]
+    }], { start: new Date('2026-09-07T03:00:00Z'), end: new Date('2026-09-14T03:00:00Z'), now: new Date('2026-09-12T12:00:00Z') });
+    expect(metrics.upcoming.map((item) => item.id)).toEqual(['tomorrow', 'second', 'third', 'fourth', 'fifth']);
+    expect(metrics.dueToday.map((item) => item.id)).toEqual(['today-end', 'today-start']);
+    expect(metrics.overdue.map((item) => item.id)).toEqual(['yesterday-end']);
+    expect(metrics.goalActuals.followUpsCompleted).toBe(1);
+  });
+
   test('counts the renamed conversation stage as an interest without counting later stages again', () => {
     const metrics = getDashboardMetrics(
       [{

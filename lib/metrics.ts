@@ -1,7 +1,7 @@
 import type { ActivityType, GoalPeriodKind, LeadStage, Prisma } from '@prisma/client';
 import { prisma } from './db';
 import { isInterestStage, isMeetingStage } from './funnel';
-import { isSameLocalDay, type GoalPeriodWindow } from './goal-periods';
+import { getLocalDayWindow, isSameLocalDay, type GoalPeriodWindow } from './goal-periods';
 import type { CustomGoalMetric } from './custom-goals';
 
 export type MetricActivity = { actorId: string; type?: ActivityType; createdAt: Date; note?: string };
@@ -50,6 +50,7 @@ export type DashboardMetrics = {
   goalActuals: GoalMetricActuals;
   dueToday: MetricFollowUp[];
   overdue: MetricFollowUp[];
+  upcoming: MetricFollowUp[];
   personalResults: Record<string, MemberResults>;
 };
 
@@ -110,7 +111,7 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
       if ((activity.type === 'CONTACT' || !activity.type) && inRange(activity.createdAt, range)) member(activity.actorId).approaches += 1;
     }
     const history = lead.stageHistory?.length ? lead.stageHistory : (lead.activities ?? []).flatMap((activity) => {
-      const match = activity.note?.match(/INTEREST|IN_CONVERSATION|FOLLOW_UP/);
+      const match = activity.note?.match(/\b(?:INTEREST|IN_CONVERSATION|MEETING|FOLLOW_UP)\b/);
       return match ? [{ actorId: activity.actorId, toStage: match[0] as LeadStage, createdAt: activity.createdAt }] : [];
     });
     for (const event of history) {
@@ -144,6 +145,7 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
 export function getDashboardMetrics(leads: MetricLead[], range: DashboardRange): DashboardMetrics {
   const { personal: personalResults, team: teamResults, mrr, followUpsCompleted } = resultsFor(leads, range);
   const now = range.now ?? new Date();
+  const todayEnd = getLocalDayWindow(now).end;
   const pendingFollowUps = leads.flatMap((lead) => lead.followUps.filter((followUp) => followUp.state === 'PENDING'));
 
   return {
@@ -165,6 +167,9 @@ export function getDashboardMetrics(leads: MetricLead[], range: DashboardRange):
     },
     dueToday: pendingFollowUps.filter((followUp) => isSameLocalDay(followUp.dueDate, now)),
     overdue: pendingFollowUps.filter((followUp) => followUp.dueDate < now && !isSameLocalDay(followUp.dueDate, now)),
+    upcoming: pendingFollowUps.filter((followUp) => followUp.dueDate >= todayEnd)
+      .sort((first, second) => first.dueDate.getTime() - second.dueDate.getTime())
+      .slice(0, 5),
     personalResults
   };
 }

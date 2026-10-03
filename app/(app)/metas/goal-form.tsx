@@ -41,7 +41,7 @@ const metricGroups = [
     description: 'Relacionamentos que seguem pelo funil.',
     Icon: ArrowsClockwiseIcon,
     fields: [
-      { key: 'meetings', goalKey: 'meetingsTarget', label: 'Reuniões e retornos', min: '1', step: '1' },
+      { key: 'meetings', goalKey: 'meetingsTarget', label: 'Reuniões', min: '1', step: '1' },
       { key: 'followUpsCompleted', goalKey: 'followUpsCompletedTarget', label: 'Follow-ups concluídos', min: '1', step: '1' },
       { key: 'sales', goalKey: 'salesTarget', label: 'Vendas fechadas', min: '1', step: '1' }
     ]

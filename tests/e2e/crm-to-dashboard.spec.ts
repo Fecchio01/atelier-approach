@@ -17,9 +17,10 @@ test('shows the complete operational dashboard with branded navigation and funne
   for (const label of ['Painel', 'Funil', 'Empresas', 'Metas', 'Relatórios']) {
     await expect(primaryNavigation.getByRole('link', { name: label }).locator('svg')).toHaveCount(1);
   }
-  for (const label of ['Receita vendida', 'MRR', 'Abordagens', 'Interesses', 'Reuniões / retornos', 'Follow-ups concluídos']) {
+  for (const label of ['Receita vendida', 'MRR', 'Abordagens', 'Interesses', 'Reuniões', 'Follow-ups concluídos']) {
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
   }
+  await expect(page.getByRole('heading', { name: /^Próximos/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Meta semanal da equipe' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Meta do ciclo mensal' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Follow-ups' })).toBeVisible();

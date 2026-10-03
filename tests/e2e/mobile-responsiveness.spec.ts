@@ -76,6 +76,7 @@ test('keeps dashboard, search, and profile usable without page overflow on phone
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Visão operacional' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Ciclo mensal' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Próximos/ })).toBeVisible();
     await expectNoViewportOverflow(page);
 
     await page.goto('/pesquisa');

@@ -39,11 +39,12 @@ function windowLabel(window: GoalPeriodWindow) {
   return `${date.format(window.start)} a ${date.format(new Date(window.end.getTime() - 1))}`;
 }
 
-function FollowUps({ followUps, empty, nameFor, overdue = false }: {
+function FollowUps({ followUps, empty, nameFor, overdue = false, upcoming = false }: {
   followUps: MetricFollowUp[];
   empty: string;
   nameFor: (id: string) => string;
   overdue?: boolean;
+  upcoming?: boolean;
 }) {
   return <ul className="mt-2 flex flex-1 flex-col divide-y divide-white/[0.07]">
     {followUps.length ? followUps.map((followUp) => <li key={followUp.id} className="flex items-start gap-3 py-3 text-sm">
@@ -52,7 +53,7 @@ function FollowUps({ followUps, empty, nameFor, overdue = false }: {
       </span>
       <span className="min-w-0 flex-1">
         <strong className="block truncate font-medium text-white">{followUp.lead?.name ?? 'Lead sem nome'}</strong>
-        <span className="mt-1 block text-xs text-white/55">{nameFor(followUp.ownerId)} · {overdue ? `Vencido em ${shortDate(followUp.dueDate)}` : 'Retorno previsto para hoje'}</span>
+        <span className="mt-1 block text-xs text-white/55">{nameFor(followUp.ownerId)} · {overdue ? `Vencido em ${shortDate(followUp.dueDate)}` : upcoming ? `Retorno em ${shortDate(followUp.dueDate)}` : 'Retorno previsto para hoje'}</span>
       </span>
       <ArrowRightIcon className="mt-2 shrink-0 text-white/35" size={15} aria-hidden="true" />
     </li>) : <li className="flex flex-1 items-center py-3 text-sm text-white/50">{empty}</li>}
@@ -106,7 +107,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const dataTo = [selectedRange.end, weeklyPeriod.end, monthlyPeriod.end].reduce((latest, date) => date > latest ? date : latest);
   const today = getLocalDayWindow(now);
 
-  const [leads, activities, stageHistory, saleEvents, followUps] = await Promise.all([
+  const [leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps] = await Promise.all([
     prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } }),
     prisma.activity.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }),
     prisma.stageHistory.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, toStage: true, createdAt: true } }),
@@ -116,6 +117,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
         { state: 'PENDING', dueDate: { lt: today.end } },
         { state: 'COMPLETED', completedAt: { gte: dataFrom, lt: dataTo } }
       ] },
+      select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
+    }),
+    prisma.followUp.findMany({
+      where: { state: 'PENDING', dueDate: { gte: today.end } },
+      orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+      take: 5,
       select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
     })
   ]);
@@ -128,7 +135,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const activitiesByLead = byLead(activities);
   const historyByLead = byLead(stageHistory);
   const salesByLead = byLead(saleEvents);
-  const followUpsByLead = byLead(followUps);
+  const followUpsByLead = byLead([...followUps, ...upcomingFollowUps]);
   const metricLeads: MetricLead[] = leads.map((lead) => ({
     ...lead,
     activities: (activitiesByLead.get(lead.id) ?? []).map(({ actorId, type, createdAt, note }) => ({ actorId, type, createdAt, note })),
@@ -159,7 +166,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     { label: 'MRR', value: money(selectedMetrics.mrr), detail: 'Receita mensal recorrente', Icon: ChartBarIcon },
     { label: 'Abordagens', value: String(selectedMetrics.approaches), detail: 'Atividades no período', Icon: PaperPlaneTiltIcon },
     { label: 'Interesses', value: String(selectedMetrics.interests), detail: 'Avanços para interesse', Icon: UsersThreeIcon },
-    { label: 'Reuniões / retornos', value: String(selectedMetrics.meetings), detail: 'Avanços para follow-up', Icon: CalendarCheckIcon },
+    { label: 'Reuniões', value: String(selectedMetrics.meetings), detail: 'Avanços para reunião', Icon: CalendarCheckIcon },
     { label: 'Follow-ups concluídos', value: String(selectedMetrics.goalActuals.followUpsCompleted), detail: 'Contados pela data de conclusão', Icon: CheckCircleIcon }
   ];
 
@@ -224,16 +231,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       <section className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><CalendarCheckIcon size={19} weight="regular" aria-hidden="true" /></span>
-          <div><h2 className="text-base font-semibold tracking-tight">Follow-ups</h2><p className="mt-1 text-xs text-white/50">Retornos vencidos e previstos para hoje.</p></div>
+          <div><h2 className="text-base font-semibold tracking-tight">Follow-ups</h2><p className="mt-1 text-xs text-white/50">Retornos vencidos, de hoje e os cinco próximos.</p></div>
         </div>
-        <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-2 sm:divide-x sm:divide-white/[0.08]">
+        <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-3 sm:divide-x sm:divide-white/[0.08]">
           <section className="flex min-w-0 flex-col sm:pr-4" aria-labelledby="overdue-followups-heading">
             <h3 id="overdue-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-rose-300" />Em atraso <span className="tabular-nums text-white/40">{selectedMetrics.overdue.length}</span></h3>
             <FollowUps followUps={selectedMetrics.overdue} empty="Nenhum follow-up vencido." nameFor={nameFor} overdue />
           </section>
-          <section className="flex min-w-0 flex-col sm:pl-4" aria-labelledby="today-followups-heading">
+          <section className="flex min-w-0 flex-col sm:px-4" aria-labelledby="today-followups-heading">
             <h3 id="today-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-[var(--atelier-green)]" />Para hoje <span className="tabular-nums text-white/40">{selectedMetrics.dueToday.length}</span></h3>
             <FollowUps followUps={selectedMetrics.dueToday} empty="Nenhum retorno para hoje." nameFor={nameFor} />
+          </section>
+          <section className="flex min-w-0 flex-col sm:pl-4" aria-labelledby="upcoming-followups-heading">
+            <h3 id="upcoming-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-sky-300" />Próximos <span className="tabular-nums text-white/40">{selectedMetrics.upcoming.length}</span></h3>
+            <FollowUps followUps={selectedMetrics.upcoming} empty="Nenhum retorno futuro pendente." nameFor={nameFor} upcoming />
           </section>
         </div>
       </section>
@@ -282,7 +293,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
         <div className="mt-5 grid grid-cols-2 gap-x-3 gap-y-5 text-left">
           <Result label="Abordagens" value={mine.approaches} />
           <Result label="Interesses" value={mine.interests} />
-          <Result label="Reuniões / retornos" value={mine.meetings} />
+          <Result label="Reuniões" value={mine.meetings} />
           <Result label="Vendas" value={mine.won} />
           <Result label="Receita vendida" value={money(mine.sales)} />
         </div>

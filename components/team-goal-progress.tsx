@@ -3,7 +3,7 @@ import type { GoalProgressByMetric } from '@/lib/metrics';
 const metrics = [
   ['approaches', 'Abordagens'],
   ['interests', 'Interesses'],
-  ['meetings', 'Reuniões e retornos'],
+  ['meetings', 'Reuniões'],
   ['sales', 'Vendas fechadas'],
   ['revenue', 'Receita de vendas'],
   ['mrr', 'MRR'],
