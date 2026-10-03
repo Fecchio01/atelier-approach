@@ -13,6 +13,7 @@ enum LeadStage {
   IN_CONVERSATION
   QUALIFIED
   PROPOSAL
+  MEETING
   INTEREST
   FOLLOW_UP
   WON
@@ -42,6 +43,7 @@ enum ActivityType {
   FOLLOW_UP_COMPLETED
   FOLLOW_UP_CANCELLED
   SALE_WON
+  SALE_FINANCIALS_UPDATED
   LEAD_REOPENED
   DISCARDED
 }
@@ -64,7 +66,7 @@ model Lead {
   latitude     Float?
   longitude    Float?
   syncedAt     DateTime?
-  stage        LeadStage      @default(NEW)
+  stage        LeadStage      @default(CONTACTED)
   saleValue    Decimal?
   mrr          Decimal?
   wonAt        DateTime?

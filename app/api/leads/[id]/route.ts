@@ -45,7 +45,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const hasStage = Object.prototype.hasOwnProperty.call(body, 'stage');
-  const stage = typeof body.stage === 'string' && Object.values(LeadStage).includes(body.stage as LeadStage)
+  const stage = typeof body.stage === 'string' && body.stage !== 'NEW' && Object.values(LeadStage).includes(body.stage as LeadStage)
     ? body.stage as LeadStage
     : undefined;
   if (hasStage && !stage) return Response.json({ error: 'Etapa inválida.' }, { status: 400 });

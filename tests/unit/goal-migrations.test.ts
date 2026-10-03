@@ -8,6 +8,14 @@ const customGoalMigrationPath = resolve(process.cwd(), 'prisma/migrations/202610
 const customGoalMigration = existsSync(customGoalMigrationPath) ? readFileSync(customGoalMigrationPath, 'utf8') : '';
 
 describe('goal migrations', () => {
+  test('adds meeting and financial audit enums and changes only the lead default', () => {
+    const migrationPath = resolve(process.cwd(), 'prisma/migrations/20261003000000_crm_funnel_meetings_sale_financial_audit/migration.sql');
+    const migration = existsSync(migrationPath) ? readFileSync(migrationPath, 'utf8') : '';
+    expect(migration).toContain('ALTER TYPE "LeadStage" ADD VALUE \'MEETING\'');
+    expect(migration).toContain('ALTER TYPE "ActivityType" ADD VALUE \'SALE_FINANCIALS_UPDATED\'');
+    expect(migration).toContain('ALTER TABLE "Lead" ALTER COLUMN "stage" SET DEFAULT \'CONTACTED\'');
+    expect(migration).not.toMatch(/\b(UPDATE|DELETE|DROP)\b/i);
+  });
   test('uses the schema selected by the database connection for the PostgreSQL baseline', () => {
     expect(baseline).not.toContain('"atelier".');
     expect(baseline).not.toMatch(/CREATE SCHEMA/i);

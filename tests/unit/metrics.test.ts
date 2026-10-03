@@ -137,7 +137,7 @@ describe('getDashboardMetrics', () => {
     expect(metrics.goalActuals.followUpsCompleted).toBe(1);
   });
 
-  test('tracks interest, meeting, and sales-count goal progress for the team and each member', () => {
+  test('keeps legacy follow-up notes out of meeting goal progress', () => {
     const metrics = getDashboardMetrics(
       [{
         id: 'qualified-lead', stage: 'WON', saleValue: 500, mrr: 50,
@@ -151,8 +151,22 @@ describe('getDashboardMetrics', () => {
       { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z') }
     );
 
-    expect(metrics.goalActuals).toMatchObject({ approaches: 2, interests: 1, meetings: 1, sales: 1, revenue: 500, mrr: 50 });
-    expect(metrics.personalResults.ana).toMatchObject({ approaches: 2, interests: 1, meetings: 1, won: 1, sales: 500 });
+    expect(metrics.goalActuals).toMatchObject({ approaches: 2, interests: 1, meetings: 0, sales: 1, revenue: 500, mrr: 50 });
+    expect(metrics.personalResults.ana).toMatchObject({ approaches: 2, interests: 1, meetings: 0, won: 1, sales: 500 });
+  });
+
+  test('counts explicit meeting history without treating follow-ups as meetings', () => {
+    const metrics = getDashboardMetrics([{
+      id: 'meeting-history', stage: 'FOLLOW_UP', saleValue: null, mrr: null, activities: [], followUps: [],
+      stageHistory: [
+        { actorId: 'ana', toStage: 'INTEREST', createdAt: new Date('2026-09-08T10:00:00.000Z') },
+        { actorId: 'ana', toStage: 'MEETING', createdAt: new Date('2026-09-09T10:00:00.000Z') },
+        { actorId: 'bia', toStage: 'FOLLOW_UP', createdAt: new Date('2026-09-10T10:00:00.000Z') }
+      ]
+    }], { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z') });
+    expect(metrics.goalActuals).toMatchObject({ interests: 1, meetings: 1 });
+    expect(metrics.personalResults.ana).toMatchObject({ interests: 1, meetings: 1 });
+    expect(metrics.personalResults.bia).toBeUndefined();
   });
 
   test('updates the existing team goal for the same period', async () => {

@@ -34,6 +34,36 @@ describe('lead routes', () => {
     await expect(prisma.activity.findMany({ where: { leadId: payload.lead.id } })).resolves.toHaveLength(1);
   });
 
+  test('defaults database creations to CONTACTED', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/default-stage' } });
+    expect(lead.stage).toBe('CONTACTED');
+  });
+
+  test('rejects NEW as a destination without changing persisted legacy data', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/legacy-new', stage: 'NEW' } });
+    const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage: 'NEW' })
+    }), { params: Promise.resolve({ id: lead.id }) });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Etapa inválida.' });
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({ stage: 'NEW' });
+    expect(await prisma.stageHistory.count({ where: { leadId: lead.id } })).toBe(0);
+  });
+
+  test('allows contact updates and operational transitions on persisted NEW leads', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/legacy-update', stage: 'NEW' } });
+    const contactResponse = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ activity: { channel: 'PHONE', note: 'Contato legado.' } })
+    }), { params: Promise.resolve({ id: lead.id }) });
+    expect(contactResponse.status).toBe(200);
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({ stage: 'NEW' });
+    const moveResponse = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage: 'MEETING' })
+    }), { params: Promise.resolve({ id: lead.id }) });
+    expect(moveResponse.status).toBe(200);
+    await expect(prisma.stageHistory.findFirstOrThrow({ where: { leadId: lead.id } })).resolves.toMatchObject({ fromStage: 'NEW', toStage: 'MEETING' });
+  });
+
   test('records a default approach note when the user submits only a channel', async () => {
     const response = await POST(new Request('http://localhost/api/leads', {
       method: 'POST',

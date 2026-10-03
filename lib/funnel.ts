@@ -1,13 +1,14 @@
-export const mainFunnelStages = ['NEW', 'CONTACTED', 'IN_CONVERSATION', 'QUALIFIED', 'PROPOSAL', 'FOLLOW_UP', 'WON'] as const;
+export const mainFunnelStages = ['CONTACTED', 'IN_CONVERSATION', 'QUALIFIED', 'PROPOSAL', 'MEETING', 'FOLLOW_UP', 'WON'] as const;
 
 export const auxiliaryFunnelStages = ['NO_RESPONSE', 'DISCARDED'] as const;
 
 export const stageLabels = {
-  NEW: 'Novo',
+  NEW: 'Abordado',
   CONTACTED: 'Abordado',
   IN_CONVERSATION: 'Em conversa',
   QUALIFIED: 'Qualificado',
   PROPOSAL: 'Proposta enviada',
+  MEETING: 'Reunião',
   FOLLOW_UP: 'Follow-up',
   WON: 'Ganho',
   NO_RESPONSE: 'Sem resposta',
@@ -20,13 +21,14 @@ export const stageLabels = {
 export type MainFunnelStage = (typeof mainFunnelStages)[number];
 export type AuxiliaryFunnelStage = (typeof auxiliaryFunnelStages)[number];
 export type FunnelStage = MainFunnelStage | AuxiliaryFunnelStage;
-export type PersistedFunnelStage = FunnelStage | 'INTEREST';
+export type PersistedFunnelStage = FunnelStage | 'NEW' | 'INTEREST';
 
 export function normalizeFunnelStage(stage: PersistedFunnelStage | string): FunnelStage {
+  if (stage === 'NEW') return 'CONTACTED';
   if (stage === 'INTEREST') return 'IN_CONVERSATION';
   if ((mainFunnelStages as readonly string[]).includes(stage)) return stage as MainFunnelStage;
   if ((auxiliaryFunnelStages as readonly string[]).includes(stage)) return stage as AuxiliaryFunnelStage;
-  return 'NEW';
+  return 'CONTACTED';
 }
 
 export function isApproachStage(stage: PersistedFunnelStage | string) {
@@ -38,5 +40,5 @@ export function isInterestStage(stage: PersistedFunnelStage | string) {
 }
 
 export function isMeetingStage(stage: PersistedFunnelStage | string) {
-  return normalizeFunnelStage(stage) === 'FOLLOW_UP';
+  return normalizeFunnelStage(stage) === 'MEETING';
 }

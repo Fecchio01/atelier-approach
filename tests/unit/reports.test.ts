@@ -184,7 +184,7 @@ describe('commercial reports', () => {
         activities: { create: { actorId: 'ana', type: 'CONTACT', channel: 'WHATSAPP', note: 'Primeira abordagem.', createdAt: new Date('2026-09-09T10:00:00.000Z') } },
         stageHistory: { create: [
           { actorId: 'ana', toStage: 'INTEREST', createdAt: new Date('2026-09-09T11:00:00.000Z') },
-          { actorId: 'ana', toStage: 'FOLLOW_UP', createdAt: new Date('2026-09-09T12:00:00.000Z') }
+          { actorId: 'ana', toStage: 'MEETING', createdAt: new Date('2026-09-09T12:00:00.000Z') }
         ] },
         followUps: { create: { ownerId: 'ana', dueDate: new Date('2026-09-10T10:00:00.000Z'), note: 'Retorno concluído.', state: 'COMPLETED', completedAt: new Date('2026-09-10T11:00:00.000Z'), completedById: 'ana' } }
       }

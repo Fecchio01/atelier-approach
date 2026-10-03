@@ -33,6 +33,7 @@ const activityLabels = {
   FOLLOW_UP_COMPLETED: 'Follow-up concluído',
   FOLLOW_UP_CANCELLED: 'Follow-up cancelado',
   SALE_WON: 'Negócio ganho',
+  SALE_FINANCIALS_UPDATED: 'Valores da venda atualizados',
   LEAD_REOPENED: 'Empresa reaberta',
   DISCARDED: 'Empresa descartada'
 } as const;
