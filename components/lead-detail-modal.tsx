@@ -6,7 +6,6 @@ import { mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage }
 import type { CrmLead } from './kanban-board';
 import { googleMapsSearchUrl } from '@/lib/google-maps-url';
 
-import { parseClosingValues } from '@/lib/crm-form';
 import { displayCompanyName } from '@/lib/display-name';
 
 type Stage = FunnelStage;
@@ -21,7 +20,7 @@ const channelLabels: Record<string, string> = {
 const activityLabels: Record<string, string> = {
   CONTACT: 'Contato', STAGE_CHANGE: 'Etapa alterada', FOLLOW_UP_SCHEDULED: 'Follow-up agendado',
   FOLLOW_UP_COMPLETED: 'Follow-up concluído', FOLLOW_UP_CANCELLED: 'Follow-up cancelado', SALE_WON: 'Negócio ganho',
-  LEAD_REOPENED: 'Lead reaberto', DISCARDED: 'Lead descartado'
+  LEAD_REOPENED: 'Lead reaberto', DISCARDED: 'Lead descartado', SALE_FINANCIALS_UPDATED: 'Valores da venda atualizados'
 };
 
 function dateTimeLabel(value: string) {
@@ -38,6 +37,7 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
   const confirmationFocusTarget = useRef<'RETURN' | 'DISCARD'>('RETURN');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [financialsSaved, setFinancialsSaved] = useState(false);
   const [confirmingReturn, setConfirmingReturn] = useState(false);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [followUpAt, setFollowUpAt] = useState<Record<string, string>>({});
@@ -83,8 +83,10 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
       const payload = (await response.json()) as { error?: string; lead?: { stage?: Stage } };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível atualizar o lead.');
       onUpdated(payload.lead?.stage);
+      return true;
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Não foi possível atualizar o lead.');
+      return false;
     } finally {
       setSavingId(null);
     }
@@ -96,11 +98,6 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
 
   async function saveStageChange(id: string) {
     if (stageDraft === normalizeFunnelStage(lead.stage)) return;
-    if (stageDraft === 'WON') {
-      setActiveTab('NEXT_ACTION');
-      setError('Informe o valor da venda e o MRR para fechar o negócio.');
-      return;
-    }
     await moveLead(id, stageDraft);
   }
 
@@ -118,12 +115,26 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
   }
 
   async function closeLead(id: string) {
-    const closingValues = parseClosingValues(saleValues[id] ?? lead.saleValue ?? undefined, mrrValues[id] ?? lead.mrr ?? undefined);
-    if (!closingValues) {
-      setError('Informe o valor da venda e o MRR para fechar o negócio.');
+    await updateLead(id, { stage: 'WON' });
+  }
+
+  async function saveFinancials(id: string) {
+    setFinancialsSaved(false);
+    const details: Record<string, number> = {};
+    for (const [key, value] of [['saleValue', saleValues[id]], ['mrr', mrrValues[id]]] as const) {
+      if (value === undefined || !value.trim()) continue;
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0) {
+        setError('Valores monetários devem ser não negativos.');
+        return;
+      }
+      details[key] = number;
+    }
+    if (!Object.keys(details).length) {
+      setError('Informe um valor para atualizar a venda.');
       return;
     }
-    await updateLead(id, { stage: 'WON', ...closingValues });
+    if (await updateLead(id, details)) setFinancialsSaved(true);
   }
 
   async function recordActivity(id: string) {
@@ -210,15 +221,19 @@ export function LeadDetailModal({ lead, onClose, onUpdated, onDeleted }: { lead:
           <button type="button" disabled={savingId === lead.id} onClick={() => recordActivity(lead.id)} className="min-h-11 rounded-md border border-white/30 px-3 text-sm disabled:opacity-60">Registrar contato</button>
         </div>
         <div className="grid gap-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
+          {lead.stage === 'WON' ? <>
+          <p className="text-sm text-white/60">Negócio ganho. Você pode complementar os valores opcionalmente.</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="grid min-w-0 gap-1 text-xs text-white/55">Valor da venda
-              <input aria-label="Valor da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? lead.saleValue ?? ''} onChange={(event) => setSaleValues({ ...saleValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
+              <input aria-label="Valor da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? lead.saleValue ?? ''} onChange={(event) => { setFinancialsSaved(false); setSaleValues({ ...saleValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
             </label>
             <label className="grid min-w-0 gap-1 text-xs text-white/55">MRR
-              <input aria-label="MRR" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? lead.mrr ?? ''} onChange={(event) => setMrrValues({ ...mrrValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
+              <input aria-label="MRR" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? lead.mrr ?? ''} onChange={(event) => { setFinancialsSaved(false); setMrrValues({ ...mrrValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
             </label>
           </div>
-          <button type="button" disabled={savingId === lead.id} onClick={() => closeLead(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">Fechar negócio</button>
+          <button type="button" disabled={savingId === lead.id} onClick={() => saveFinancials(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">{savingId === lead.id ? 'Salvando valores…' : 'Salvar valores da venda'}</button>
+          {financialsSaved ? <p role="status" className="text-sm text-[var(--atelier-green)]">Valores da venda salvos.</p> : null}
+          </> : <><p className="text-sm text-white/60">Marque como ganho para registrar a venda. Os valores podem ser informados depois.</p><button type="button" disabled={savingId === lead.id} onClick={() => closeLead(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">Fechar negócio</button></>}
         </div>
         {lead.stage !== 'DISCARDED' ? <button ref={discardButtonRef} type="button" disabled={savingId === lead.id} onClick={discardLead} className="min-h-11 rounded-lg border border-red-300/45 px-3 text-sm text-red-200 disabled:opacity-60 md:col-span-2">Descartar empresa</button> : null}
         </section> : null}

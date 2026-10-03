@@ -91,7 +91,27 @@ test('CRM keeps details private to an accessible modal and preserves lead action
     await expect(modal.getByText('Anotação que pertence apenas aos detalhes.')).toBeVisible();
     await modal.getByRole('button', { name: 'Próxima ação', exact: true }).click();
     await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
-    await expect(modal.getByRole('alert')).toHaveText('Informe o valor da venda e o MRR para fechar o negócio.');
+    await expect(modal).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Ganho', exact: true }).getByRole('button', { name: `Abrir detalhes de ${name}` })).toHaveCount(1);
+    const databaseUrl = process.env.TEST_DATABASE_URL;
+    if (!databaseUrl || new URL(databaseUrl).searchParams.get('schema') !== 'atelier_test') throw new Error('TEST_DATABASE_URL must point to the isolated atelier_test schema.');
+    const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+    try {
+      const original = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id } });
+      expect(Number(original.saleValue)).toBe(0);
+      expect(Number(original.mrr)).toBe(0);
+      await card.click();
+      await modal.getByRole('button', { name: 'Próxima ação', exact: true }).click();
+      await modal.getByLabel('Valor da venda', { exact: true }).fill('1500');
+      await modal.getByRole('button', { name: 'Salvar valores da venda', exact: true }).click();
+      await expect(modal.getByRole('status')).toHaveText('Valores da venda salvos.');
+      const sales = await prisma.saleEvent.findMany({ where: { leadId: lead.id } });
+      expect(sales).toHaveLength(1);
+      expect(sales[0].id).toBe(original.id);
+      expect(sales[0].occurredAt).toEqual(original.occurredAt);
+      expect(Number(sales[0].saleValue)).toBe(1500);
+      expect(Number(sales[0].mrr)).toBe(0);
+    } finally { await prisma.$disconnect(); }
     await page.keyboard.press('Escape');
     await expect(modal).toHaveCount(0);
     await expect(card).toBeFocused();

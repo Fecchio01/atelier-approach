@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 
@@ -208,19 +208,40 @@ describe('lead routes', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Valores monetários devem ser não negativos.' });
   });
 
-  test('requires both sale value and MRR before a lead can be marked as won', async () => {
+  test('records an unpriced win and cancels pending follow-ups', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/missing-closing-values' } });
+    const followUp = await prisma.followUp.create({ data: { leadId: lead.id, ownerId: 'internal-equipe', dueDate: new Date(), note: 'Retorno pendente.' } });
 
     const response = await PATCH(
       new Request(`http://localhost/api/leads/${lead.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stage: 'WON', saleValue: 1200 })
+        body: JSON.stringify({ stage: 'WON' })
       }),
       { params: Promise.resolve({ id: lead.id }) }
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: 'Informe o valor da venda e o MRR para fechar o negócio.' });
+    expect(response.status).toBe(200);
+    const sale = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id } });
+    expect(Number(sale.saleValue)).toBe(0);
+    expect(Number(sale.mrr)).toBe(0);
+    expect(await prisma.saleEvent.count({ where: { leadId: lead.id } })).toBe(1);
+    await expect(prisma.followUp.findUniqueOrThrow({ where: { id: followUp.id } })).resolves.toMatchObject({ state: 'CANCELLED', cancelledById: 'internal-equipe' });
+  });
+
+  test('supplements a persisted sale without changing its identity or counting another sale', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/financial-complement' } });
+    expect((await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify({ stage: 'WON' }) }), { params: Promise.resolve({ id: lead.id }) })).status).toBe(200);
+    const original = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id } });
+    expect((await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify({ saleValue: 1500 }) }), { params: Promise.resolve({ id: lead.id }) })).status).toBe(200);
+    const sales = await prisma.saleEvent.findMany({ where: { leadId: lead.id } });
+    expect(sales).toHaveLength(1);
+    expect(sales[0]).toMatchObject({ id: original.id, occurredAt: original.occurredAt, actorId: original.actorId });
+    expect(Number(sales[0].saleValue)).toBe(1500);
+    expect(Number(sales[0].mrr)).toBe(0);
+    const updated = await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } });
+    expect(Number(updated.saleValue)).toBe(1500);
+    expect(Number(updated.mrr)).toBe(0);
+    await expect(prisma.activity.findFirstOrThrow({ where: { leadId: lead.id, type: 'SALE_FINANCIALS_UPDATED' } })).resolves.toMatchObject({ actorId: 'internal-equipe', note: 'Valores da venda atualizados: venda de 0 para 1500; MRR de 0 para 0.' });
   });
 
   test('discards a lead directly without requiring a written reason', async () => {
@@ -312,5 +333,111 @@ describe('lead routes', () => {
     await expect(prisma.followUp.findUniqueOrThrow({ where: { id: third.id } })).resolves.toMatchObject({
       state: 'CANCELLED', cancelledById: 'internal-equipe', cancelledAt: expect.any(Date)
     });
+  });
+});
+
+// The real database contract above remains enabled. This route-level harness also
+// exercises financial transactions without requiring a migrated PostgreSQL enum.
+describe('sale financial contract without database', () => {
+  type TestLead = { id: string; stage: string; saleValue: number | null; mrr: number | null; wonAt: Date | null; wonById: string | null };
+  type TestSale = { id: string; leadId: string; actorId: string; saleValue: number; mrr: number; occurredAt: Date };
+  let lead: TestLead;
+  let sales: TestSale[];
+  let activities: { type: string; note: string }[];
+  let followUps: { state: string; cancelledById?: string }[];
+
+  beforeEach(() => {
+    mocks.getCurrentUser.mockResolvedValue({ id: 'internal-equipe' });
+    lead = { id: 'financial-lead', stage: 'CONTACTED', saleValue: null, mrr: null, wonAt: null, wonById: null };
+    sales = [];
+    activities = [];
+    followUps = [{ state: 'PENDING' }, { state: 'COMPLETED' }];
+    const tx = {
+      $queryRaw: async () => [{ id: lead.id }],
+      lead: { findUnique: async () => ({ ...lead }), update: async ({ data }: { data: Partial<TestLead> }) => (lead = { ...lead, ...data }) },
+      stageHistory: { create: async () => ({}) },
+      saleEvent: {
+        create: async ({ data }: { data: Omit<TestSale, 'id'> }) => { const sale = { id: `sale-${sales.length + 1}`, ...data }; sales.push(sale); return sale; },
+        findFirst: async () => sales.toSorted((a, b) => b.occurredAt.valueOf() - a.occurredAt.valueOf())[0] ?? null,
+        update: async ({ where, data }: { where: { id: string }; data: Partial<TestSale> }) => { const sale = sales.find((item) => item.id === where.id)!; Object.assign(sale, data); return sale; }
+      },
+      activity: { create: async ({ data }: { data: { type: string; note: string } }) => { activities.push(data); return data; } },
+      followUp: { updateMany: async ({ data }: { data: { state: string; cancelledById: string } }) => { followUps.filter((item) => item.state === 'PENDING').forEach((item) => Object.assign(item, data)); return { count: 1 }; } }
+    };
+    vi.spyOn(prisma, '$transaction').mockImplementation((async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)) as never);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  async function patch(data: Record<string, unknown>) {
+    return PATCH(new Request('http://localhost/api/leads/financial-lead', { method: 'PATCH', body: JSON.stringify(data) }), { params: Promise.resolve({ id: lead.id }) });
+  }
+
+  test('wins without a price, counts one sale, and cancels only pending follow-ups', async () => {
+    expect((await patch({ stage: 'WON' })).status).toBe(200);
+    expect(lead).toMatchObject({ stage: 'WON', saleValue: 0, mrr: 0, wonById: 'internal-equipe' });
+    expect(sales).toHaveLength(1);
+    expect(sales[0]).toMatchObject({ saleValue: 0, mrr: 0 });
+    expect(followUps).toEqual([expect.objectContaining({ state: 'CANCELLED', cancelledById: 'internal-equipe' }), { state: 'COMPLETED' }]);
+  });
+
+  test('supplements only supplied financial values while preserving sale identity and date', async () => {
+    expect((await patch({ stage: 'WON', mrr: 30 })).status).toBe(200);
+    const original = { ...sales[0] };
+    expect((await patch({ saleValue: 500 })).status).toBe(200);
+    expect(sales).toEqual([{ ...original, saleValue: 500 }]);
+    expect(lead).toMatchObject({ saleValue: 500, mrr: 30 });
+    expect(activities.filter((item) => item.type === 'SALE_FINANCIALS_UPDATED')).toHaveLength(1);
+    expect(activities.at(-1)?.note).toBe('Valores da venda atualizados: venda de 0 para 500; MRR de 30 para 30.');
+    expect((await patch({ mrr: 70 })).status).toBe(200);
+    expect(sales).toEqual([{ ...original, saleValue: 500, mrr: 70 }]);
+  });
+
+  test('backfills a legacy won lead with its original winning actor and date only once', async () => {
+    const wonAt = new Date('2026-09-01T12:00:00Z');
+    lead = { ...lead, stage: 'WON', wonAt, wonById: 'original-actor', saleValue: 200, mrr: 20 };
+    expect((await patch({ mrr: 50 })).status).toBe(200);
+    expect(sales).toEqual([expect.objectContaining({ actorId: 'original-actor', occurredAt: wonAt, saleValue: 200, mrr: 50 })]);
+    expect((await patch({ saleValue: 300 })).status).toBe(200);
+    expect(sales).toHaveLength(1);
+    expect(sales[0]).toMatchObject({ actorId: 'original-actor', occurredAt: wonAt, saleValue: 300, mrr: 50 });
+  });
+
+  test('preserves the previous win when reopening and supplements the current sale', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-01T12:00:00Z'));
+      expect((await patch({ stage: 'WON', saleValue: 100, mrr: 10 })).status).toBe(200);
+      const original = { ...sales[0] };
+      expect((await patch({ stage: 'CONTACTED' })).status).toBe(200);
+      vi.setSystemTime(new Date('2026-09-02T12:00:00Z'));
+      expect((await patch({ stage: 'WON' })).status).toBe(200);
+      const current = { ...sales[1] };
+      expect((await patch({ saleValue: 400 })).status).toBe(200);
+      expect(sales).toEqual([original, { ...current, saleValue: 400 }]);
+    } finally { vi.useRealTimers(); }
+  });
+
+  test.each([-1, '100', null, {}, true])('rejects malformed/negative finances %j before changing a sale', async (value) => {
+    expect((await patch({ stage: 'WON', saleValue: value })).status).toBe(400);
+    expect(sales).toHaveLength(0);
+    expect(lead.stage).toBe('CONTACTED');
+  });
+
+  test('rejects financial updates on a lead that is not won', async () => {
+    expect((await patch({ saleValue: 100 })).status).toBe(400);
+    expect(sales).toHaveLength(0);
+  });
+
+  test('does not duplicate a sale when a won request is repeated', async () => {
+    expect((await patch({ stage: 'WON' })).status).toBe(200);
+    expect((await patch({ stage: 'WON' })).status).toBe(409);
+    expect(sales).toHaveLength(1);
+    expect(activities.filter((item) => item.type === 'SALE_WON')).toHaveLength(1);
+  });
+
+  test('rejects a non-finite JSON number before writing financial records', async () => {
+    const response = await PATCH(new Request('http://localhost/api/leads/financial-lead', { method: 'PATCH', body: '{"stage":"WON","saleValue":1e400}' }), { params: Promise.resolve({ id: lead.id }) });
+    expect(response.status).toBe(400);
+    expect(sales).toHaveLength(0);
   });
 });

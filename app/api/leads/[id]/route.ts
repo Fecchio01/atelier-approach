@@ -55,9 +55,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if ((hasSaleValue && !isNonNegativeMoney(body.saleValue)) || (hasMrr && !isNonNegativeMoney(body.mrr))) {
     return Response.json({ error: 'Valores monetários devem ser não negativos.' }, { status: 400 });
   }
-  if (stage === 'WON' && (!hasSaleValue || !hasMrr || !isNonNegativeMoney(body.saleValue) || !isNonNegativeMoney(body.mrr))) {
-    return Response.json({ error: 'Informe o valor da venda e o MRR para fechar o negócio.' }, { status: 400 });
-  }
+  const hasFinancials = hasSaleValue || hasMrr;
 
   const followUpAction = body.followUpAction;
   if (followUpAction !== undefined && !isFollowUpAction(followUpAction)) {
@@ -80,26 +78,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ error: 'Informe canal e nota da atividade.' }, { status: 400 });
   }
 
-  if (!stage && !followUpAction && !body.activity) {
+  if (!stage && !followUpAction && !body.activity && !hasFinancials) {
     return Response.json({ error: 'Informe uma atualização para o lead.' }, { status: 400 });
   }
 
   const { id } = await params;
-  const lead = await prisma.lead.findUnique({ where: { id } });
-  if (!lead) return Response.json({ error: 'Lead não encontrado.' }, { status: 404 });
-  if (stage === 'WON' && lead.stage === 'WON') {
-    return Response.json({ error: 'Este lead já está marcado como ganho. Reabra-o antes de registrar uma nova venda.' }, { status: 409 });
-  }
-
   const updatedLead = await prisma.$transaction(async (tx) => {
+    // Serialize changes to this lead so repeated wins and legacy backfills cannot
+    // create two sale events from the same persisted state.
+    await tx.$queryRaw`SELECT "id" FROM "Lead" WHERE "id" = ${id} FOR UPDATE`;
+    const lead = await tx.lead.findUnique({ where: { id } });
+    if (!lead) throw new Error('LEAD_NOT_FOUND');
+    if (stage === 'WON' && lead.stage === 'WON') throw new Error('ALREADY_WON');
+    if (hasFinancials && stage !== 'WON' && (lead.stage !== 'WON' || stage)) throw new Error('FINANCIALS_REQUIRE_WON');
     let updated = lead;
 
     if (stage && stage !== lead.stage) {
       const now = new Date();
       const leadData: Prisma.LeadUpdateInput = { stage };
       if (stage === 'WON') {
-        leadData.saleValue = body.saleValue as number;
-        leadData.mrr = body.mrr as number;
+        leadData.saleValue = hasSaleValue ? body.saleValue as number : 0;
+        leadData.mrr = hasMrr ? body.mrr as number : 0;
         leadData.wonAt = now;
         leadData.wonById = user.id;
       } else if (lead.stage === 'WON') {
@@ -112,7 +111,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       await tx.stageHistory.create({ data: { leadId: id, actorId: user.id, fromStage: lead.stage, toStage: stage } });
 
       if (stage === 'WON') {
-        await tx.saleEvent.create({ data: { leadId: id, actorId: user.id, saleValue: body.saleValue as number, mrr: body.mrr as number, occurredAt: now } });
+        await tx.saleEvent.create({ data: { leadId: id, actorId: user.id, saleValue: hasSaleValue ? body.saleValue as number : 0, mrr: hasMrr ? body.mrr as number : 0, occurredAt: now } });
+        await tx.followUp.updateMany({
+          where: { leadId: id, state: 'PENDING' },
+          data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id }
+        });
       }
       const type: ActivityType = stage === 'WON'
         ? 'SALE_WON'
@@ -130,6 +133,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             : `Etapa alterada para ${stage}.`;
       await tx.activity.create({ data: { leadId: id, actorId: user.id, type, note } });
 
+    }
+
+    if (hasFinancials && lead.stage === 'WON' && !stage) {
+      const sale = await tx.saleEvent.findFirst({ where: { leadId: id }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] });
+      const previousSaleValue = Number(sale?.saleValue ?? lead.saleValue ?? 0);
+      const previousMrr = Number(sale?.mrr ?? lead.mrr ?? 0);
+      const saleValue = hasSaleValue ? body.saleValue as number : previousSaleValue;
+      const mrr = hasMrr ? body.mrr as number : previousMrr;
+      if (sale) {
+        await tx.saleEvent.update({ where: { id: sale.id }, data: { saleValue, mrr } });
+      } else {
+        await tx.saleEvent.create({ data: { leadId: id, actorId: lead.wonById ?? user.id, occurredAt: lead.wonAt ?? new Date(), saleValue, mrr } });
+      }
+      updated = await tx.lead.update({ where: { id }, data: { saleValue, mrr } });
+      await tx.activity.create({ data: {
+        leadId: id, actorId: user.id, type: 'SALE_FINANCIALS_UPDATED',
+        note: `Valores da venda atualizados: venda de ${previousSaleValue} para ${saleValue}; MRR de ${previousMrr} para ${mrr}.`
+      } });
     }
 
     if (stage === 'FOLLOW_UP' && dueDate && !followUpAction) {
@@ -165,11 +186,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return updated;
   }).catch((error: unknown) => {
+    if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'FINANCIALS_REQUIRE_WON'].includes(error.message)) return error.message;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_FOUND') return null;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_PENDING') return false;
     throw error;
   });
 
+  if (updatedLead === 'LEAD_NOT_FOUND') return Response.json({ error: 'Lead não encontrado.' }, { status: 404 });
+  if (updatedLead === 'ALREADY_WON') return Response.json({ error: 'Este lead já está marcado como ganho. Reabra-o antes de registrar uma nova venda.' }, { status: 409 });
+  if (updatedLead === 'FINANCIALS_REQUIRE_WON') return Response.json({ error: 'Os valores financeiros só podem ser alterados em um negócio ganho.' }, { status: 400 });
   if (updatedLead === null) return Response.json({ error: 'Follow-up não encontrado para este lead.' }, { status: 404 });
   if (updatedLead === false) return Response.json({ error: 'Este follow-up já foi encerrado.' }, { status: 409 });
   return Response.json({ lead: updatedLead });
