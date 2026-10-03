@@ -1,4 +1,12 @@
+import type { GoalMetricActuals, GoalMetricKey } from './metrics';
+
 export const customGoalIcons = ['target', 'car', 'users', 'currency', 'chart', 'checklist', 'star', 'handshake', 'calendar', 'wrench', 'trophy'] as const;
+
+export type CustomGoalSource = 'manual' | GoalMetricKey;
+export const customGoalSourceLabels: Record<CustomGoalSource, string> = {
+  manual: 'Manual', approaches: 'Abordagens', interests: 'Interesses', meetings: 'Reuniões',
+  followUpsCompleted: 'Follow-ups concluídos', sales: 'Vendas', revenue: 'Receita', mrr: 'MRR', conversionRate: 'Conversão'
+};
 
 export type CustomGoalIcon = typeof customGoalIcons[number];
 
@@ -9,7 +17,12 @@ export type CustomGoalMetric = {
   target: number;
   current: number;
   icon?: CustomGoalIcon;
+  source?: CustomGoalSource;
 };
+
+export function getCustomGoalCurrent(goal: CustomGoalMetric, actuals: GoalMetricActuals): number {
+  return !goal.source || goal.source === 'manual' ? goal.current : actuals[goal.source];
+}
 
 export type CustomGoalParseResult =
   | { ok: true; goals: CustomGoalMetric[] }
@@ -45,7 +58,7 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
   for (const candidate of value) {
     if (!isRecord(candidate)) return { ok: false, message: 'Revise os dados das metas personalizadas.' };
 
-    const { id, name, unit, target, current, icon } = candidate;
+    const { id, name, unit, target, current, icon, source } = candidate;
     if (typeof id !== 'string' || !validId.test(id) || seenIds.has(id)) {
       return { ok: false, message: 'Cada meta personalizada precisa de um identificador único válido.' };
     }
@@ -62,6 +75,9 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
     if (icon !== undefined && (typeof icon !== 'string' || !iconSet.has(icon))) {
       return { ok: false, message: 'Escolha um dos ícones disponíveis para a meta.' };
     }
+    if (source !== undefined && (typeof source !== 'string' || !Object.hasOwn(customGoalSourceLabels, source))) {
+      return { ok: false, message: 'Escolha uma origem disponível para o progresso da meta.' };
+    }
 
     seenIds.add(id);
     const trimmedUnit = typeof unit === 'string' ? unit.trim() : '';
@@ -71,7 +87,8 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
       ...(trimmedUnit ? { unit: trimmedUnit } : {}),
       target,
       current,
-      ...(icon ? { icon: icon as CustomGoalIcon } : {})
+      ...(icon ? { icon: icon as CustomGoalIcon } : {}),
+      ...(source ? { source: source as CustomGoalSource } : {})
     });
   }
 

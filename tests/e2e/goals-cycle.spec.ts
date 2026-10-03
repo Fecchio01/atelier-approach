@@ -43,6 +43,20 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await weeklyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
     await expect(weeklyApproachesTarget).toBeVisible();
     await weeklyApproachesTarget.fill('321');
+    await weeklyPanel.getByRole('button', { name: 'Adicionar indicador' }).click();
+    await weeklyPanel.getByLabel(/^Nome do indicador /).last().fill('Conversas da equipe');
+    const weeklyCustom = weeklyPanel.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Conversas da equipe', exact: true }) });
+    await weeklyCustom.getByLabel(/^Meta do indicador /).fill('20');
+    await weeklyCustom.getByLabel(/^Progresso do indicador /).fill('7');
+    await weeklyCustom.getByLabel(/^Origem do indicador /).selectOption('approaches');
+    await expect(weeklyCustom.getByLabel(/^Progresso do indicador /)).toBeDisabled();
+    await expect(weeklyCustom.getByLabel('Conversas da equipe: 10 de 20')).toBeVisible();
+    await weeklyCustom.getByLabel(/^Origem do indicador /).selectOption('manual');
+    await expect(weeklyCustom.getByLabel(/^Progresso do indicador /)).toHaveValue('7');
+    await weeklyCustom.getByLabel(/^Origem do indicador /).selectOption('approaches');
+    await weeklyCustom.getByRole('button', { name: 'Fechar edição de Conversas da equipe' }).click();
+    await expect(weeklyCustom.getByLabel(/^Nome do indicador /)).toHaveCount(0);
+    await expect(weeklyCustom.getByRole('progressbar')).toHaveAttribute('aria-valuetext', '50% da meta');
     await monthlyTab.click();
     await expect(monthlyTab).toHaveAttribute('aria-selected', 'true');
     await monthlyPanel.getByLabel('Dia de início do ciclo mensal').fill('14');
@@ -51,6 +65,13 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await monthlyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
     await expect(monthlyApproachesTarget).toBeVisible();
     await monthlyApproachesTarget.fill('777');
+    await monthlyPanel.getByRole('button', { name: 'Adicionar indicador' }).click();
+    await monthlyPanel.getByLabel(/^Nome do indicador /).last().fill('Carros do mês');
+    const monthlyCustom = monthlyPanel.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Carros do mês', exact: true }) });
+    await monthlyCustom.getByLabel(/^Meta do indicador /).fill('8');
+    await monthlyCustom.getByLabel(/^Progresso do indicador /).fill('2');
+    await monthlyCustom.getByRole('button', { name: 'Fechar edição de Carros do mês' }).click();
+    await expect(monthlyCustom.getByLabel('Carros do mês: 2 de 8')).toBeVisible();
     await monthlyPanel.getByRole('button', { name: 'Salvar metas' }).click();
     await expect(monthlyPanel.getByRole('status')).toContainText('Meta mensal da equipe salva');
 
@@ -59,6 +80,7 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
       orderBy: { periodStart: 'desc' }
     });
     expect(monthlyGoal?.approachesTarget).toBe(777);
+    expect(monthlyGoal?.customGoals).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Carros do mês', source: 'manual', current: 2 })]));
     expect((await prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }))?.monthlyStartDay).toBe(14);
     await monthlyPanel.getByRole('button', { name: 'Fechar edição da meta para abordagens' }).click();
     await expect(monthlyPanel.getByLabel('Abordagens: 10 de 777')).toBeVisible();
@@ -77,6 +99,11 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
       orderBy: { periodStart: 'desc' }
     });
     expect(weeklyGoal?.approachesTarget).toBe(321);
+    expect(weeklyGoal?.customGoals).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Conversas da equipe', source: 'approaches', current: 7 })]));
+    await page.reload();
+    const restoredCustom = page.getByRole('tabpanel', { name: 'Semanal' }).getByRole('article').filter({ has: page.getByRole('heading', { name: 'Conversas da equipe', exact: true }) });
+    await expect(restoredCustom.getByLabel('Conversas da equipe: 10 de 20')).toBeVisible();
+    await expect(restoredCustom.getByLabel(/^Nome do indicador /)).toHaveCount(0);
   } finally {
     await prisma.goal.deleteMany({ where: { ownerId: '__team__' } });
     if (testLeadId) await prisma.lead.delete({ where: { id: testLeadId } });

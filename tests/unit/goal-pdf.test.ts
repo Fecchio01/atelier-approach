@@ -2,9 +2,17 @@ import { describe, expect, test } from 'vitest';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 
 import { parseGoalDocumentText } from '../../lib/goal-pdf';
+import { applyGoalSuggestions } from '../../lib/goal-import-state';
 import { MAX_GOAL_PDF_BYTES, readGoalPdfText } from '../../lib/read-goal-pdf';
 
 describe('PDF goal text suggestions', () => {
+  test('custom PDF suggestions retain manual progress when applied to the goal form', () => {
+    const parsed = parseGoalDocumentText('Conversas humanas: atual 2, meta 10 conversas');
+    const applied = applyGoalSuggestions({}, [], parsed.customGoals.map((goal, index) => ({
+      ...goal, id: `pdf-${index}`, target: String(goal.target), current: String(goal.current), destination: 'custom' as const, icon: 'target' as const
+    })));
+    expect(applied.customGoals).toEqual([{ id: 'pdf-0', name: 'Conversas humanas', unit: 'conversas', target: 10, current: 2, icon: 'target', source: 'manual' }]);
+  });
   test('maps known goal names to CRM metrics and parses Brazilian money and percentages', () => {
     expect(parseGoalDocumentText([
       'Abordagens: 500',

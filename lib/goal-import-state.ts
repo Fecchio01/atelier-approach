@@ -40,7 +40,8 @@ export function applyGoalSuggestions(
       ...(unit ? { unit } : {}),
       target,
       current,
-      icon: suggestion.icon
+      icon: suggestion.icon,
+      source: 'manual'
     });
     usedIds.add(suggestion.id);
   }

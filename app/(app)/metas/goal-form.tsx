@@ -262,7 +262,7 @@ export function GoalForm({
       </section>)}
     </div>
 
-    <CustomGoalMetrics goals={customGoals} onChange={setCustomGoals} />
+    <CustomGoalMetrics goals={customGoals} actuals={actuals} onChange={setCustomGoals} />
 
     <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.07] pt-5">
       <p role="status" aria-live="polite" className={`text-sm ${state.status === 'error' ? 'text-red-300' : state.status === 'saved' ? 'text-[var(--atelier-green)]' : 'text-white/45'}`}>

@@ -178,6 +178,21 @@ test('keeps goals and reports usable without page overflow on phones', async ({ 
     await expect(weeklyPanel.getByRole('button', { name: 'Salvar metas' })).toBeVisible();
     await expectNoViewportOverflow(page);
 
+    await weeklyPanel.getByRole('button', { name: 'Adicionar indicador' }).click();
+    await weeklyPanel.getByLabel(/^Nome do indicador /).last().fill('Carros entregues no período');
+    const customGoal = weeklyPanel.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Carros entregues no período' }) });
+    await customGoal.getByLabel(/^Meta do indicador /).fill('10');
+    await customGoal.getByLabel(/^Progresso do indicador /).fill('3');
+    await expectNoViewportOverflow(page);
+    await customGoal.getByLabel(/^Origem do indicador /).selectOption('sales');
+    await expect(customGoal.getByLabel(/^Progresso do indicador /)).toBeDisabled();
+    await expectNoViewportOverflow(page);
+    await customGoal.getByLabel(/^Origem do indicador /).selectOption('manual');
+    await expect(customGoal.getByLabel(/^Progresso do indicador /)).toHaveValue('3');
+    await customGoal.getByRole('button', { name: 'Fechar edição de Carros entregues no período' }).click();
+    await expect(customGoal.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '30');
+    await expectNoViewportOverflow(page);
+
     await monthlyTab.click();
     await expect(monthlyPanel.getByLabel('Dia de início do ciclo mensal')).toBeVisible();
     const monthlyTarget = monthlyPanel.getByLabel('Meta para abordagens', { exact: true });

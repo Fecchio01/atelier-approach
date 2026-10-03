@@ -1,12 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import {
   CalendarBlankIcon, CarProfileIcon, ChartLineUpIcon, CheckSquareOffsetIcon,
   CurrencyDollarIcon, HandshakeIcon, PlusIcon, StarIcon, TargetIcon,
-  TrashIcon, TrophyIcon, UsersThreeIcon, WrenchIcon
+  TrashIcon, TrophyIcon, UsersThreeIcon, WrenchIcon, PencilSimpleIcon, XIcon
 } from '@phosphor-icons/react';
 
-import { customGoalIcons, type CustomGoalIcon, type CustomGoalMetric } from '@/lib/custom-goals';
+import { customGoalIcons, customGoalSourceLabels, getCustomGoalCurrent, type CustomGoalIcon, type CustomGoalMetric, type CustomGoalSource } from '@/lib/custom-goals';
+import type { GoalMetricActuals } from '@/lib/metrics';
 
 const iconDetails: Record<CustomGoalIcon, { label: string; Icon: typeof TargetIcon }> = {
   target: { label: 'Alvo', Icon: TargetIcon },
@@ -30,24 +32,29 @@ function formatValue(value: number, unit?: string) {
 
 export function CustomGoalMetrics({
   goals,
+  actuals,
   onChange
 }: {
   goals: CustomGoalMetric[];
+  actuals: GoalMetricActuals;
   onChange: (goals: CustomGoalMetric[]) => void;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
   function updateGoal(id: string, changes: Partial<CustomGoalMetric>) {
     onChange(goals.map((goal) => goal.id === id ? { ...goal, ...changes } : goal));
   }
 
   function addGoal() {
-    onChange([...goals, { id: crypto.randomUUID(), name: '', target: 1, current: 0, icon: 'target' }]);
+    const id = crypto.randomUUID();
+    onChange([...goals, { id, name: '', target: 1, current: 0, icon: 'target', source: 'manual' }]);
+    setEditingId(id);
   }
 
   return <section aria-labelledby="custom-goals-heading" className="rounded-2xl border border-white/[0.08] bg-[#11171b]/85 p-4 sm:p-5">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-4">
       <div>
         <h3 id="custom-goals-heading" className="font-semibold text-white/90">Indicadores personalizados</h3>
-        <p className="mt-1 text-xs leading-5 text-white/45">Crie outros marcos e atualize o progresso manualmente neste ciclo.</p>
+        <p className="mt-1 text-xs leading-5 text-white/45">Acompanhe outros marcos com progresso manual ou automático do CRM.</p>
       </div>
       <button type="button" onClick={addGoal} disabled={goals.length >= 30} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/35 px-3 py-2 text-xs font-semibold text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08] disabled:opacity-40">
         <PlusIcon size={15} aria-hidden="true" /> Adicionar indicador
@@ -58,15 +65,46 @@ export function CustomGoalMetrics({
       {goals.map((goal, index) => {
         const icon = goal.icon && customGoalIcons.includes(goal.icon) ? goal.icon : 'target';
         const { Icon } = iconDetails[icon];
+        const source = goal.source ?? 'manual';
+        const current = getCustomGoalCurrent(goal, actuals);
+        const isEditing = editingId === goal.id;
         const targetValid = Number.isFinite(goal.target) && goal.target >= 0;
-        const currentValid = Number.isFinite(goal.current) && goal.current >= 0;
+        const currentValid = Number.isFinite(current) && current >= 0;
         const percent = targetValid && currentValid
-          ? goal.target === 0 ? (goal.current === 0 ? 100 : 0) : Math.min(100, Math.max(0, Math.round(goal.current / goal.target * 100)))
+          ? goal.target === 0 ? (current === 0 ? 100 : 0) : Math.round(current / goal.target * 100)
           : 0;
+        const progressWidth = Math.min(100, Math.max(0, percent));
+        const goalLabel = goal.name || `Indicador ${index + 1}`;
 
         return <article key={goal.id} className="min-w-0 rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(104px,124px)] items-center gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><Icon size={18} aria-hidden="true" /></span>
+              <div className="min-w-0">
+                <h4 className="truncate text-sm font-medium text-white/85" title={goalLabel}>{goalLabel}</h4>
+                <p aria-label={`${goalLabel}: ${formatValue(current, goal.unit)} de ${formatValue(goal.target, goal.unit)}`} className="mt-1.5 flex min-w-0 items-baseline gap-1.5 text-sm font-semibold tabular-nums">
+                  <span className="truncate text-[var(--atelier-green)]">{formatValue(current, goal.unit)}</span>
+                  <span className="shrink-0 text-xs font-normal text-white/35">/</span>
+                  <span className="truncate text-white/65">{formatValue(goal.target, goal.unit)}</span>
+                </p>
+                <span className="mt-1 block truncate text-[10px] text-white/45">{source === 'manual' ? 'Progresso manual' : `CRM · ${customGoalSourceLabels[source]}`}</span>
+              </div>
+            </div>
+            <div className="flex min-w-0 items-center gap-1 rounded-lg border border-white/[0.08] bg-[#1b2328] py-1.5 pl-2.5 pr-1.5">
+              <div className="min-w-0 flex-1"><span className="block text-[10px] font-medium leading-4 text-white/45">Meta</span><span className="block truncate text-sm font-semibold leading-5 text-white/85">{formatValue(goal.target, goal.unit)}</span></div>
+              <button type="button" aria-label={`${isEditing ? 'Fechar edição de' : 'Editar'} ${goalLabel}`} aria-expanded={isEditing} aria-controls={`custom-goal-edit-${goal.id}`} onClick={() => setEditingId(isEditing ? null : goal.id)} className="flex size-8 shrink-0 items-center justify-center rounded-md text-white/55 transition-colors hover:bg-white/[0.07] hover:text-[var(--atelier-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+                {isEditing ? <XIcon size={16} aria-hidden="true" /> : <PencilSimpleIcon size={16} aria-hidden="true" />}
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2.5">
+            <div role="progressbar" aria-label={`Progresso de ${goalLabel}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressWidth} aria-valuetext={`${percent}% da meta`} className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.12]">
+              <span className="block h-full rounded-full bg-gradient-to-r from-[#81e986] to-[var(--atelier-green)] transition-[width] duration-300" style={{ width: `${progressWidth}%` }} />
+            </div>
+            <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-white/45">{percent}%</span>
+          </div>
+          {isEditing && <div id={`custom-goal-edit-${goal.id}`} className="mt-4 border-t border-white/[0.07] pt-4">
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><Icon size={18} aria-hidden="true" /></span>
             <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[minmax(0,1fr)_132px]">
               <label className="grid min-w-0 gap-1 text-[11px] text-white/45">
                 Nome do indicador
@@ -78,6 +116,12 @@ export function CustomGoalMetrics({
                   {customGoalIcons.map((key) => <option key={key} value={key}>{iconDetails[key].label}</option>)}
                 </select>
               </label>
+              <label className="grid min-w-0 gap-1 text-[11px] text-white/45 sm:col-span-2">
+                Origem do progresso
+                <select aria-label={`Origem do indicador ${index + 1}`} value={source} onChange={(event) => updateGoal(goal.id, { source: event.target.value as CustomGoalSource })} className="h-9 w-full min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2 text-xs text-white outline-none focus:border-[var(--atelier-green)]/50">
+                  {Object.entries(customGoalSourceLabels).map(([key, label]) => <option key={key} value={key}>{key === 'manual' ? label : `CRM · ${label}`}</option>)}
+                </select>
+              </label>
               <label className="grid gap-1 text-[11px] text-white/45">
                 Unidade (opcional)
                 <input aria-label={`Unidade do indicador ${index + 1}`} maxLength={24} value={goal.unit ?? ''} onChange={(event) => updateGoal(goal.id, { unit: event.target.value })} placeholder="unidades, R$, %" className="h-9 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
@@ -85,11 +129,11 @@ export function CustomGoalMetrics({
               <div className="grid grid-cols-2 gap-2">
                 <label className="grid min-w-0 gap-1 text-[11px] text-white/45">
                   Meta
-                  <input aria-label={`Meta do indicador ${index + 1}`} type="number" inputMode="decimal" min="0" step="any" value={targetValid ? goal.target : ''} onChange={(event) => updateGoal(goal.id, { target: event.target.value === '' ? Number.NaN : Number(event.target.value) })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
+                  <input aria-label={`Meta do indicador ${index + 1}`} type="number" inputMode="decimal" min="0" step="any" value={targetValid ? goal.target : ''} onChange={(event) => updateGoal(goal.id, { target: event.target.value === '' ? Number.NaN : Number(event.target.value) })} className="goal-target-number h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
                 </label>
                 <label className="grid min-w-0 gap-1 text-[11px] text-white/45">
                   Progresso
-                  <input aria-label={`Progresso do indicador ${index + 1}`} type="number" inputMode="decimal" min="0" step="any" value={currentValid ? goal.current : ''} onChange={(event) => updateGoal(goal.id, { current: event.target.value === '' ? Number.NaN : Number(event.target.value) })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
+                  <input aria-label={`Progresso do indicador ${index + 1}`} type="number" inputMode="decimal" min="0" step="any" disabled={source !== 'manual'} value={currentValid ? current : ''} onChange={(event) => updateGoal(goal.id, { current: event.target.value === '' ? Number.NaN : Number(event.target.value) })} className="goal-target-number h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50 disabled:text-white/45" />
                 </label>
               </div>
             </div>
@@ -97,13 +141,8 @@ export function CustomGoalMetrics({
               <TrashIcon size={16} aria-hidden="true" />
             </button>
           </div>
-          <div className="mt-4 flex items-center gap-3">
-            <div role="progressbar" aria-label={`Progresso de ${goal.name || `indicador ${index + 1}`}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.12]">
-              <span className="block h-full rounded-full bg-gradient-to-r from-[#81e986] to-[var(--atelier-green)] transition-[width] duration-300" style={{ width: `${percent}%` }} />
-            </div>
-            <span className="w-28 shrink-0 text-right text-xs tabular-nums text-white/55">{formatValue(goal.current, goal.unit)} / {formatValue(goal.target, goal.unit)}</span>
-            <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-white/45">{percent}%</span>
-          </div>
+          {source !== 'manual' && <p className="mt-3 text-xs leading-5 text-white/45">Atualizado pelo CRM neste ciclo. Seu progresso manual fica guardado ao trocar a origem.</p>}
+          </div>}
         </article>;
       })}
     </div>}

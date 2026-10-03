@@ -31,6 +31,14 @@ describe('team goal actions', () => {
     await expect(saveMonthlyGoal(initialGoalActionState, new FormData())).resolves.toMatchObject({ status: 'error' });
   });
 
+  test('persists automatic custom origins with their stored manual values', async () => {
+    const form = new FormData();
+    form.set('customGoals', JSON.stringify([{ id: 'crm', name: 'Vendas', target: 5, current: 3, source: 'sales' }]));
+    await expect(saveWeeklyGoal(initialGoalActionState, form)).resolves.toMatchObject({ status: 'saved' });
+    expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), undefined,
+      [{ id: 'crm', name: 'Vendas', target: 5, current: 3, source: 'sales' }]);
+  });
+
   test('does not persist weekly or monthly goals when no user is authenticated', async () => {
     mocks.getCurrentUser.mockResolvedValue(null);
     const monthly = new FormData();
