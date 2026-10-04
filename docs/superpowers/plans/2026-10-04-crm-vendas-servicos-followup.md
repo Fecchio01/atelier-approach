@@ -89,11 +89,12 @@
 - Modify: `lib/metrics.ts` — tipo/projeção `MetricSaleEvent` e cálculo de metas e painel.
 - Modify: `lib/reports.ts` — sumarização diária aberta e ciclos semanais/mensais.
 - Modify: `app/(app)/page.tsx` e `app/api/reports/route.ts` — consultas ativas usadas pelo painel e exportações.
+- Modify: `components/daily-report-view.tsx` — rótulo tipado da atividade `SALE_REVERSED` no relatório diário.
 - Modify: `tests/unit/metrics.test.ts`, `tests/unit/reports.test.ts`, `tests/unit/daily-reports.test.ts`.
 
 **Interfaces:**
 - Consome: campo `SaleEvent.reversedAt` da Task 1.
-- Produz: todas as projeções dinâmicas consomem apenas eventos cujo `reversedAt` é `null`; venda, receita, MRR, conversão, canal e metas usam o mesmo conjunto.
+- Produz: todas as projeções dinâmicas consomem apenas eventos cujo `reversedAt` é `null`; venda, receita, MRR, conversão, canal e metas usam o mesmo conjunto. Relatório/exportação e painel diário exibem corretamente a nova atividade `SALE_REVERSED` como “Venda revertida”.
 - Produz: snapshots diários já salvos seguem inalterados; a construção de snapshot de dia aberto exclui reversões já registradas até o fechamento.
 
 - [ ] **Step 1: Escrever testes RED** — `metrics.test.ts`: venda revertida não incrementa venda/receita/MRR/conversão; outra venda ativa do mesmo lead permanece contável. `reports.test.ts`: semanal/mensal e exportação omitem evento revertido e mantêm o evento de reversão no histórico de ações. `daily-reports.test.ts`: snapshot existente não muda e novo snapshot aberto respeita estado revertido.
