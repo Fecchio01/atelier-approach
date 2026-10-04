@@ -48,6 +48,7 @@ test('mobile login shows immediate feedback and blocks repeat taps while authent
   try {
     await expect(submitButton).toHaveText('Entrando...', { timeout: 1_500 });
     await expect(submitButton).toBeDisabled();
+    await expect(submitButton).toHaveAttribute('aria-busy', 'true');
   } catch (error) {
     feedbackError = error;
   } finally {

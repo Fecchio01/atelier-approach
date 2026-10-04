@@ -31,7 +31,7 @@ function localDateParam(value: Date) {
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
-  return <article className="min-w-0 rounded-xl border border-white/[0.08] bg-[#111719] p-4">
+  return <article className="min-w-0 rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4">
     <p className="text-xs text-white/55">{label}</p>
     <strong className="mt-2 block truncate text-2xl font-semibold tabular-nums text-white">{value}</strong>
   </article>;
@@ -88,7 +88,7 @@ export function DailyReportView({
       </section>
 
       <div className="mt-7 grid gap-5 lg:grid-cols-2">
-        <section className="min-w-0 rounded-2xl border border-white/[0.09] bg-black/25 p-4 sm:p-5">
+        <section className="min-w-0 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
           <h2 className="text-lg font-semibold">Atividades por canal</h2>
           <ul className="mt-3 divide-y divide-white/[0.08]">
             {summary!.channels.length ? summary!.channels.map((channel) => <li key={channel.channel} className="flex items-center justify-between gap-3 py-3 text-sm">
@@ -96,7 +96,7 @@ export function DailyReportView({
             </li>) : <li className="py-3 text-sm text-white/50">Nenhuma abordagem por canal registrada.</li>}
           </ul>
         </section>
-        <section className="min-w-0 rounded-2xl border border-white/[0.09] bg-black/25 p-4 sm:p-5">
+        <section className="min-w-0 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
           <h2 className="text-lg font-semibold">Desempenho da equipe</h2>
           <ul className="mt-3 divide-y divide-white/[0.08]">
             {summary!.members.length ? summary!.members.map((member) => <li key={member.memberId} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3">
@@ -106,7 +106,7 @@ export function DailyReportView({
         </section>
       </div>
 
-      <section aria-labelledby="daily-actions-title" className="mt-7 rounded-2xl border border-white/[0.09] bg-black/25 p-4 sm:p-5">
+      <section aria-labelledby="daily-actions-title" className="mt-7 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
         <h2 id="daily-actions-title" className="text-lg font-semibold">Ações do dia</h2>
         <ol className="mt-3 divide-y divide-white/[0.08]">
           {report.snapshot.actions.length ? report.snapshot.actions.map((action) => <li key={action.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:gap-5">
@@ -119,16 +119,16 @@ export function DailyReportView({
           </li>) : <li className="py-4 text-sm text-white/50">Nenhuma atividade registrada antes do fechamento.</li>}
         </ol>
       </section>
-    </> : <section role="status" className="mt-6 rounded-2xl border border-white/[0.09] bg-[#111719] p-5 text-sm text-white/60">
+    </> : <section role="status" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-5 text-sm text-white/60">
       Este dia ainda não foi fechado. Nenhum relatório diário salvo para esta data.
     </section>}
 
-    <section aria-labelledby="recent-daily-reports-title" className="mt-7 rounded-2xl border border-white/[0.09] bg-black/25 p-4 sm:p-5">
+    <section aria-labelledby="recent-daily-reports-title" className="mt-7 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
       <h2 id="recent-daily-reports-title" className="text-lg font-semibold">Fechamentos recentes</h2>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {recent.length ? recent.map((item) => {
           const itemDate = localDateParam(item.dayStart);
-          return <li key={item.id}><Link href={`/relatorios?period=day&date=${itemDate}`} aria-current={itemDate === date ? 'page' : undefined} className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-white/[0.08] px-3 py-2 text-sm transition-colors hover:border-[var(--atelier-green)]">
+          return <li key={item.id}><Link href={`/relatorios?period=day&date=${itemDate}`} aria-current={itemDate === date ? 'page' : undefined} className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-white/[0.08] px-3 py-2 text-sm transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:border-[var(--atelier-green)]">
             <span className="font-medium">{dateFormatter.format(item.dayStart)}</span><span className="text-xs text-white/50">{item.approaches} abordagens</span>
           </Link></li>;
         }) : <li className="py-2 text-sm text-white/50">Nenhum dia fechado ainda.</li>}

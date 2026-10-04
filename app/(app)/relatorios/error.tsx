@@ -15,7 +15,7 @@ export default function ReportsError({ reset }: { reset: () => void }) {
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-200">Relatórios indisponíveis</p>
       <h1 className="mt-3 text-2xl font-semibold text-white">Não foi possível carregar este relatório.</h1>
       <p className="mt-2 text-sm text-white/65">A navegação foi liberada. Tente novamente em instantes.</p>
-      <button type="button" onClick={reset} className="mt-6 inline-flex min-h-10 items-center rounded-md bg-[var(--atelier-green)] px-4 py-2 text-sm font-semibold text-black">Tentar novamente</button>
+      <button type="button" onClick={reset} className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-[var(--atelier-green)] px-4 py-2 text-sm font-semibold text-black transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[#c9ff72]">Tentar novamente</button>
     </div>
   </section>;
 }

@@ -74,7 +74,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <p className="mt-3 max-w-3xl text-sm leading-6 text-white/55">Atualize como você aparece para a equipe e controle a senha usada para entrar no Atelier Approach.</p>
     </header>
 
-    <section aria-label="Resumo da conta" className="mt-7 flex min-h-24 items-center gap-5 rounded-xl border border-white/10 bg-[#11191d] px-5 py-4 md:px-7">
+    <section aria-label="Resumo da conta" className="mt-7 flex min-h-24 items-center gap-5 rounded-xl border border-white/10 bg-[var(--atelier-surface)] px-5 py-4 md:px-7">
       <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-[#303941] text-lg font-semibold text-white">{initials}</span>
       <span aria-hidden="true" className="h-12 w-px shrink-0 bg-white/10" />
       <div className="min-w-0">
@@ -84,27 +84,27 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     </section>
 
     <div className="mt-6 grid gap-5 lg:grid-cols-2">
-      <section className="rounded-xl border border-white/10 bg-[#11191d] p-5 md:p-7" aria-labelledby="profile-title">
+      <section className="rounded-xl border border-white/10 bg-[var(--atelier-surface)] p-5 md:p-7" aria-labelledby="profile-title">
         <div><h2 id="profile-title" className="text-xl font-semibold tracking-[-0.03em]">Meu perfil</h2><p className="mt-1 text-sm text-white/50">Nome e foto exibidos no sistema.</p></div>
         {params.profile === 'updated' && <p role="status" className="mt-5 rounded-lg bg-[var(--atelier-green)]/10 px-4 py-3 text-sm text-[var(--atelier-green)]">Perfil salvo.</p>}
         {params.profile === 'invalid' && <p role="alert" className="mt-5 rounded-lg bg-red-400/10 px-4 py-3 text-sm text-red-100">Confira o nome e a URL da foto.</p>}
         <form action={saveProfile} className="mt-6 grid gap-4">
-          <label className="grid gap-2 text-sm font-medium">Nome exibido<input name="name" required maxLength={80} defaultValue={user.name ?? ''} className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
-          <label className="grid gap-2 text-sm font-medium">Foto de perfil<input name="avatarUrl" type="url" defaultValue={user.image ?? ''} placeholder="https://..." className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none placeholder:text-white/30 focus:border-[var(--atelier-green)]" /><span className="text-xs font-normal text-white/45">URL opcional</span></label>
+          <label className="grid gap-2 text-sm font-medium">Nome exibido<input name="name" required maxLength={80} defaultValue={user.name ?? ''} className="min-h-11 min-w-0 rounded-lg border border-white/15 bg-[var(--atelier-surface-raised)] px-4 text-base outline-none sm:text-sm focus:border-[var(--atelier-green)]" /></label>
+          <label className="grid gap-2 text-sm font-medium">Foto de perfil<input name="avatarUrl" type="url" defaultValue={user.image ?? ''} placeholder="https://..." className="min-h-11 min-w-0 rounded-lg border border-white/15 bg-[var(--atelier-surface-raised)] px-4 text-base outline-none sm:text-sm placeholder:text-white/30 focus:border-[var(--atelier-green)]" /><span className="text-xs font-normal text-white/45">URL opcional</span></label>
           <div className="rounded-lg border border-white/10 bg-[#1b2328] px-4 py-3"><span className="block text-[11px] uppercase tracking-[0.16em] text-white/40">E-mail de acesso</span><span className="mt-1 block break-all text-sm text-white/75">{user.email}</span></div>
-          <button className="min-h-11 w-full min-w-32 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-colors hover:bg-[#c9ff72] active:scale-[0.98] sm:w-fit">Salvar perfil</button>
+          <button className="min-h-11 w-full min-w-32 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[#c9ff72]  sm:w-fit">Salvar perfil</button>
         </form>
       </section>
 
-      <section className="rounded-xl border border-white/10 bg-[#11191d] p-5 md:p-7" aria-labelledby="password-title">
+      <section className="rounded-xl border border-white/10 bg-[var(--atelier-surface)] p-5 md:p-7" aria-labelledby="password-title">
         <h2 id="password-title" className="text-xl font-semibold tracking-[-0.03em]">Alterar senha</h2>
         {params.password && passwordErrors[params.password] && <p role="alert" className="mt-5 rounded-lg bg-red-400/10 px-4 py-3 text-sm text-red-100">{passwordErrors[params.password]}</p>}
         <form action={changePassword} className="mt-6 grid gap-4">
-          <label className="grid gap-2 text-sm font-medium">Senha atual<input name="currentPassword" type="password" autoComplete="current-password" required className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
-          <label className="grid gap-2 text-sm font-medium">Nova senha<input name="newPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
-          <label className="grid gap-2 text-sm font-medium">Confirmar nova senha<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-11 rounded-lg border border-white/15 bg-[#151b20] px-4 outline-none focus:border-[var(--atelier-green)]" /></label>
+          <label className="grid gap-2 text-sm font-medium">Senha atual<input name="currentPassword" type="password" autoComplete="current-password" required className="min-h-11 min-w-0 rounded-lg border border-white/15 bg-[var(--atelier-surface-raised)] px-4 text-base outline-none sm:text-sm focus:border-[var(--atelier-green)]" /></label>
+          <label className="grid gap-2 text-sm font-medium">Nova senha<input name="newPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-11 min-w-0 rounded-lg border border-white/15 bg-[var(--atelier-surface-raised)] px-4 text-base outline-none sm:text-sm focus:border-[var(--atelier-green)]" /></label>
+          <label className="grid gap-2 text-sm font-medium">Confirmar nova senha<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} maxLength={128} required className="min-h-11 min-w-0 rounded-lg border border-white/15 bg-[var(--atelier-surface-raised)] px-4 text-base outline-none sm:text-sm focus:border-[var(--atelier-green)]" /></label>
           <p className="text-xs leading-5 text-white/45">Após salvar, você entrará novamente com a nova senha.</p>
-          <button className="min-h-11 w-full min-w-36 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-colors hover:bg-[#c9ff72] active:scale-[0.98] sm:w-fit">Atualizar senha</button>
+          <button className="min-h-11 w-full min-w-36 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[#c9ff72]  sm:w-fit">Atualizar senha</button>
         </form>
       </section>
     </div>

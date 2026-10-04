@@ -9,7 +9,7 @@ function localDateParam(value: Date) {
 }
 
 function Skeleton({ className = '' }: { className?: string }) {
-  return <div aria-hidden="true" className={`animate-pulse rounded-lg bg-white/[0.06] ${className}`} />;
+  return <div aria-hidden="true" className={`rounded-lg bg-white/[0.06] ${className}`} />;
 }
 
 export default function ReportsLoading() {
@@ -27,14 +27,14 @@ export default function ReportsLoading() {
       <Skeleton className="mt-3 h-3 w-64 max-w-full" />
     </div>
     <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {Array.from({ length: 6 }, (_, index) => <div key={index} className="rounded-xl border border-white/[0.08] bg-[#11161b]/80 p-5">
+      {Array.from({ length: 6 }, (_, index) => <div key={index} className="rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-5">
         <Skeleton className="h-3 w-28" />
         <Skeleton className="mt-4 h-8 w-32" />
         <Skeleton className="mt-3 h-3 w-40 max-w-full" />
       </div>)}
     </div>
     <div className="mt-8 grid gap-6 lg:grid-cols-2">
-      {Array.from({ length: 2 }, (_, index) => <div key={index} className="rounded-xl border border-white/[0.08] bg-[#11161b]/70 p-5">
+      {Array.from({ length: 2 }, (_, index) => <div key={index} className="rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-5">
         <Skeleton className="h-5 w-44 max-w-full" />
         <Skeleton className="mt-5 h-40 w-full" />
       </div>)}

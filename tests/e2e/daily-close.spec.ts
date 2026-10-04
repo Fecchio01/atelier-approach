@@ -75,11 +75,18 @@ test('reopens a closed day, preserves CRM activities, and allows a fresh close',
   await page.getByRole('button', { name: 'Fechar o dia' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Dia fechado' })).toBeVisible();
   await page.getByRole('button', { name: 'Reabrir dia' }).click();
+  const confirmation = page.getByRole('group', { name: 'Confirmar reabertura do dia' });
+  await expect(confirmation).toHaveCSS('transition-property', 'transform, opacity');
   await expect(page.getByText('O relatório e o PDF de hoje serão removidos. As atividades do CRM continuarão salvas.')).toBeVisible();
   await page.getByRole('button', { name: 'Manter fechado' }).click();
+  await expect(confirmation).toBeHidden();
   await expect(page.getByRole('status').filter({ hasText: 'Dia fechado' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Reabrir dia' }).click();
+  await expect(confirmation).toBeVisible();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(confirmation).toHaveCSS('transition-duration', '0s');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   const reopenResponse = page.waitForResponse((response) => response.url().endsWith('/api/reports') && response.request().method() === 'DELETE');
   await page.getByRole('button', { name: 'Confirmar reabertura' }).click();
   expect((await reopenResponse).status()).toBe(200);

@@ -64,7 +64,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#11161b]/75 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-7 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+        <div className="rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-7 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
           <div className="mb-5 flex items-center gap-2 text-xs font-medium text-white/55 lg:mb-10"><span className="size-2 rounded-full bg-[var(--atelier-green)] shadow-[0_0_18px_rgba(182,255,54,.7)]" /> Acesso à equipe Atelier</div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--atelier-green)]">Bem-vindo de volta</p>
           <h2 id="login-title" className="mt-3 text-[clamp(1.75rem,7vw,2.2rem)] font-semibold tracking-[-0.055em] lg:text-5xl">Entrar na plataforma</h2>
@@ -74,8 +74,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           {params.password === 'updated' && <p role="status" className="mt-5 rounded-xl border border-[var(--atelier-green)]/25 bg-[var(--atelier-green)]/10 px-4 py-3 text-sm text-[var(--atelier-green)] lg:mt-7">Senha atualizada. Entre com a nova senha.</p>}
 
           <form action={authenticate} className="mt-6 space-y-4 lg:mt-9 lg:space-y-5">
-            <label className="block text-sm font-medium" htmlFor="email">E-mail<input className="mt-2 block min-h-[52px] w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 text-base text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)] lg:min-h-12 lg:text-sm" id="email" name="email" type="email" autoComplete="email" placeholder="voce@empresa.com" required /></label>
-            <label className="block text-sm font-medium" htmlFor="password">Senha<input className="mt-2 block min-h-[52px] w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 text-base text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)] lg:min-h-12 lg:text-sm" id="password" name="password" type="password" autoComplete="current-password" placeholder="Sua senha" required /></label>
+            <label className="block text-sm font-medium" htmlFor="email">E-mail<input className="mt-2 block min-h-[52px] w-full rounded-xl border border-white/15 bg-[var(--atelier-surface-raised)] px-4 text-base text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)] lg:min-h-12 lg:text-sm" id="email" name="email" type="email" autoComplete="email" placeholder="voce@empresa.com" required /></label>
+            <label className="block text-sm font-medium" htmlFor="password">Senha<input className="mt-2 block min-h-[52px] w-full rounded-xl border border-white/15 bg-[var(--atelier-surface-raised)] px-4 text-base text-white outline-none placeholder:text-white/25 focus:border-[var(--atelier-green)] lg:min-h-12 lg:text-sm" id="password" name="password" type="password" autoComplete="current-password" placeholder="Sua senha" required /></label>
             <LoginSubmitButton />
           </form>
           <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-5 text-white/40 lg:mt-8 lg:pt-6">Seu perfil e a troca de senha ficam disponíveis dentro da plataforma.</p>

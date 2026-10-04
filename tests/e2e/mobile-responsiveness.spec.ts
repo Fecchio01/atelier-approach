@@ -115,6 +115,7 @@ test('keeps dashboard, search, and profile usable without page overflow on phone
     await expect(page.getByRole('heading', { name: 'Perfil e segurança' })).toBeVisible();
     await expect(page.getByLabel('Nome exibido')).toBeVisible();
     await expect(page.getByLabel('Nova senha', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Nova senha', { exact: true })).toHaveCSS('font-size', '16px');
     await expect.poll(() => page.getByRole('button', { name: 'Salvar perfil' }).evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(200);
     await expectNoViewportOverflow(page);
   }
