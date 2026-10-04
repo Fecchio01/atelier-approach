@@ -166,31 +166,103 @@ describe('lead routes', () => {
   });
 
   test('schedules a follow-up and persists closing values supplied by the CRM', async () => {
-    const lead = await prisma.lead.create({ data: { osmId: 'node/ui-controls', stage: 'INTEREST' } });
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-07T10:00:00.000Z'));
+      const lead = await prisma.lead.create({ data: { osmId: 'node/ui-controls', stage: 'INTEREST' } });
+      await prisma.crmSettings.upsert({ where: { id: 'team' }, create: { id: 'team', followUpDelayDays: 3 }, update: { followUpDelayDays: 3 } });
 
-    const followUpResponse = await PATCH(
-      new Request(`http://localhost/api/leads/${lead.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ stage: 'FOLLOW_UP', followUpAt: '2026-09-10T10:00:00.000Z' })
-      }),
-      { params: Promise.resolve({ id: lead.id }) }
-    );
-    expect(followUpResponse.status).toBe(200);
-    await expect(prisma.followUp.findMany({ where: { leadId: lead.id } })).resolves.toMatchObject([
-      { ownerId: 'internal-equipe', dueDate: new Date('2026-09-10T10:00:00.000Z') }
-    ]);
+      const followUpResponse = await PATCH(
+        new Request(`http://localhost/api/leads/${lead.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ stage: 'FOLLOW_UP' })
+        }),
+        { params: Promise.resolve({ id: lead.id }) }
+      );
+      expect(followUpResponse.status).toBe(200);
+      await expect(prisma.followUp.findMany({ where: { leadId: lead.id } })).resolves.toMatchObject([
+        { ownerId: 'internal-equipe', dueDate: new Date('2026-09-10T10:00:00.000Z') }
+      ]);
 
-    const closeResponse = await PATCH(
-      new Request(`http://localhost/api/leads/${lead.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ stage: 'WON', saleValue: 1500, mrr: 250 })
-      }),
-      { params: Promise.resolve({ id: lead.id }) }
-    );
-    expect(closeResponse.status).toBe(200);
-    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({
-      stage: 'WON', saleValue: expect.anything(), mrr: expect.anything()
-    });
+      const pendingFollowUp = await prisma.followUp.findFirstOrThrow({ where: { leadId: lead.id, state: 'PENDING' } });
+      const repeatedResponse = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH', body: JSON.stringify({ stage: 'FOLLOW_UP' })
+      }), { params: Promise.resolve({ id: lead.id }) });
+      expect(repeatedResponse.status).toBe(200);
+      await expect(prisma.followUp.findMany({ where: { leadId: lead.id } })).resolves.toHaveLength(1);
+      await expect(prisma.followUp.findUniqueOrThrow({ where: { id: pendingFollowUp.id } })).resolves.toMatchObject({ state: 'PENDING' });
+
+      const closeResponse = await PATCH(
+        new Request(`http://localhost/api/leads/${lead.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ stage: 'WON', saleValue: 1500, mrr: 250 })
+        }),
+        { params: Promise.resolve({ id: lead.id }) }
+      );
+      expect(closeResponse.status).toBe(200);
+      await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({
+        stage: 'WON', saleValue: expect.anything(), mrr: expect.anything()
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('uses the two-day fallback and replaces an existing pending follow-up only on a new transition', async () => {
+    await prisma.crmSettings.deleteMany();
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-10T10:00:00.000Z'));
+      const lead = await prisma.lead.create({ data: { osmId: 'node/follow-up-fallback', stage: 'INTEREST' } });
+      const oldFollowUp = await prisma.followUp.create({
+        data: { leadId: lead.id, ownerId: 'internal-equipe', dueDate: new Date('2026-09-11T10:00:00.000Z'), note: 'Retorno antigo.' }
+      });
+
+      const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+        method: 'PATCH', body: JSON.stringify({ stage: 'FOLLOW_UP' })
+      }), { params: Promise.resolve({ id: lead.id }) });
+
+      expect(response.status).toBe(200);
+      await expect(prisma.followUp.findUniqueOrThrow({ where: { id: oldFollowUp.id } })).resolves.toMatchObject({
+        state: 'CANCELLED', cancelledById: 'internal-equipe', cancelledAt: new Date('2026-09-10T10:00:00.000Z')
+      });
+      await expect(prisma.followUp.findMany({ where: { leadId: lead.id, state: 'PENDING' } })).resolves.toMatchObject([
+        { dueDate: new Date('2026-09-12T10:00:00.000Z') }
+      ]);
+      await expect(prisma.followUp.count({ where: { leadId: lead.id } })).resolves.toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a changed company interval affects only follow-ups created after the change', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-10T10:00:00.000Z'));
+      await prisma.crmSettings.upsert({ where: { id: 'team' }, create: { id: 'team', followUpDelayDays: 3 }, update: { followUpDelayDays: 3 } });
+      const firstLead = await prisma.lead.create({ data: { osmId: 'node/follow-up-interval-first', stage: 'INTEREST' } });
+      const firstResponse = await PATCH(new Request(`http://localhost/api/leads/${firstLead.id}`, {
+        method: 'PATCH', body: JSON.stringify({ stage: 'FOLLOW_UP' })
+      }), { params: Promise.resolve({ id: firstLead.id }) });
+      expect(firstResponse.status).toBe(200);
+      const firstFollowUp = await prisma.followUp.findFirstOrThrow({ where: { leadId: firstLead.id, state: 'PENDING' } });
+
+      await prisma.crmSettings.update({ where: { id: 'team' }, data: { followUpDelayDays: 5 } });
+      const secondLead = await prisma.lead.create({ data: { osmId: 'node/follow-up-interval-second', stage: 'INTEREST' } });
+      const secondResponse = await PATCH(new Request(`http://localhost/api/leads/${secondLead.id}`, {
+        method: 'PATCH', body: JSON.stringify({ stage: 'FOLLOW_UP' })
+      }), { params: Promise.resolve({ id: secondLead.id }) });
+      expect(secondResponse.status).toBe(200);
+
+      await expect(prisma.followUp.findUniqueOrThrow({ where: { id: firstFollowUp.id } })).resolves.toMatchObject({
+        state: 'PENDING', dueDate: new Date('2026-09-13T10:00:00.000Z')
+      });
+      await expect(prisma.followUp.findFirstOrThrow({ where: { leadId: secondLead.id, state: 'PENDING' } })).resolves.toMatchObject({
+        dueDate: new Date('2026-09-15T10:00:00.000Z')
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('rejects malformed monetary values when moving a lead', async () => {

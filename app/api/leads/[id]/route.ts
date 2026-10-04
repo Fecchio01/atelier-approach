@@ -1,7 +1,9 @@
 import { ActivityType, Channel, FollowUpState, LeadStage, Prisma } from '@prisma/client';
 
 import { getCurrentUser } from '../../../../lib/auth';
+import { getFollowUpDelayDays } from '../../../../lib/commercial-settings';
 import { prisma } from '../../../../lib/db';
+import { getFollowUpDueDate } from '../../../../lib/follow-up-scheduling';
 import { summarizeServiceItems } from '../../../../lib/service-sales';
 
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
@@ -79,7 +81,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const dueDate = parseDueDate(body.followUpAt);
   if (dueDate === null) return Response.json({ error: 'Data de retorno inválida.' }, { status: 400 });
-  if ((stage === 'FOLLOW_UP' || followUpAction === 'RESCHEDULE') && !dueDate) {
+  if (followUpAction === 'RESCHEDULE' && !dueDate) {
     return Response.json({ error: 'Informe a data e hora do follow-up.' }, { status: 400 });
   }
 
@@ -200,13 +202,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       } });
     }
 
-    if (stage === 'FOLLOW_UP' && dueDate && !followUpAction) {
+    if (stage === 'FOLLOW_UP' && stage !== lead.stage && !followUpAction) {
       const now = new Date();
+      const delayDays = await getFollowUpDelayDays(tx);
+      const scheduledDueDate = getFollowUpDueDate(now, delayDays);
       await tx.followUp.updateMany({
         where: { leadId: id, state: 'PENDING' },
         data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id }
       });
-      await tx.followUp.create({ data: { leadId: id, dueDate, ownerId: user.id, note: 'Retorno agendado pelo CRM.' } });
+      await tx.followUp.create({ data: { leadId: id, dueDate: scheduledDueDate, ownerId: user.id, note: 'Retorno agendado pelo CRM.' } });
       await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'FOLLOW_UP_SCHEDULED', note: 'Follow-up agendado.' } });
     }
 
