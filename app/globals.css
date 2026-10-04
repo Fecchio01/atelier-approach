@@ -6,6 +6,11 @@
   --atelier-surface: #11161b;
   --atelier-surface-raised: #171e24;
   --atelier-line: rgba(255, 255, 255, 0.09);
+  --atelier-motion-duration: 180ms;
+  --atelier-motion-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --atelier-floating-border: rgba(255, 255, 255, 0.12);
+  --atelier-floating-surface: rgba(17, 22, 27, 0.96);
+  --atelier-floating-solid-surface: var(--atelier-surface);
 }
 
 * {
@@ -17,6 +22,7 @@ body {
   min-width: 320px;
   background: radial-gradient(circle at 55% -20%, #1c2923 0, transparent 38rem), var(--atelier-black);
   color: #fff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 ::selection {
@@ -29,9 +35,53 @@ body {
   outline-offset: 3px;
 }
 
-button, a, input, select, textarea { transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease; }
+button, a, input, select, textarea {
+  transition:
+    border-color var(--atelier-motion-duration) var(--atelier-motion-easing),
+    background-color var(--atelier-motion-duration) var(--atelier-motion-easing),
+    color var(--atelier-motion-duration) var(--atelier-motion-easing),
+    transform var(--atelier-motion-duration) var(--atelier-motion-easing);
+}
 button:active, a:active { transform: translateY(1px); }
 input, select, textarea { color-scheme: dark; }
+
+.atelier-floating,
+[data-atelier-floating],
+dialog {
+  border-color: var(--atelier-floating-border);
+  background-color: var(--atelier-floating-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --atelier-motion-duration: 0ms; }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --atelier-floating-border: rgba(255, 255, 255, 0.38);
+    --atelier-floating-surface: var(--atelier-floating-solid-surface);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root { --atelier-floating-surface: var(--atelier-floating-solid-surface); }
+
+  .atelier-floating,
+  [data-atelier-floating],
+  dialog {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
 
 .goal-target-number { appearance: textfield; }
 .goal-target-number::-webkit-outer-spin-button,
