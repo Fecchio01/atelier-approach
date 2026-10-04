@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 export type ReportPeriod = 'day' | 'week' | 'month';
@@ -36,6 +36,12 @@ export function ReportPeriodNavigationProvider({ children }: { children: ReactNo
   }, [clearPendingNavigation]);
 
   const value = useMemo(() => ({ pendingPeriod, beginNavigation, clearPendingNavigation }), [pendingPeriod, beginNavigation, clearPendingNavigation]);
+
+  useEffect(() => {
+    const handleNavigationError = () => clearPendingNavigation();
+    window.addEventListener('atelier:navigation-error', handleNavigationError);
+    return () => window.removeEventListener('atelier:navigation-error', handleNavigationError);
+  }, [clearPendingNavigation]);
 
   return <ReportPeriodNavigationContext.Provider value={value}>{children}</ReportPeriodNavigationContext.Provider>;
 }

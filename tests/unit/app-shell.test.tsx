@@ -28,6 +28,9 @@ describe('AppShell brand navigation', () => {
 
     expect(markup).toContain('alt="Arvello"');
     expect(markup).toContain('src="/brand/arvello_approach_com_nome_fundo_preto.png"');
+    expect(markup).toContain('mix-blend-screen');
+    expect(markup).not.toContain('bg-black');
+    expect(markup).toContain('data-atelier-design="apple"');
     expect(markup.match(/Sua operação comercial/g)).toHaveLength(3);
     expect(markup).toContain('xl:w-[150px]');
     expect(markup).toContain('w-full');

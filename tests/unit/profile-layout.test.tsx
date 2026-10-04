@@ -36,6 +36,7 @@ describe('profile settings layout', () => {
     expect(markup).toContain('Senha atual');
     expect(markup).toContain('Confirmar nova senha');
     expect(markup).toContain('Salvar perfil');
+    expect(markup).toContain('data-atelier-material');
     expect(markup).toContain('Atualizar senha');
   });
 });

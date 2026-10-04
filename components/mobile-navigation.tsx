@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
+import type { MouseEvent } from 'react';
+import { AppNavigationLink } from './app-navigation-link';
 import {
   BuildingsIcon,
   ChartBarIcon,
@@ -30,13 +31,13 @@ export function MobileNavigation({
   pathname,
   user,
   onSignOut,
-  onNavigate,
+  onNavigationStart,
   brandLogo
 }: {
   pathname: string;
   user: { name: string; email: string };
   onSignOut: () => Promise<void>;
-  onNavigate: () => void;
+  onNavigationStart: (href: string, label: string, event: MouseEvent<HTMLAnchorElement>) => boolean;
   brandLogo: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -59,17 +60,16 @@ export function MobileNavigation({
     setIsOpen(true);
   }
 
-  function navigate() {
+  function closeOnNavigate() {
     closeDrawer();
-    onNavigate();
   }
 
   return <>
     <header data-atelier-floating className="sticky top-0 z-30 border-b border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl backdrop-saturate-150 md:hidden">
       <div className="flex min-h-16 items-center justify-between gap-2 px-4 py-2">
-        <Link href="/" prefetch={false} onClick={onNavigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
+        <AppNavigationLink href="/" label="Painel" onNavigationStart={onNavigationStart} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
           {brandLogo}
-        </Link>
+        </AppNavigationLink>
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
@@ -81,9 +81,9 @@ export function MobileNavigation({
           >
             {isOpen ? <XIcon size={22} aria-hidden="true" /> : <ListIcon size={22} aria-hidden="true" />}
           </button>
-          <Link href="/configuracoes" prefetch={false} aria-label="Meu perfil" onClick={onNavigate} className="flex size-11 items-center justify-center rounded-lg text-[var(--atelier-green)] hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+          <AppNavigationLink href="/configuracoes" label="Meu perfil" onNavigationStart={onNavigationStart} aria-label="Meu perfil" className="flex size-11 items-center justify-center rounded-lg text-[var(--atelier-green)] hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
             <UserCircleIcon size={23} aria-hidden="true" />
-          </Link>
+          </AppNavigationLink>
         </div>
       </div>
     </header>
@@ -103,9 +103,9 @@ export function MobileNavigation({
       <div className="flex h-full min-h-0">
         <aside data-mobile-navigation-panel data-atelier-floating className="flex h-full w-[min(20rem,calc(100vw-3.5rem))] min-w-0 flex-col border-r border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[12px_0_40px_rgba(0,0,0,0.32)] backdrop-blur-xl backdrop-saturate-150">
           <div className="flex min-h-12 items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
-            <Link href="/" prefetch={false} onClick={navigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
+            <AppNavigationLink href="/" label="Painel" onNavigationStart={onNavigationStart} onClick={closeOnNavigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
               {brandLogo}
-            </Link>
+            </AppNavigationLink>
             <button type="button" aria-label="Fechar menu" onClick={closeDrawer} className="flex size-11 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/[0.06] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
               <XIcon size={21} aria-hidden="true" />
             </button>
@@ -115,26 +115,27 @@ export function MobileNavigation({
             {appRoutes.map((route) => {
               const active = routeIsActive(pathname, route.href);
               const Icon = route.Icon;
-              return <Link
+              return <AppNavigationLink
                 key={route.href}
                 href={route.href}
-                prefetch={false}
+                label={route.label}
+                onNavigationStart={onNavigationStart}
                 scroll={route.href === '/pesquisa' ? false : undefined}
-                onClick={navigate}
+                onClick={closeOnNavigate}
                 aria-current={active ? 'page' : undefined}
                 className={`flex min-h-11 items-center gap-3 rounded-lg border-l-2 px-3 text-sm ${active ? 'border-[var(--atelier-green)] bg-[var(--atelier-green)]/[0.08] font-semibold text-[var(--atelier-green)]' : 'border-transparent text-white/65 hover:bg-white/[0.045] hover:text-white'}`}
               >
                 <Icon size={19} weight="regular" aria-hidden="true" />
                 <span>{route.label}</span>
-              </Link>;
+              </AppNavigationLink>;
             })}
           </nav>
 
           <div className="mt-auto border-t border-white/[0.08] pt-4">
-            <Link href="/configuracoes" prefetch={false} onClick={navigate} aria-current={pathname.startsWith('/configuracoes') ? 'page' : undefined} className="flex min-h-14 items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/[0.05]">
+            <AppNavigationLink href="/configuracoes" label="Meu perfil" onNavigationStart={onNavigationStart} onClick={closeOnNavigate} aria-current={pathname.startsWith('/configuracoes') ? 'page' : undefined} className="flex min-h-14 items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/[0.05]">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--atelier-green)]/15 text-sm font-semibold text-[var(--atelier-green)]">{initials}</span>
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{user.name}</span><span className="block truncate text-xs text-white/45">Meu perfil · {user.email}</span></span>
-            </Link>
+            </AppNavigationLink>
             <form action={onSignOut}>
               <button type="submit" className="mt-2 flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-white/55 hover:bg-white/[0.045] hover:text-white">
                 <SignOutIcon size={17} weight="regular" aria-hidden="true" />

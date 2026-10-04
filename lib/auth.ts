@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import { cache } from 'react';
 
 import authConfig from './auth-config';
 import { authenticateMember } from './member-credentials';
@@ -25,7 +26,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   ]
 });
 
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async function getCurrentUser() {
   const session = await auth();
 
   if (!session?.user?.id) {
@@ -40,4 +41,4 @@ export async function getCurrentUser() {
     });
 
   return { ...session.user, name: profile.name, email: profile.email, image: profile.avatarUrl };
-}
+});

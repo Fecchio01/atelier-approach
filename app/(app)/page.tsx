@@ -61,7 +61,7 @@ function FollowUps({ followUps, empty, nameFor, overdue = false, upcoming = fals
 }
 
 function Result({ label, value }: { label: string; value: string | number }) {
-  return <div className="min-w-0 border-l border-white/10 pl-3 first:border-0 first:pl-0">
+  return <div className="min-w-0">
     <strong className="block truncate text-xl font-semibold tabular-nums tracking-tight text-white md:text-2xl">{value}</strong>
     <span className="mt-1 block text-xs leading-snug text-white/50">{label}</span>
   </div>;
