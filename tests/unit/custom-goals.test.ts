@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { getCustomGoalCurrent, getCustomGoalIcon, inferCustomGoalIcon, parseCustomGoalMetrics, type CustomGoalMetric } from '../../lib/custom-goals';
+import { getCustomGoalCurrent, getCustomGoalGroup, getCustomGoalIcon, inferCustomGoalGroup, inferCustomGoalIcon, parseCustomGoalMetrics, updateCustomGoalDraft, type CustomGoalMetric } from '../../lib/custom-goals';
 import * as goalGrouping from '../../lib/custom-goals';
 
 describe('custom team goals', () => {
@@ -57,6 +57,20 @@ describe('custom team goals', () => {
     expect(groups?.prospecting.map(({ id }) => id)).toEqual(['conversations']);
     expect(groups?.progress.map(({ id }) => id)).toEqual(['approved', 'pain']);
     expect(groups?.other).toEqual([]);
+  });
+
+  test('keeps a legacy goal in its current group while editing its name, then allows commit inference', () => {
+    const legacyGoal: CustomGoalMetric = { id: 'legacy-revenue', name: 'Faturamento', target: 5, current: 1 };
+    const draft = updateCustomGoalDraft(legacyGoal, { name: 'Receita recorrente' });
+
+    expect(getCustomGoalGroup(draft)).toBe('revenue');
+    expect(draft.group).toBe('revenue');
+    expect(inferCustomGoalGroup(draft.name, draft.unit)).toBe('revenue');
+
+    const otherLegacyGoal: CustomGoalMetric = { id: 'legacy-car', name: 'Carros vendidos', target: 5, current: 1 };
+    const renamedDraft = updateCustomGoalDraft(otherLegacyGoal, { name: 'Receita recorrente' });
+    expect(getCustomGoalGroup(renamedDraft)).toBe('vehicles');
+    expect(inferCustomGoalGroup(renamedDraft.name, renamedDraft.unit)).toBe('revenue');
   });
 
   test('persists a recognized group and rejects an unsupported group value', () => {

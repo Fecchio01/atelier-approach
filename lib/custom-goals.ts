@@ -83,6 +83,21 @@ export function getCustomGoalGroup(goal: Pick<CustomGoalMetric, 'name' | 'unit' 
   return goal.group && customGoalGroupSet.has(goal.group) ? goal.group : inferCustomGoalGroup(goal.name, goal.unit);
 }
 
+/**
+ * Keep legacy goals in their current visual section while their label is being
+ * edited. The form can infer and persist a new section after the edit commits.
+ */
+export function updateCustomGoalDraft(
+  goal: CustomGoalMetric,
+  changes: Partial<CustomGoalMetric>
+): CustomGoalMetric {
+  const updatedGoal = { ...goal, ...changes };
+  if (!goal.group && ('name' in changes || 'unit' in changes)) {
+    updatedGoal.group = getCustomGoalGroup(goal);
+  }
+  return updatedGoal;
+}
+
 export function groupCustomGoals(goals: CustomGoalMetric[]): Record<CustomGoalGroup, CustomGoalMetric[]> {
   const grouped: Record<CustomGoalGroup, CustomGoalMetric[]> = {
     prospecting: [], progress: [], revenue: [], vehicles: [], operations: [], other: []

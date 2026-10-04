@@ -161,11 +161,20 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await expect(restoredCustom.getByLabel('Conversas da equipe: 10 de 20')).toBeVisible();
     await expect(restoredCustom.getByLabel(/^Nome do indicador /)).toHaveCount(0);
     await restoredCustom.getByRole('button', { name: 'Remover Conversas da equipe' }).click();
-    await expect(page.getByRole('tabpanel', { name: 'Semanal' }).getByRole('heading', { name: 'Conversas da equipe', exact: true })).toHaveCount(0);
+    await expect(restoredCustom.getByRole('progressbar', { name: 'Progresso de Conversas da equipe' })).toHaveCount(0);
+    await expect(restoredCustom.getByLabel('Indicador especial: 4 de 12')).toBeVisible();
+    await expect(restoredCustom.getByLabel('Receita recorrente: 3 de 9')).toBeVisible();
     const weeklyAfterManualRemoval = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });
-    expect(weeklyAfterManualRemoval?.customGoals).toEqual([]);
+    expect(weeklyAfterManualRemoval?.customGoals).toHaveLength(2);
+    expect(weeklyAfterManualRemoval?.customGoals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Indicador especial', group: 'revenue', target: 12, current: 4 }),
+      expect.objectContaining({ name: 'Receita recorrente', group: 'revenue', target: 9, current: 3 })
+    ]));
     await page.reload();
-    await expect(page.getByRole('tabpanel', { name: 'Semanal' }).getByRole('heading', { name: 'Conversas da equipe', exact: true })).toHaveCount(0);
+    const restoredAfterRemoval = page.getByRole('tabpanel', { name: 'Semanal' });
+    await expect(restoredAfterRemoval.getByRole('progressbar', { name: 'Progresso de Conversas da equipe' })).toHaveCount(0);
+    await expect(restoredAfterRemoval.getByLabel('Indicador especial: 4 de 12')).toBeVisible();
+    await expect(restoredAfterRemoval.getByLabel('Receita recorrente: 3 de 9')).toBeVisible();
   } finally {
     await prisma.goal.deleteMany({ where: { ownerId: '__team__' } });
     if (testLeadId) await prisma.lead.delete({ where: { id: testLeadId } });

@@ -4,7 +4,7 @@ import { useActionState, useState } from 'react';
 import { ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, TargetIcon, WrenchIcon, XIcon } from '@phosphor-icons/react';
 
 import { applyGoalSuggestions, createGoalSaveFormData, removePdfImportedCustomGoals } from '@/lib/goal-import-state';
-import { customGoalGroupKeys, customGoalGroups, getCustomGoalGroup, groupCustomGoals, inferCustomGoalGroup, type CustomGoalGroup, type CustomGoalMetric } from '@/lib/custom-goals';
+import { customGoalGroupKeys, customGoalGroups, getCustomGoalGroup, groupCustomGoals, inferCustomGoalGroup, updateCustomGoalDraft, type CustomGoalGroup, type CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { removeImportedPdfGoals, saveCustomGoalsForCycle, saveMonthlyGoal, saveWeeklyGoal } from './actions';
@@ -214,7 +214,7 @@ export function GoalForm({
   function updateCustomGoal(id: string, changes: Partial<CustomGoalMetric>) {
     setGoalNotice(null);
     setCustomGoalsDirty(true);
-    const nextCustomGoals = customGoals.map((item) => item.id === id ? { ...item, ...changes } : item);
+    const nextCustomGoals = customGoals.map((item) => item.id === id ? updateCustomGoalDraft(item, changes) : item);
     const previousGoal = customGoals.find((item) => item.id === id);
     const updatedGoal = nextCustomGoals.find((item) => item.id === id);
     setCustomGoals(nextCustomGoals);
