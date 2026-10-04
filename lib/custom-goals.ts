@@ -9,6 +9,7 @@ export const customGoalIconLabels: Record<typeof customGoalIcons[number], string
 };
 
 export type CustomGoalSource = 'manual' | GoalMetricKey;
+export type CustomGoalOrigin = 'manual' | 'pdf';
 export const customGoalSourceLabels: Record<CustomGoalSource, string> = {
   manual: 'Manual', approaches: 'Abordagens', interests: 'Interesses', meetings: 'Reuniões',
   followUpsCompleted: 'Follow-ups concluídos', sales: 'Vendas', revenue: 'Receita', mrr: 'MRR', conversionRate: 'Conversão'
@@ -39,6 +40,7 @@ export type CustomGoalMetric = {
   icon?: CustomGoalIcon;
   group?: CustomGoalGroup;
   source?: CustomGoalSource;
+  origin?: CustomGoalOrigin;
 };
 
 function normalizeGoalText(value: string) {
@@ -127,7 +129,7 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
   for (const candidate of value) {
     if (!isRecord(candidate)) return { ok: false, message: 'Revise os dados das metas personalizadas.' };
 
-    const { id, name, unit, target, current, icon, group, source } = candidate;
+    const { id, name, unit, target, current, icon, group, source, origin } = candidate;
     if (typeof id !== 'string' || !validId.test(id) || seenIds.has(id)) {
       return { ok: false, message: 'Cada meta personalizada precisa de um identificador único válido.' };
     }
@@ -150,6 +152,9 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
     if (source !== undefined && (typeof source !== 'string' || !Object.hasOwn(customGoalSourceLabels, source))) {
       return { ok: false, message: 'Escolha uma origem disponível para o progresso da meta.' };
     }
+    if (origin !== undefined && origin !== 'manual' && origin !== 'pdf') {
+      return { ok: false, message: 'Escolha uma origem disponível para o indicador.' };
+    }
 
     seenIds.add(id);
     const trimmedUnit = typeof unit === 'string' ? unit.trim() : '';
@@ -161,7 +166,8 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
       current,
       ...(icon ? { icon: icon as CustomGoalIcon } : {}),
       ...(group ? { group: group as CustomGoalGroup } : {}),
-      ...(source ? { source: source as CustomGoalSource } : {})
+      ...(source ? { source: source as CustomGoalSource } : {}),
+      ...(origin ? { origin: origin as CustomGoalOrigin } : {})
     });
   }
 

@@ -12,6 +12,10 @@ export type ReviewedGoalSuggestion = {
   group?: CustomGoalGroup;
 };
 
+export function removePdfImportedCustomGoals(customGoals: CustomGoalMetric[]) {
+  return customGoals.filter((goal) => goal.origin !== 'pdf');
+}
+
 export function createGoalSaveFormData(
   targets: Partial<Record<GoalMetricKey, string>>,
   customGoals: CustomGoalMetric[],
@@ -32,7 +36,7 @@ export function applyGoalSuggestions(
   suggestions: ReviewedGoalSuggestion[]
 ) {
   const targets = { ...currentTargets };
-  const customGoals = [...currentCustomGoals];
+  const customGoals = removePdfImportedCustomGoals(currentCustomGoals);
 
   for (const suggestion of suggestions) {
     const target = Number(suggestion.target.replace(',', '.'));
@@ -57,7 +61,8 @@ export function applyGoalSuggestions(
       current,
       icon: suggestion.icon,
       ...(suggestion.group ? { group: suggestion.group } : {}),
-      source: 'manual'
+      source: 'manual',
+      origin: 'pdf'
     } satisfies CustomGoalMetric;
     const existingIndex = customGoals.findIndex((goal) => goal.id === suggestion.id);
     if (existingIndex === -1) customGoals.push(customGoal);

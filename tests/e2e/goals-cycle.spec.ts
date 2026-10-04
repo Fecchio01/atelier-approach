@@ -43,9 +43,11 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await weeklyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
     await expect(weeklyApproachesTarget).toBeVisible();
     await weeklyApproachesTarget.fill('321');
+    await weeklyPanel.getByRole('button', { name: 'Salvar metas' }).click();
+    await expect(weeklyPanel.getByRole('status')).toContainText('Meta semanal da equipe salva');
     await weeklyPanel.getByRole('button', { name: 'Adicionar indicador' }).click();
     await weeklyPanel.getByLabel(/^Nome do indicador /).last().fill('Conversas da equipe');
-    const weeklyCustom = weeklyPanel.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Conversas da equipe', exact: true }) });
+    const weeklyCustom = weeklyPanel;
     await weeklyCustom.getByLabel(/^Meta do indicador /).fill('20');
     await weeklyCustom.getByLabel(/^Progresso do indicador /).fill('7');
     await weeklyCustom.getByLabel(/^Origem do indicador /).selectOption('approaches');
@@ -56,7 +58,15 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await weeklyCustom.getByLabel(/^Origem do indicador /).selectOption('approaches');
     await weeklyCustom.getByRole('button', { name: 'Fechar edição de Conversas da equipe' }).click();
     await expect(weeklyCustom.getByLabel(/^Nome do indicador /)).toHaveCount(0);
-    await expect(weeklyCustom.getByRole('progressbar')).toHaveAttribute('aria-valuetext', '50% da meta');
+    await expect(weeklyCustom.getByRole('progressbar', { name: 'Progresso de Conversas da equipe' })).toHaveAttribute('aria-valuetext', '50% da meta');
+
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Funil' }).click();
+    await expect(page).toHaveURL(/\/crm$/);
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
+    await expect(page).toHaveURL(/\/metas$/);
+    const restoredBeforeSave = page.getByRole('tabpanel', { name: 'Semanal' });
+    await expect(restoredBeforeSave.getByLabel('Conversas da equipe: 10 de 20')).toBeVisible();
+
     await monthlyTab.click();
     await expect(monthlyTab).toHaveAttribute('aria-selected', 'true');
     await monthlyPanel.getByLabel('Dia de início do ciclo mensal').fill('14');
@@ -67,7 +77,7 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await monthlyApproachesTarget.fill('777');
     await monthlyPanel.getByRole('button', { name: 'Adicionar indicador' }).click();
     await monthlyPanel.getByLabel(/^Nome do indicador /).last().fill('Carros do mês');
-    const monthlyCustom = monthlyPanel.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Carros do mês', exact: true }) });
+    const monthlyCustom = monthlyPanel;
     await monthlyCustom.getByLabel(/^Meta do indicador /).fill('8');
     await monthlyCustom.getByLabel(/^Progresso do indicador /).fill('2');
     await monthlyCustom.getByRole('button', { name: 'Fechar edição de Carros do mês' }).click();
@@ -101,9 +111,15 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     expect(weeklyGoal?.approachesTarget).toBe(321);
     expect(weeklyGoal?.customGoals).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Conversas da equipe', source: 'approaches', current: 7 })]));
     await page.reload();
-    const restoredCustom = page.getByRole('tabpanel', { name: 'Semanal' }).getByRole('article').filter({ has: page.getByRole('heading', { name: 'Conversas da equipe', exact: true }) });
+    const restoredCustom = page.getByRole('tabpanel', { name: 'Semanal' });
     await expect(restoredCustom.getByLabel('Conversas da equipe: 10 de 20')).toBeVisible();
     await expect(restoredCustom.getByLabel(/^Nome do indicador /)).toHaveCount(0);
+    await restoredCustom.getByRole('button', { name: 'Remover Conversas da equipe' }).click();
+    await expect(page.getByRole('tabpanel', { name: 'Semanal' }).getByRole('heading', { name: 'Conversas da equipe', exact: true })).toHaveCount(0);
+    const weeklyAfterManualRemoval = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });
+    expect(weeklyAfterManualRemoval?.customGoals).toEqual([]);
+    await page.reload();
+    await expect(page.getByRole('tabpanel', { name: 'Semanal' }).getByRole('heading', { name: 'Conversas da equipe', exact: true })).toHaveCount(0);
   } finally {
     await prisma.goal.deleteMany({ where: { ownerId: '__team__' } });
     if (testLeadId) await prisma.lead.delete({ where: { id: testLeadId } });

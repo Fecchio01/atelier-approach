@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { applyGoalSuggestions, createGoalSaveFormData, type ReviewedGoalSuggestion } from '../../lib/goal-import-state';
+import { applyGoalSuggestions, createGoalSaveFormData, removePdfImportedCustomGoals, type ReviewedGoalSuggestion } from '../../lib/goal-import-state';
 
 describe('reviewed goal suggestions', () => {
   test('saves the reviewer-selected thematic group with a custom PDF metric', () => {
@@ -18,6 +18,36 @@ describe('reviewed goal suggestions', () => {
     expect(result.customGoals[0]).toMatchObject({ source: 'sales', current: 2 });
     expect(result.customGoals[1]).toMatchObject({ source: 'manual', current: 3 });
   });
+
+  test('replaces only imported custom goals and updates standard target values from the PDF', () => {
+    const manualGoal = { id: 'manual', name: 'Parcerias', target: 5, current: 1, source: 'manual' as const };
+    const previousPdfGoal = { id: 'old-pdf', name: 'Carros', target: 3, current: 1, icon: 'car' as const, origin: 'pdf' as const };
+    const result = applyGoalSuggestions(
+      { approaches: '12', sales: '4' },
+      [manualGoal, previousPdfGoal],
+      [
+        { id: 'approaches', name: 'Abordagens', target: '30', current: '0', destination: 'approaches', icon: 'prospecting' },
+        { id: 'new-pdf', name: 'Serviços concluídos', target: '8', current: '2', destination: 'custom', icon: 'wrench', group: 'operations' }
+      ]
+    );
+
+    expect(result.targets).toEqual({ approaches: '30', sales: '4' });
+    expect(result.customGoals).toEqual([
+      manualGoal,
+      { id: 'new-pdf', name: 'Serviços concluídos', target: 8, current: 2, icon: 'wrench', group: 'operations', source: 'manual', origin: 'pdf' }
+    ]);
+  });
+
+  test('removes PDF-imported goals while preserving manual and legacy custom goals', () => {
+    expect(removePdfImportedCustomGoals([
+      { id: 'manual', name: 'Parcerias', target: 5, current: 1, origin: 'manual' },
+      { id: 'legacy', name: 'Indicador antigo', target: 2, current: 0 },
+      { id: 'pdf', name: 'Carros', target: 3, current: 1, origin: 'pdf' }
+    ])).toEqual([
+      { id: 'manual', name: 'Parcerias', target: 5, current: 1, origin: 'manual' },
+      { id: 'legacy', name: 'Indicador antigo', target: 2, current: 0 }
+    ]);
+  });
   test('merges reviewed fixed targets and appends custom metrics without losing existing values', () => {
     const result = applyGoalSuggestions(
       { approaches: '12', sales: '4' },
@@ -31,7 +61,7 @@ describe('reviewed goal suggestions', () => {
     expect(result.targets).toMatchObject({ approaches: '500', sales: '4' });
     expect(result.customGoals).toEqual([
       { id: 'existing', name: 'Carros', target: 3, current: 1, icon: 'car' },
-      { id: 'custom', name: 'Veículos entregues', unit: 'carros', target: 8, current: 2, icon: 'car', source: 'manual' }
+      { id: 'custom', name: 'Veículos entregues', unit: 'carros', target: 8, current: 2, icon: 'car', source: 'manual', origin: 'pdf' }
     ]);
   });
 
@@ -52,7 +82,7 @@ describe('reviewed goal suggestions', () => {
 
     expect(result).toEqual({
       targets: {},
-      customGoals: [{ id: 'zero-limit', name: 'Repetições / fora do perfil', target: 0, current: 0, icon: 'target', source: 'manual' }]
+      customGoals: [{ id: 'zero-limit', name: 'Repetições / fora do perfil', target: 0, current: 0, icon: 'target', source: 'manual', origin: 'pdf' }]
     });
   });
 
@@ -78,7 +108,7 @@ describe('reviewed goal suggestions', () => {
     ]);
 
     expect(retry.customGoals).toEqual([
-      { id: 'pdf-car', name: 'Carros entregues', unit: 'carros', target: 5, current: 2, icon: 'car', group: 'vehicles', source: 'manual' }
+      { id: 'pdf-car', name: 'Carros entregues', unit: 'carros', target: 5, current: 2, icon: 'car', group: 'vehicles', source: 'manual', origin: 'pdf' }
     ]);
   });
 });

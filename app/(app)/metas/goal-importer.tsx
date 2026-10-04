@@ -35,7 +35,11 @@ function makeRows(targets: Partial<Record<GoalMetricKey, number>>, custom: Array
   return [...fixed, ...customRows];
 }
 
-export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalSuggestion[]) => Promise<GoalActionState> }) {
+export function GoalImporter({ onApply, disabled = false, onActivityChange }: {
+  onApply: (suggestions: ReviewedGoalSuggestion[]) => Promise<GoalActionState>;
+  disabled?: boolean;
+  onActivityChange?: (active: boolean) => void;
+}) {
   const [rows, setRows] = useState<ImportableDraft[]>([]);
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
@@ -55,6 +59,7 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
     if (!file) return;
 
     setBusy(true);
+    onActivityChange?.(true);
     try {
       const text = await readGoalPdfText(file);
       const draft = parseGoalDocumentText(text);
@@ -79,6 +84,7 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
       setError(reason instanceof Error ? reason.message : 'Não foi possível ler esse PDF. Tente outro arquivo.');
     } finally {
       setBusy(false);
+      onActivityChange?.(false);
     }
   }
 
@@ -111,6 +117,7 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
     }
 
     setApplying(true);
+    onActivityChange?.(true);
     setError('');
     setNotice('Salvando as metas importadas…');
     try {
@@ -128,10 +135,13 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
       setNotice('As sugestões foram colocadas nos indicadores, mas ainda não foram gravadas.');
     } finally {
       setApplying(false);
+      onActivityChange?.(false);
     }
   }
 
-  return <section aria-labelledby="goal-import-heading" className="rounded-2xl border border-[var(--atelier-green)]/20 bg-[linear-gradient(118deg,rgba(27,37,32,0.64),rgba(17,22,27,0.92))] p-4 sm:p-5">
+  const interactionDisabled = disabled || busy || applying;
+
+  return <section aria-labelledby="goal-import-heading" aria-busy={interactionDisabled} className="rounded-2xl border border-[var(--atelier-green)]/20 bg-[linear-gradient(118deg,rgba(27,37,32,0.64),rgba(17,22,27,0.92))] p-4 sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="flex min-w-0 items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.09] text-[var(--atelier-green)]"><FilePdfIcon size={19} aria-hidden="true" /></span>
@@ -143,7 +153,7 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
       <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--atelier-green)]/40 px-3.5 py-2 text-xs font-semibold text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08] has-[:disabled]:cursor-wait has-[:disabled]:opacity-55">
         <ArrowDownIcon size={15} aria-hidden="true" />
         {busy ? 'Importando e salvando…' : fileName ? 'Escolher outro PDF' : 'Selecionar PDF'}
-        <input aria-label="Importar metas de PDF" type="file" accept="application/pdf,.pdf" disabled={busy || applying} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void handleFile(file); }} className="sr-only" />
+        <input aria-label="Importar metas de PDF" type="file" accept="application/pdf,.pdf" disabled={interactionDisabled} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void handleFile(file); }} className="sr-only" />
       </label>
     </div>
 
@@ -154,7 +164,7 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
     {busy && <p role="status" className="mt-4 text-sm text-white/65">Lendo o PDF e salvando as metas reconhecidas neste ciclo…</p>}
     {error && <p role="alert" className="mt-4 text-sm text-red-300">{error}</p>}
 
-    {rows.length > 0 && reviewOpen && <div className="mt-4 space-y-3">
+    {rows.length > 0 && reviewOpen && <fieldset disabled={interactionDisabled} className="mt-4 min-w-0 space-y-3 disabled:opacity-60">
       <p className="text-xs font-medium text-white/65">O salvamento automático falhou. Corrija nome, alvo, progresso, destino ou grupo e tente novamente.</p>
       <div className="grid gap-3 lg:grid-cols-2">
         {rows.map((row, index) => <article key={row.id} className="grid min-w-0 gap-3 rounded-xl border border-white/[0.08] bg-black/15 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(128px,0.75fr)]">
@@ -210,10 +220,10 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
           <button type="button" disabled={busy || applying} onClick={() => void apply()} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 py-2 text-xs font-semibold text-[#11170b] transition hover:bg-[#c7ff69] disabled:cursor-wait disabled:opacity-60">{applying ? 'Aplicando e salvando…' : 'Aplicar e salvar metas'}</button>
         </div>
       </div>
-    </div>}
+    </fieldset>}
     {rows.length > 0 && !reviewOpen && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
       <p className="text-xs text-white/55">{rows.length} sugestões aguardando revisão; ainda não foram aplicadas.</p>
-      <button type="button" onClick={() => setReviewOpen(true)} className="min-h-9 rounded-lg px-3 text-xs font-medium text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08]">Revisar sugestões</button>
+      <button type="button" disabled={interactionDisabled} onClick={() => setReviewOpen(true)} className="min-h-9 rounded-lg px-3 text-xs font-medium text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08] disabled:opacity-50">Revisar sugestões</button>
     </div>}
     {notice && <p role="status" className="mt-3 text-xs text-[var(--atelier-green)]">{notice}</p>}
     </>}

@@ -65,6 +65,14 @@ describe('custom team goals', () => {
     expect(parseCustomGoalMetrics([{ id: 'goal', name: 'Meta', target: 4, current: 1, group: 'untrusted-group' }])).toMatchObject({ ok: false });
   });
 
+  test('persists the custom goal origin and rejects unsupported values', () => {
+    expect(parseCustomGoalMetrics([{ id: 'pdf-goal', name: 'Carros', target: 3, current: 0, origin: 'pdf' }])).toEqual({
+      ok: true,
+      goals: [{ id: 'pdf-goal', name: 'Carros', target: 3, current: 0, origin: 'pdf' }]
+    });
+    expect(parseCustomGoalMetrics([{ id: 'bad-origin', name: 'Carros', target: 3, current: 0, origin: 'upload' }])).toMatchObject({ ok: false });
+  });
+
   test('legacy and explicit manual sources use stored progress', () => {
     const goal: CustomGoalMetric = { id: 'legacy', name: 'Carros', target: 5, current: 2 };
     expect(getCustomGoalCurrent(goal, actuals)).toBe(2);

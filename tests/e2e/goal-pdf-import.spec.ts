@@ -37,7 +37,7 @@ test('automatically applies PDF goals, closes the review, and persists weekly an
 
     const importedWeeklyGoal = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });
     expect(importedWeeklyGoal?.approachesTarget).toBe(25);
-    expect(importedWeeklyGoal?.customGoals).toMatchObject([{ name: 'Carros', unit: 'carros', target: 3, current: 1, icon: 'car', group: 'vehicles' }]);
+    expect(importedWeeklyGoal?.customGoals).toMatchObject([{ name: 'Carros', unit: 'carros', target: 3, current: 1, icon: 'car', group: 'vehicles', origin: 'pdf' }]);
 
     const navigation = page.getByRole('navigation', { name: 'Navegação principal' }).first();
     await navigation.getByRole('link', { name: 'Funil' }).click();
@@ -63,6 +63,19 @@ test('automatically applies PDF goals, closes the review, and persists weekly an
     expect(weeklyGoal?.customGoals).toMatchObject([{ name: 'Carros', unit: 'carros', target: 5, current: 2, icon: 'car' }]);
     await expect(weeklyPanel.getByLabel('Progresso do indicador 1')).toHaveValue('2');
 
+    await weeklyPanel.locator('input[type="file"]').setInputFiles({ name: 'metas-semana-atualizada.pdf', mimeType: 'application/pdf', buffer: pdfBuffer });
+    await expect(weeklyPanel.getByText('Metas aplicadas e salvas neste ciclo.', { exact: false })).toBeVisible({ timeout: 15_000 });
+    const replacedWeeklyGoal = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });
+    expect(replacedWeeklyGoal?.approachesTarget).toBe(25);
+    expect(replacedWeeklyGoal?.customGoals).toHaveLength(1);
+    expect(replacedWeeklyGoal?.customGoals).toMatchObject([{ name: 'Carros', origin: 'pdf' }]);
+
+    await weeklyPanel.getByRole('button', { name: 'Voltar ao padrão' }).click();
+    await expect(weeklyPanel.getByRole('status').last()).toContainText('Metas do PDF removidas');
+    const resetWeeklyGoal = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });
+    expect(resetWeeklyGoal?.approachesTarget).toBe(25);
+    expect(resetWeeklyGoal?.customGoals).toEqual([]);
+
     await page.getByRole('tab', { name: 'Mensal' }).click();
     await monthlyPanel.getByLabel('Dia de início do ciclo mensal').fill('14');
     await monthlyPanel.locator('input[type="file"]').setInputFiles({ name: 'metas-mes.pdf', mimeType: 'application/pdf', buffer: pdfBuffer });
@@ -79,13 +92,17 @@ test('automatically applies PDF goals, closes the review, and persists weekly an
     const monthlyGoal = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'MONTHLY' } });
     expect(monthlyGoal?.approachesTarget).toBe(90);
     expect(monthlyGoal?.customGoals).toMatchObject([{ name: 'Carros', target: 3, current: 1 }]);
+    await monthlyPanel.getByRole('button', { name: 'Voltar ao padrão' }).click();
+    await expect(monthlyPanel.getByRole('status').last()).toContainText('Metas do PDF removidas');
+    const resetMonthlyGoal = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'MONTHLY' } });
+    expect(resetMonthlyGoal?.approachesTarget).toBe(90);
+    expect(resetMonthlyGoal?.customGoals).toEqual([]);
 
     await page.reload();
     const reloadedWeeklyPanel = page.locator('#goal-panel-weekly');
     await reloadedWeeklyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
-    await expect(reloadedWeeklyPanel.getByRole('spinbutton', { name: 'Meta para abordagens' })).toHaveValue('41');
-    await expect(reloadedWeeklyPanel.getByLabel('Meta do indicador 1')).toHaveValue('5');
-    await expect(reloadedWeeklyPanel.getByLabel('Progresso do indicador 1')).toHaveValue('2');
+    await expect(reloadedWeeklyPanel.getByRole('spinbutton', { name: 'Meta para abordagens' })).toHaveValue('25');
+    await expect(reloadedWeeklyPanel.getByRole('button', { name: 'Voltar ao padrão' })).toHaveCount(0);
   } finally {
     await prisma.goal.deleteMany({ where: { ownerId: '__team__' } });
     if (previousSettings) {

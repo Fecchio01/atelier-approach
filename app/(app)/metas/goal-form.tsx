@@ -3,11 +3,11 @@
 import { useActionState, useState } from 'react';
 import { ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, TargetIcon, WrenchIcon, XIcon } from '@phosphor-icons/react';
 
-import { applyGoalSuggestions, createGoalSaveFormData } from '@/lib/goal-import-state';
+import { applyGoalSuggestions, createGoalSaveFormData, removePdfImportedCustomGoals } from '@/lib/goal-import-state';
 import { customGoalGroupKeys, customGoalGroups, groupCustomGoals, type CustomGoalGroup, type CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
-import { saveMonthlyGoal, saveWeeklyGoal } from './actions';
+import { removeImportedPdfGoals, saveCustomGoalsForCycle, saveMonthlyGoal, saveWeeklyGoal } from './actions';
 import { initialGoalActionState, type GoalActionState } from './goal-form-state';
 import { CustomGoalMetricRow } from './custom-goal-metrics';
 import { GoalImporter } from './goal-importer';
@@ -122,6 +122,11 @@ export function GoalForm({
   const [editingField, setEditingField] = useState<GoalTargetField | null>(null);
   const [editingCustomGoalId, setEditingCustomGoalId] = useState<string | null>(null);
   const [importPending, setImportPending] = useState(false);
+  const [customGoalSavePending, setCustomGoalSavePending] = useState(false);
+  const [customGoalsDirty, setCustomGoalsDirty] = useState(false);
+  const [importerBusy, setImporterBusy] = useState(false);
+  const [importerRevision, setImporterRevision] = useState(0);
+  const [goalNotice, setGoalNotice] = useState<GoalActionState | null>(null);
   const [monthlyStartDayDraft, setMonthlyStartDayDraft] = useState(String(monthlyStartDay));
   const numericStartDay = Number(monthlyStartDayDraft);
   const displayedPeriod = kind === 'MONTHLY' && Number.isInteger(numericStartDay) && numericStartDay >= 1 && numericStartDay <= 31
@@ -132,7 +137,30 @@ export function GoalForm({
   const daysLabel = progress.daysLeft === 1 ? '1 dia restante' : `${progress.daysLeft} dias restantes`;
   const panelTitle = kind === 'WEEKLY' ? 'Metas semanais da equipe' : 'Metas mensais da equipe';
 
+  async function persistCustomGoalList(nextCustomGoals: CustomGoalMetric[]): Promise<GoalActionState> {
+    setCustomGoalSavePending(true);
+    setGoalNotice({ status: 'idle', message: 'Salvando indicador…' });
+    try {
+      const result = await saveCustomGoalsForCycle(kind, JSON.stringify(nextCustomGoals));
+      setGoalNotice(result);
+      if (result.status === 'saved') setCustomGoalsDirty(false);
+      return result;
+    } catch {
+      const result: GoalActionState = { status: 'error', message: 'Não foi possível salvar o indicador agora. Ele continua no formulário; tente novamente.' };
+      setGoalNotice(result);
+      return result;
+    } finally {
+      setCustomGoalSavePending(false);
+    }
+  }
+
+  function commitCustomGoals() {
+    if (!customGoalsDirty || pending || importPending || importerBusy || customGoalSavePending) return;
+    void persistCustomGoalList(customGoals);
+  }
+
   async function applyImportedSuggestions(suggestions: Parameters<typeof applyGoalSuggestions>[2]): Promise<GoalActionState> {
+    setGoalNotice(null);
     const merged = applyGoalSuggestions(draft, customGoals, suggestions);
     const nextDraft = { ...draft, ...merged.targets };
     setDraft(nextDraft);
@@ -140,11 +168,13 @@ export function GoalForm({
 
     setImportPending(true);
     try {
-      return await action(initialGoalActionState, createGoalSaveFormData(
+      const result = await action(initialGoalActionState, createGoalSaveFormData(
         nextDraft,
         merged.customGoals,
         kind === 'MONTHLY' ? monthlyStartDayDraft : undefined
       ));
+      if (result.status === 'saved') setCustomGoalsDirty(false);
+      return result;
     } catch {
       return { status: 'error', message: 'Não foi possível salvar as metas importadas. Elas continuam no formulário; tente salvar novamente.' };
     } finally {
@@ -152,26 +182,60 @@ export function GoalForm({
     }
   }
 
+  async function restoreDefaultGoals() {
+    const nextCustomGoals = removePdfImportedCustomGoals(customGoals);
+    if (nextCustomGoals.length === customGoals.length || pending || importPending || importerBusy || customGoalSavePending) return;
+
+    setImportPending(true);
+    setGoalNotice({ status: 'idle', message: 'Removendo metas importadas…' });
+    try {
+      const result = await removeImportedPdfGoals(kind);
+      setGoalNotice(result);
+      if (result.status === 'saved') {
+        setCustomGoals(nextCustomGoals);
+        setEditingCustomGoalId((current) => nextCustomGoals.some((goal) => goal.id === current) ? current : null);
+        setImporterRevision((current) => current + 1);
+      }
+    } catch {
+      setGoalNotice({ status: 'error', message: 'Não foi possível remover as metas importadas agora. Tente novamente.' });
+    } finally {
+      setImportPending(false);
+    }
+  }
+
   function updateCustomGoal(id: string, changes: Partial<CustomGoalMetric>) {
+    setGoalNotice(null);
+    setCustomGoalsDirty(true);
     setCustomGoals((current) => current.map((item) => item.id === id ? { ...item, ...changes } : item));
   }
 
   function addCustomGoal() {
+    if (pending || importPending || importerBusy || customGoalSavePending) return;
+    setGoalNotice(null);
     const id = crypto.randomUUID();
-    setCustomGoals((current) => [...current, { id, name: '', target: 1, current: 0, icon: 'target', group: 'other', source: 'manual' }]);
+    const nextCustomGoals = [...customGoals, { id, name: 'Novo indicador', target: 1, current: 0, icon: 'target' as const, group: 'other' as const, source: 'manual' as const, origin: 'manual' as const }];
+    setCustomGoals(nextCustomGoals);
+    setCustomGoalsDirty(true);
     setEditingCustomGoalId(id);
+    void persistCustomGoalList(nextCustomGoals);
   }
 
-  function removeCustomGoal(id: string) {
-    setCustomGoals((current) => current.filter((item) => item.id !== id));
-    setEditingCustomGoalId((current) => current === id ? null : current);
+  async function removeCustomGoal(id: string) {
+    if (pending || importPending || importerBusy || customGoalSavePending) return;
+    setGoalNotice(null);
+    const nextCustomGoals = customGoals.filter((item) => item.id !== id);
+    const result = await persistCustomGoalList(nextCustomGoals);
+    if (result.status === 'saved') {
+      setCustomGoals(nextCustomGoals);
+      setEditingCustomGoalId((current) => current === id ? null : current);
+    }
   }
 
   const customGoalsByGroup = groupCustomGoals(customGoals);
 
   return <form action={formAction} className="space-y-6">
     <input type="hidden" name="customGoals" value={JSON.stringify(customGoals)} />
-    <GoalImporter onApply={applyImportedSuggestions} />
+    <GoalImporter key={importerRevision} disabled={importPending || customGoalSavePending || pending} onActivityChange={setImporterBusy} onApply={applyImportedSuggestions} />
     <section aria-label={kind === 'WEEKLY' ? 'Ciclo semanal atual' : 'Ciclo mensal atual'} className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(118deg,rgba(25,34,36,0.96),rgba(17,22,27,0.96))] p-4 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex items-start gap-3">
@@ -222,8 +286,8 @@ export function GoalForm({
         <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em]">Marcos da meta</h2>
         <p className="mt-1 text-sm text-white/50">Defina os resultados que o time quer alcançar neste ciclo.</p>
       </div>
-      <button type="submit" disabled={pending || importPending} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 py-2.5 text-sm font-semibold text-[#11170b] hover:bg-[#c7ff69] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto">
-        {importPending ? 'Salvando metas importadas…' : pending ? 'Salvando metas…' : 'Salvar metas'}
+      <button type="submit" disabled={pending || importPending || importerBusy || customGoalSavePending} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 py-2.5 text-sm font-semibold text-[#11170b] hover:bg-[#c7ff69] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto">
+        {importPending ? 'Salvando alterações…' : pending || importerBusy || customGoalSavePending ? 'Salvando metas…' : 'Salvar metas'}
       </button>
     </div>
 
@@ -233,9 +297,20 @@ export function GoalForm({
           <h3 id="custom-goals-heading" className="font-semibold text-white/90">Indicadores personalizados</h3>
           <p className="mt-1 text-xs leading-5 text-white/45">Metas organizadas dentro do tema correspondente para o time acompanhar o ciclo.</p>
         </div>
-        <button type="button" onClick={addCustomGoal} disabled={customGoals.length >= 30} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/35 px-3 py-2 text-xs font-semibold text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08] active:scale-[0.98] disabled:opacity-40">
-          <PlusIcon size={15} aria-hidden="true" /> Adicionar indicador
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {customGoals.some((customGoal) => customGoal.origin === 'pdf') && <button
+            type="button"
+            onClick={() => void restoreDefaultGoals()}
+            disabled={pending || importPending || importerBusy || customGoalSavePending}
+            title="Remove apenas indicadores adicionados por PDF; preserva metas padrão e manuais."
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/[0.09] px-3 py-2 text-xs font-medium text-white/60 transition hover:bg-white/[0.05] hover:text-white disabled:cursor-wait disabled:opacity-50"
+          >
+            <ArrowsClockwiseIcon size={15} aria-hidden="true" /> Voltar ao padrão
+          </button>}
+          <button type="button" onClick={addCustomGoal} disabled={customGoals.length >= 30 || pending || importPending || importerBusy || customGoalSavePending} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/35 px-3 py-2 text-xs font-semibold text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08] active:scale-[0.98] disabled:opacity-40">
+            <PlusIcon size={15} aria-hidden="true" /> Adicionar indicador
+          </button>
+        </div>
       </div>
 
     <div className="grid gap-4 xl:grid-cols-3">
@@ -277,7 +352,7 @@ export function GoalForm({
                       step={field.step}
                       {...('max' in field ? { max: field.max } : {})}
                       value={draft[field.key]}
-                      onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}
+                      onChange={(event) => { setGoalNotice(null); setDraft((current) => ({ ...current, [field.key]: event.target.value })); }}
                       placeholder="—"
                       className="goal-target-number w-full min-w-0 bg-transparent text-sm font-semibold leading-5 text-white outline-none placeholder:text-white/35"
                     /> : <>
@@ -319,9 +394,11 @@ export function GoalForm({
             index={index}
             actuals={actuals}
             isEditing={editingCustomGoalId === customGoal.id}
+            disabled={pending || importPending || importerBusy || customGoalSavePending}
             onToggle={() => setEditingCustomGoalId((current) => current === customGoal.id ? null : customGoal.id)}
             onChange={(changes) => updateCustomGoal(customGoal.id, changes)}
-            onRemove={() => removeCustomGoal(customGoal.id)}
+            onCommit={commitCustomGoals}
+            onRemove={() => void removeCustomGoal(customGoal.id)}
           />)}
         </div>
       </section>)}
@@ -340,9 +417,11 @@ export function GoalForm({
               index={index}
               actuals={actuals}
               isEditing={editingCustomGoalId === customGoal.id}
+              disabled={pending || importPending || importerBusy || customGoalSavePending}
               onToggle={() => setEditingCustomGoalId((current) => current === customGoal.id ? null : customGoal.id)}
               onChange={(changes) => updateCustomGoal(customGoal.id, changes)}
-              onRemove={() => removeCustomGoal(customGoal.id)}
+              onCommit={commitCustomGoals}
+              onRemove={() => void removeCustomGoal(customGoal.id)}
             />)}
           </div>
         </section>;
@@ -351,8 +430,8 @@ export function GoalForm({
     </section>
 
     <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.07] pt-5">
-      <p role="status" aria-live="polite" className={`text-sm ${state.status === 'error' ? 'text-red-300' : state.status === 'saved' ? 'text-[var(--atelier-green)]' : 'text-white/45'}`}>
-        {state.message || 'Os resultados deste ciclo também aparecem no painel e nos relatórios.'}
+      <p role="status" aria-live="polite" className={`text-sm ${(goalNotice ?? state).status === 'error' ? 'text-red-300' : (goalNotice ?? state).status === 'saved' ? 'text-[var(--atelier-green)]' : 'text-white/45'}`}>
+        {(goalNotice ?? state).message || 'Os resultados deste ciclo também aparecem no painel e nos relatórios.'}
       </p>
     </div>
   </form>;

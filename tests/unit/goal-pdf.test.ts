@@ -11,7 +11,7 @@ describe('PDF goal text suggestions', () => {
     const applied = applyGoalSuggestions({}, [], parsed.customGoals.map((goal, index) => ({
       ...goal, id: `pdf-${index}`, target: String(goal.target), current: String(goal.current), destination: 'custom' as const, icon: 'target' as const
     })));
-    expect(applied.customGoals).toEqual([{ id: 'pdf-0', name: 'Conversas humanas', unit: 'conversas', target: 10, current: 2, icon: 'target', source: 'manual' }]);
+    expect(applied.customGoals).toEqual([{ id: 'pdf-0', name: 'Conversas humanas', unit: 'conversas', target: 10, current: 2, icon: 'target', source: 'manual', origin: 'pdf' }]);
   });
   test('maps known goal names to CRM metrics and parses Brazilian money and percentages', () => {
     expect(parseGoalDocumentText([

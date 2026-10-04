@@ -4,15 +4,22 @@ const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   upsertTeamGoal: vi.fn(),
   saveMonthlyStartDay: vi.fn(),
-  transaction: vi.fn()
+  transaction: vi.fn(),
+  goalUpsert: vi.fn(),
+  goalFindFirst: vi.fn(),
+  settingsFindUnique: vi.fn()
 }));
 
 vi.mock('@/lib/auth', () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock('@/lib/metrics', () => ({ upsertTeamGoal: mocks.upsertTeamGoal, saveMonthlyStartDay: mocks.saveMonthlyStartDay }));
-vi.mock('@/lib/db', () => ({ prisma: { $transaction: mocks.transaction } }));
+vi.mock('@/lib/db', () => ({ prisma: {
+  $transaction: mocks.transaction,
+  goal: { upsert: mocks.goalUpsert, findFirst: mocks.goalFindFirst },
+  teamGoalSettings: { findUnique: mocks.settingsFindUnique }
+} }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
-import { saveMonthlyGoal, saveWeeklyGoal } from '../../app/(app)/metas/actions';
+import { saveCustomGoalsForCycle, saveMonthlyGoal, saveWeeklyGoal } from '../../app/(app)/metas/actions';
 import { initialGoalActionState } from '../../app/(app)/metas/goal-form-state';
 
 describe('team goal actions', () => {
@@ -21,7 +28,13 @@ describe('team goal actions', () => {
     mocks.upsertTeamGoal.mockReset();
     mocks.saveMonthlyStartDay.mockReset();
     mocks.transaction.mockReset();
+    mocks.goalUpsert.mockReset();
+    mocks.goalFindFirst.mockReset();
+    mocks.settingsFindUnique.mockReset();
     mocks.getCurrentUser.mockResolvedValue({ id: 'team-member' });
+    mocks.goalUpsert.mockResolvedValue({ id: 'goal' });
+    mocks.goalFindFirst.mockResolvedValue(null);
+    mocks.settingsFindUnique.mockResolvedValue(null);
   });
 
   test('returns an inline error when authentication lookup fails instead of rejecting', async () => {
@@ -37,6 +50,46 @@ describe('team goal actions', () => {
     await expect(saveWeeklyGoal(initialGoalActionState, form)).resolves.toMatchObject({ status: 'saved' });
     expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), undefined,
       [{ id: 'crm', name: 'Vendas', target: 5, current: 3, source: 'sales' }]);
+  });
+
+  test('persists manually added indicators to the active weekly cycle without overwriting its targets', async () => {
+    const customGoals = [{ id: 'manual-1', name: 'Parcerias', target: 5, current: 1, source: 'manual', origin: 'manual' }];
+
+    await expect(saveCustomGoalsForCycle('WEEKLY', JSON.stringify(customGoals))).resolves.toMatchObject({ status: 'saved' });
+    expect(mocks.goalUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { ownerId_periodKind_periodStart: expect.objectContaining({ ownerId: '__team__', periodKind: 'WEEKLY', periodStart: expect.any(Date) }) },
+      create: expect.objectContaining({ ownerId: '__team__', periodKind: 'WEEKLY', customGoals }),
+      update: expect.objectContaining({ customGoals })
+    }));
+    expect(mocks.goalUpsert.mock.calls[0][0].update).not.toHaveProperty('approachesTarget');
+  });
+
+  test('persists the manually removed list to the existing monthly cycle', async () => {
+    const periodStart = new Date('2026-09-14T03:00:00.000Z');
+    const customGoals = [{ id: 'kept', name: 'Parcerias', target: 5, current: 1, origin: 'manual' }];
+    mocks.settingsFindUnique.mockResolvedValue({ id: 'team', monthlyStartDay: 14 });
+    mocks.goalFindFirst.mockResolvedValue({ periodStart });
+
+    await expect(saveCustomGoalsForCycle('MONTHLY', JSON.stringify(customGoals))).resolves.toMatchObject({ status: 'saved' });
+    expect(mocks.goalUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { ownerId_periodKind_periodStart: { ownerId: '__team__', periodKind: 'MONTHLY', periodStart } },
+      update: expect.objectContaining({ customGoals })
+    }));
+  });
+
+  test('allows removing the last manual indicator by saving an empty list', async () => {
+    await expect(saveCustomGoalsForCycle('WEEKLY', '[]')).resolves.toMatchObject({ status: 'saved' });
+    expect(mocks.goalUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ customGoals: [] }),
+      update: { customGoals: [] }
+    }));
+  });
+
+  test('does not persist manual indicators without an authenticated user', async () => {
+    mocks.getCurrentUser.mockResolvedValue(null);
+
+    await expect(saveCustomGoalsForCycle('WEEKLY', '[]')).resolves.toMatchObject({ status: 'error' });
+    expect(mocks.goalUpsert).not.toHaveBeenCalled();
   });
 
   test('does not persist weekly or monthly goals when no user is authenticated', async () => {
