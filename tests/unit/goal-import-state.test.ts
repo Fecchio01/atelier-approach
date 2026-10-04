@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { applyGoalSuggestions, type ReviewedGoalSuggestion } from '../../lib/goal-import-state';
+import { applyGoalSuggestions, createGoalSaveFormData, type ReviewedGoalSuggestion } from '../../lib/goal-import-state';
 
 describe('reviewed goal suggestions', () => {
   test('saves the reviewer-selected thematic group with a custom PDF metric', () => {
@@ -54,5 +54,31 @@ describe('reviewed goal suggestions', () => {
       targets: {},
       customGoals: [{ id: 'zero-limit', name: 'Repetições / fora do perfil', target: 0, current: 0, icon: 'target', source: 'manual' }]
     });
+  });
+
+  test('builds the server-save payload from the applied PDF goals and selected monthly cycle', () => {
+    const customGoals = [
+      { id: 'pdf-pain', name: 'Dores confirmadas', target: 3, current: 1, icon: 'checklist' as const, group: 'progress' as const, source: 'manual' as const }
+    ];
+    const formData = createGoalSaveFormData({ approaches: '25', interests: '', sales: '2' }, customGoals, '14');
+
+    expect(formData.get('approaches')).toBe('25');
+    expect(formData.get('interests')).toBe('');
+    expect(formData.get('sales')).toBe('2');
+    expect(JSON.parse(String(formData.get('customGoals')))).toEqual(customGoals);
+    expect(formData.get('monthlyStartDay')).toBe('14');
+  });
+
+  test('updates the same imported custom goal when retrying after a failed auto-save', () => {
+    const firstApply = applyGoalSuggestions({}, [], [
+      { id: 'pdf-car', name: 'Carros', unit: 'carros', target: '3', current: '1', destination: 'custom', icon: 'car', group: 'vehicles' }
+    ]);
+    const retry = applyGoalSuggestions({}, firstApply.customGoals, [
+      { id: 'pdf-car', name: 'Carros entregues', unit: 'carros', target: '5', current: '2', destination: 'custom', icon: 'car', group: 'vehicles' }
+    ]);
+
+    expect(retry.customGoals).toEqual([
+      { id: 'pdf-car', name: 'Carros entregues', unit: 'carros', target: 5, current: 2, icon: 'car', group: 'vehicles', source: 'manual' }
+    ]);
   });
 });

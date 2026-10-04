@@ -13,7 +13,7 @@ async function makeGoalPdf() {
   return Buffer.from(await pdf.save());
 }
 
-test('imports, reviews, edits, and persists PDF goals independently in weekly and monthly cycles', async ({ page }) => {
+test('automatically applies PDF goals, closes the review, and persists weekly and monthly cycles', async ({ page }) => {
   const databaseUrl = process.env.TEST_DATABASE_URL;
   if (!databaseUrl) throw new Error('TEST_DATABASE_URL is required');
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
@@ -32,17 +32,31 @@ test('imports, reviews, edits, and persists PDF goals independently in weekly an
     const monthlyPanel = page.locator('#goal-panel-monthly');
     const weeklyFile = weeklyPanel.locator('input[type="file"]');
     await weeklyFile.setInputFiles({ name: 'metas-semana.pdf', mimeType: 'application/pdf', buffer: pdfBuffer });
-    await expect(weeklyPanel.getByLabel('Meta sugerida 1')).toHaveValue('25');
-    await expect(weeklyPanel.getByLabel('Nome sugerido 2')).toHaveValue('Carros');
-    await expect(weeklyPanel.getByLabel('Progresso sugerido 2')).toHaveValue('1');
-    await weeklyPanel.getByLabel('Meta sugerida 1').fill('41');
-    await weeklyPanel.getByLabel('Progresso sugerido 2').fill('2');
-    await weeklyPanel.getByRole('button', { name: 'Aplicar sugestões revisadas' }).click();
-    await expect(weeklyPanel.getByText('Sugestões aplicadas ao formulário', { exact: false })).toBeVisible();
-    await expect(weeklyPanel.getByLabel('Meta do indicador 1')).toHaveValue('3');
-    await weeklyPanel.getByLabel('Meta do indicador 1').fill('5');
-    await weeklyPanel.getByRole('button', { name: 'Salvar metas' }).click();
-    await expect(weeklyPanel.getByText('Meta semanal da equipe salva', { exact: false })).toBeVisible();
+    await expect(weeklyPanel.getByText('Metas aplicadas e salvas neste ciclo.', { exact: false })).toBeVisible({ timeout: 15_000 });
+    await expect(weeklyPanel.getByLabel('Meta sugerida 1')).toHaveCount(0);
+
+    const importedWeeklyGoal = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });
+    expect(importedWeeklyGoal?.approachesTarget).toBe(25);
+    expect(importedWeeklyGoal?.customGoals).toMatchObject([{ name: 'Carros', unit: 'carros', target: 3, current: 1, icon: 'car', group: 'vehicles' }]);
+
+    const navigation = page.getByRole('navigation', { name: 'Navegação principal' }).first();
+    await navigation.getByRole('link', { name: 'Funil' }).click();
+    await expect(page).toHaveURL(/\/crm$/);
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
+    await expect(page).toHaveURL(/\/metas$/);
+    const restoredWeeklyPanel = page.locator('#goal-panel-weekly');
+    await restoredWeeklyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
+    await expect(restoredWeeklyPanel.getByRole('spinbutton', { name: 'Meta para abordagens' })).toHaveValue('25');
+    await restoredWeeklyPanel.getByRole('button', { name: 'Editar Carros' }).click();
+    await expect(restoredWeeklyPanel.getByLabel('Meta do indicador 1')).toHaveValue('3');
+    await expect(restoredWeeklyPanel.getByLabel('Progresso do indicador 1')).toHaveValue('1');
+
+    const weeklyPanelAfterNavigation = page.locator('#goal-panel-weekly');
+    await weeklyPanelAfterNavigation.getByLabel('Meta para abordagens').fill('41');
+    await weeklyPanelAfterNavigation.getByLabel('Meta do indicador 1').fill('5');
+    await weeklyPanelAfterNavigation.getByLabel('Progresso do indicador 1').fill('2');
+    await weeklyPanelAfterNavigation.getByRole('button', { name: 'Salvar metas' }).click();
+    await expect(weeklyPanelAfterNavigation.getByText('Meta semanal da equipe salva', { exact: false })).toBeVisible();
 
     const weeklyGoal = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });
     expect(weeklyGoal?.approachesTarget).toBe(41);
@@ -52,9 +66,13 @@ test('imports, reviews, edits, and persists PDF goals independently in weekly an
     await page.getByRole('tab', { name: 'Mensal' }).click();
     await monthlyPanel.getByLabel('Dia de início do ciclo mensal').fill('14');
     await monthlyPanel.locator('input[type="file"]').setInputFiles({ name: 'metas-mes.pdf', mimeType: 'application/pdf', buffer: pdfBuffer });
-    await expect(monthlyPanel.getByLabel('Meta sugerida 1')).toHaveValue('25');
-    await monthlyPanel.getByLabel('Meta sugerida 1').fill('90');
-    await monthlyPanel.getByRole('button', { name: 'Aplicar sugestões revisadas' }).click();
+    await expect(monthlyPanel.getByText('Metas aplicadas e salvas neste ciclo.', { exact: false })).toBeVisible({ timeout: 15_000 });
+
+    const importedMonthlyGoal = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'MONTHLY' } });
+    expect(importedMonthlyGoal?.approachesTarget).toBe(25);
+    expect(importedMonthlyGoal?.customGoals).toMatchObject([{ name: 'Carros', target: 3, current: 1 }]);
+    await monthlyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
+    await monthlyPanel.getByLabel('Meta para abordagens').fill('90');
     await monthlyPanel.getByRole('button', { name: 'Salvar metas' }).click();
     await expect(monthlyPanel.getByText('Meta mensal da equipe salva', { exact: false })).toBeVisible();
 

@@ -3,7 +3,7 @@
 import { useActionState, useState } from 'react';
 import { ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, TargetIcon, WrenchIcon, XIcon } from '@phosphor-icons/react';
 
-import { applyGoalSuggestions } from '@/lib/goal-import-state';
+import { applyGoalSuggestions, createGoalSaveFormData } from '@/lib/goal-import-state';
 import { customGoalGroupKeys, customGoalGroups, groupCustomGoals, type CustomGoalGroup, type CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
@@ -121,6 +121,7 @@ export function GoalForm({
   const [customGoals, setCustomGoals] = useState(() => goal?.customGoals ?? []);
   const [editingField, setEditingField] = useState<GoalTargetField | null>(null);
   const [editingCustomGoalId, setEditingCustomGoalId] = useState<string | null>(null);
+  const [importPending, setImportPending] = useState(false);
   const [monthlyStartDayDraft, setMonthlyStartDayDraft] = useState(String(monthlyStartDay));
   const numericStartDay = Number(monthlyStartDayDraft);
   const displayedPeriod = kind === 'MONTHLY' && Number.isInteger(numericStartDay) && numericStartDay >= 1 && numericStartDay <= 31
@@ -131,10 +132,24 @@ export function GoalForm({
   const daysLabel = progress.daysLeft === 1 ? '1 dia restante' : `${progress.daysLeft} dias restantes`;
   const panelTitle = kind === 'WEEKLY' ? 'Metas semanais da equipe' : 'Metas mensais da equipe';
 
-  function applyImportedSuggestions(suggestions: Parameters<typeof applyGoalSuggestions>[2]) {
+  async function applyImportedSuggestions(suggestions: Parameters<typeof applyGoalSuggestions>[2]): Promise<GoalActionState> {
     const merged = applyGoalSuggestions(draft, customGoals, suggestions);
-    setDraft((current) => ({ ...current, ...merged.targets }));
+    const nextDraft = { ...draft, ...merged.targets };
+    setDraft(nextDraft);
     setCustomGoals(merged.customGoals);
+
+    setImportPending(true);
+    try {
+      return await action(initialGoalActionState, createGoalSaveFormData(
+        nextDraft,
+        merged.customGoals,
+        kind === 'MONTHLY' ? monthlyStartDayDraft : undefined
+      ));
+    } catch {
+      return { status: 'error', message: 'Não foi possível salvar as metas importadas. Elas continuam no formulário; tente salvar novamente.' };
+    } finally {
+      setImportPending(false);
+    }
   }
 
   function updateCustomGoal(id: string, changes: Partial<CustomGoalMetric>) {
@@ -207,8 +222,8 @@ export function GoalForm({
         <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em]">Marcos da meta</h2>
         <p className="mt-1 text-sm text-white/50">Defina os resultados que o time quer alcançar neste ciclo.</p>
       </div>
-      <button type="submit" disabled={pending} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 py-2.5 text-sm font-semibold text-[#11170b] hover:bg-[#c7ff69] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto">
-        {pending ? 'Salvando metas…' : 'Salvar metas'}
+      <button type="submit" disabled={pending || importPending} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 py-2.5 text-sm font-semibold text-[#11170b] hover:bg-[#c7ff69] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto">
+        {importPending ? 'Salvando metas importadas…' : pending ? 'Salvando metas…' : 'Salvar metas'}
       </button>
     </div>
 

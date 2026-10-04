@@ -86,14 +86,14 @@ describe('team goal actions', () => {
   test('saves reviewed custom metrics with weekly fixed targets in the same upsert', async () => {
     const form = new FormData();
     form.set('approaches', '20');
-    form.set('customGoals', JSON.stringify([{ id: 'car-goal', name: 'Carros', unit: 'veículos', target: 3, current: 1, icon: 'car' }]));
+    form.set('customGoals', JSON.stringify([{ id: 'car-goal', name: 'Carros', unit: 'veículos', target: 3, current: 1, icon: 'car', group: 'vehicles' }]));
 
     await expect(saveWeeklyGoal(initialGoalActionState, form)).resolves.toMatchObject({ status: 'saved' });
     expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'WEEKLY' }),
       expect.objectContaining({ approaches: 20 }),
       undefined,
-      [{ id: 'car-goal', name: 'Carros', unit: 'veículos', target: 3, current: 1, icon: 'car' }]
+      [{ id: 'car-goal', name: 'Carros', unit: 'veículos', target: 3, current: 1, icon: 'car', group: 'vehicles' }]
     );
   });
 

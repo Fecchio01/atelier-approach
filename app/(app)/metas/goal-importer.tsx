@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowDownIcon, FilePdfIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react';
+import { ArrowDownIcon, FilePdfIcon, PlusIcon, TrashIcon, XIcon } from '@phosphor-icons/react';
 
 import { customGoalGroupKeys, customGoalGroups, customGoalIconLabels, customGoalIcons, inferCustomGoalGroup, inferCustomGoalIcon, type CustomGoalIcon, type CustomGoalGroup } from '@/lib/custom-goals';
 import type { GoalMetricKey } from '@/lib/metrics';
 import { parseGoalDocumentText } from '@/lib/goal-pdf';
 import { readGoalPdfText } from '@/lib/read-goal-pdf';
 import type { ReviewedGoalSuggestion } from '@/lib/goal-import-state';
+import type { GoalActionState } from './goal-form-state';
 
 const metrics: Array<{ key: GoalMetricKey; label: string; unit?: string }> = [
   { key: 'approaches', label: 'Abordagens' },
@@ -34,17 +35,22 @@ function makeRows(targets: Partial<Record<GoalMetricKey, number>>, custom: Array
   return [...fixed, ...customRows];
 }
 
-export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalSuggestion[]) => void }) {
+export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalSuggestion[]) => Promise<GoalActionState> }) {
   const [rows, setRows] = useState<ImportableDraft[]>([]);
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   async function handleFile(file?: File) {
     setRows([]);
     setError('');
     setNotice('');
+    setApplied(false);
+    setReviewOpen(false);
     setFileName(file?.name ?? '');
     if (!file) return;
 
@@ -57,7 +63,18 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
         setError('Não encontrei metas reconhecíveis neste PDF. Você pode continuar preenchendo manualmente.');
         return;
       }
-      setRows(suggestions);
+      setNotice('');
+      const result = await onApply(suggestions);
+      if (result.status === 'saved') {
+        setApplied(true);
+        setRows([]);
+        setNotice('');
+      } else {
+        setRows(suggestions);
+        setError(result.message);
+        setNotice('A lista foi mantida para você corrigir ou tentar salvar novamente.');
+        setReviewOpen(true);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Não foi possível ler esse PDF. Tente outro arquivo.');
     } finally {
@@ -81,9 +98,37 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
     });
   }
 
-  function apply() {
-    onApply(rows);
-    setNotice('Sugestões aplicadas ao formulário. Confira e salve o ciclo para concluir.');
+  async function apply() {
+    if (applying || rows.length === 0) return;
+    const hasInvalidRow = rows.some((row) => {
+      const target = Number(row.target.replace(',', '.'));
+      const current = Number(row.current.replace(',', '.'));
+      return !row.name.trim() || !Number.isFinite(target) || target < 0 || !Number.isFinite(current) || current < 0;
+    });
+    if (hasInvalidRow) {
+      setError('Revise o nome, a meta e o progresso de cada sugestão antes de aplicar.');
+      return;
+    }
+
+    setApplying(true);
+    setError('');
+    setNotice('Salvando as metas importadas…');
+    try {
+      const result = await onApply(rows);
+      if (result.status === 'saved') {
+        setApplied(true);
+        setRows([]);
+        setNotice('');
+      } else {
+        setError(result.message);
+        setNotice('As metas ficaram nos indicadores. Corrija o problema ou use “Salvar metas” para tentar novamente.');
+      }
+    } catch {
+      setError('Não foi possível salvar agora. As metas continuam no formulário; tente salvar novamente.');
+      setNotice('As sugestões foram colocadas nos indicadores, mas ainda não foram gravadas.');
+    } finally {
+      setApplying(false);
+    }
   }
 
   return <section aria-labelledby="goal-import-heading" className="rounded-2xl border border-[var(--atelier-green)]/20 bg-[linear-gradient(118deg,rgba(27,37,32,0.64),rgba(17,22,27,0.92))] p-4 sm:p-5">
@@ -92,22 +137,25 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.09] text-[var(--atelier-green)]"><FilePdfIcon size={19} aria-hidden="true" /></span>
         <div>
           <h3 id="goal-import-heading" className="font-semibold text-white/90">Importar metas de PDF</h3>
-          <p className="mt-1 max-w-2xl text-xs leading-5 text-white/50">O arquivo é lido no seu navegador e não é enviado. Revise as sugestões antes de aplicar; o progresso das métricas do CRM continua automático.</p>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-white/50">O arquivo é lido no seu navegador e não é enviado. As metas reconhecidas são aplicadas e salvas automaticamente; depois você pode ajustá-las nos indicadores.</p>
         </div>
       </div>
       <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--atelier-green)]/40 px-3.5 py-2 text-xs font-semibold text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08] has-[:disabled]:cursor-wait has-[:disabled]:opacity-55">
         <ArrowDownIcon size={15} aria-hidden="true" />
-        {busy ? 'Lendo PDF…' : fileName ? 'Escolher outro PDF' : 'Selecionar PDF'}
-        <input aria-label="Importar metas de PDF" type="file" accept="application/pdf,.pdf" disabled={busy} onChange={(event) => void handleFile(event.currentTarget.files?.[0])} className="sr-only" />
+        {busy ? 'Importando e salvando…' : fileName ? 'Escolher outro PDF' : 'Selecionar PDF'}
+        <input aria-label="Importar metas de PDF" type="file" accept="application/pdf,.pdf" disabled={busy || applying} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void handleFile(file); }} className="sr-only" />
       </label>
     </div>
 
+    {applied ? <div role="status" className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-3 text-xs text-[var(--atelier-green)]">
+      <span>Metas aplicadas e salvas neste ciclo. Você pode ajustá-las nos indicadores abaixo.</span>
+    </div> : <>
     {fileName && <p className="mt-3 truncate text-xs text-white/45">Arquivo local: <span className="text-white/65">{fileName}</span></p>}
-    {busy && <p role="status" className="mt-4 text-sm text-white/65">Lendo o texto do PDF neste dispositivo…</p>}
+    {busy && <p role="status" className="mt-4 text-sm text-white/65">Lendo o PDF e salvando as metas reconhecidas neste ciclo…</p>}
     {error && <p role="alert" className="mt-4 text-sm text-red-300">{error}</p>}
 
-    {rows.length > 0 && <div className="mt-4 space-y-3">
-      <p className="text-xs font-medium text-white/65">Sugestões encontradas · revise nome, alvo, progresso e destino antes de aplicar.</p>
+    {rows.length > 0 && reviewOpen && <div className="mt-4 space-y-3">
+      <p className="text-xs font-medium text-white/65">O salvamento automático falhou. Corrija nome, alvo, progresso, destino ou grupo e tente novamente.</p>
       <div className="grid gap-3 lg:grid-cols-2">
         {rows.map((row, index) => <article key={row.id} className="grid min-w-0 gap-3 rounded-xl border border-white/[0.08] bg-black/15 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(128px,0.75fr)]">
           <div className="grid min-w-0 gap-2">
@@ -155,9 +203,19 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
         <button type="button" onClick={() => setRows((previous) => [...previous, { id: crypto.randomUUID(), name: '', target: '', current: '0', destination: 'custom', icon: 'target', group: 'other' }])} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-white/65 hover:bg-white/[0.05] hover:text-white">
           <PlusIcon size={14} aria-hidden="true" /> Adicionar outra sugestão
         </button>
-        <button type="button" onClick={apply} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 py-2 text-xs font-semibold text-[#11170b] transition hover:bg-[#c7ff69]">Aplicar sugestões revisadas</button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" disabled={busy || applying} onClick={() => setReviewOpen(false)} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-white/[0.09] px-3 py-2 text-xs font-medium text-white/55 transition hover:bg-white/[0.05] hover:text-white disabled:opacity-50">
+            <XIcon size={14} aria-hidden="true" /> Fechar revisão
+          </button>
+          <button type="button" disabled={busy || applying} onClick={() => void apply()} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 py-2 text-xs font-semibold text-[#11170b] transition hover:bg-[#c7ff69] disabled:cursor-wait disabled:opacity-60">{applying ? 'Aplicando e salvando…' : 'Aplicar e salvar metas'}</button>
+        </div>
       </div>
     </div>}
+    {rows.length > 0 && !reviewOpen && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
+      <p className="text-xs text-white/55">{rows.length} sugestões aguardando revisão; ainda não foram aplicadas.</p>
+      <button type="button" onClick={() => setReviewOpen(true)} className="min-h-9 rounded-lg px-3 text-xs font-medium text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08]">Revisar sugestões</button>
+    </div>}
     {notice && <p role="status" className="mt-3 text-xs text-[var(--atelier-green)]">{notice}</p>}
+    </>}
   </section>;
 }

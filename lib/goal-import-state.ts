@@ -12,6 +12,20 @@ export type ReviewedGoalSuggestion = {
   group?: CustomGoalGroup;
 };
 
+export function createGoalSaveFormData(
+  targets: Partial<Record<GoalMetricKey, string>>,
+  customGoals: CustomGoalMetric[],
+  monthlyStartDay?: string
+): FormData {
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(targets)) {
+    if (value !== undefined) formData.set(key, value);
+  }
+  formData.set('customGoals', JSON.stringify(customGoals));
+  if (monthlyStartDay !== undefined) formData.set('monthlyStartDay', monthlyStartDay);
+  return formData;
+}
+
 export function applyGoalSuggestions(
   currentTargets: Partial<Record<GoalMetricKey, string>>,
   currentCustomGoals: CustomGoalMetric[],
@@ -19,7 +33,6 @@ export function applyGoalSuggestions(
 ) {
   const targets = { ...currentTargets };
   const customGoals = [...currentCustomGoals];
-  const usedIds = new Set(customGoals.map(({ id }) => id));
 
   for (const suggestion of suggestions) {
     const target = Number(suggestion.target.replace(',', '.'));
@@ -33,10 +46,10 @@ export function applyGoalSuggestions(
       continue;
     }
 
-    if (usedIds.has(suggestion.id) || !customGoalIcons.includes(suggestion.icon)
+    if (!customGoalIcons.includes(suggestion.icon)
       || suggestion.group !== undefined && !customGoalGroupKeys.includes(suggestion.group)) continue;
     const unit = suggestion.unit?.trim();
-    customGoals.push({
+    const customGoal = {
       id: suggestion.id,
       name: suggestion.name.trim(),
       ...(unit ? { unit } : {}),
@@ -45,8 +58,10 @@ export function applyGoalSuggestions(
       icon: suggestion.icon,
       ...(suggestion.group ? { group: suggestion.group } : {}),
       source: 'manual'
-    });
-    usedIds.add(suggestion.id);
+    } satisfies CustomGoalMetric;
+    const existingIndex = customGoals.findIndex((goal) => goal.id === suggestion.id);
+    if (existingIndex === -1) customGoals.push(customGoal);
+    else customGoals[existingIndex] = customGoal;
   }
 
   return { targets, customGoals };
