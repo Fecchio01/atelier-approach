@@ -166,7 +166,7 @@ export default function PesquisaPage() {
         {continuationError ? <p role="alert" className="mt-6 rounded-lg border border-red-300/30 bg-[#281a1e] p-3 text-sm leading-6 text-red-100">{continuationError}</p> : null}
         {hasMore ? (
           <div className="mt-6 flex justify-center">
-            <button type="button" disabled={isLoadingMore} onClick={loadMoreBusinesses} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-5 text-sm font-semibold text-black transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[#c7ff69] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60">
+            <button type="button" disabled={isLoadingMore} onClick={loadMoreBusinesses} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-5 text-sm font-semibold text-black transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[var(--atelier-green-hover)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60">
               {isLoadingMore ? 'Buscando mais empresas…' : 'Carregar mais empresas'}
             </button>
           </div>

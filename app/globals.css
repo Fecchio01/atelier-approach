@@ -2,14 +2,16 @@
 
 :root {
   --atelier-black: #070a0d;
-  --atelier-green: #b6ff36;
+  --atelier-green: #a7d81a;
+  --atelier-green-hover: #b7e646;
   --atelier-surface: #11161b;
   --atelier-surface-raised: #171e24;
   --atelier-line: rgba(255, 255, 255, 0.09);
-  --atelier-motion-duration: 180ms;
-  --atelier-motion-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --atelier-motion-duration: 220ms;
+  --atelier-press-duration: 90ms;
+  --atelier-motion-easing: cubic-bezier(0.22, 0.61, 0.36, 1);
   --atelier-floating-border: rgba(255, 255, 255, 0.12);
-  --atelier-floating-surface: rgba(17, 22, 27, 0.96);
+  --atelier-floating-surface: rgba(17, 22, 27, 0.84);
   --atelier-floating-solid-surface: var(--atelier-surface);
 }
 
@@ -22,8 +24,15 @@ body {
   min-width: 320px;
   background: radial-gradient(circle at 55% -20%, #1c2923 0, transparent 38rem), var(--atelier-black);
   color: #fff;
+  line-height: 1.5;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
 
 ::selection {
   background: var(--atelier-green);
@@ -31,25 +40,46 @@ body {
 }
 
 :focus-visible {
-  outline: 3px solid var(--atelier-green);
-  outline-offset: 3px;
+  outline: 2px solid var(--atelier-green);
+  outline-offset: 2px;
 }
 
-button, a, input, select, textarea {
-  transition: transform var(--atelier-motion-duration) var(--atelier-motion-easing);
+button, a[href], [role="button"], input, select, textarea, summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
-button:active, a:active { transform: translateY(1px); }
-input, select, textarea { color-scheme: dark; }
+
+button, a[href], [role="button"], summary {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: var(--atelier-motion-duration);
+  transition-timing-function: var(--atelier-motion-easing);
+}
+
+button:active, a[href]:active, [role="button"]:active, summary:active {
+  transform: scale(0.985);
+  transition-duration: var(--atelier-press-duration);
+}
+
+input, select, textarea {
+  color-scheme: dark;
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: var(--atelier-motion-duration);
+  transition-timing-function: var(--atelier-motion-easing);
+}
 
 .atelier-floating,
 [data-atelier-floating],
 dialog {
   border-color: var(--atelier-floating-border);
   background-color: var(--atelier-floating-surface);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --atelier-motion-duration: 0ms; }
+  :root {
+    --atelier-motion-duration: 120ms;
+    --atelier-press-duration: 80ms;
+  }
 
   *,
   *::before,
@@ -57,8 +87,9 @@ dialog {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0ms !important;
   }
+
+  button:active, a[href]:active, [role="button"]:active, summary:active { transform: none !important; }
 }
 
 @media (prefers-contrast: more) {

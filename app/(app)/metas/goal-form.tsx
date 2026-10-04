@@ -272,7 +272,7 @@ export function GoalForm({
           <div className="relative px-2 pb-1 pt-5">
             <div className="h-px w-full bg-white/[0.15]" />
             <div className="absolute left-2 right-2 top-[19px] h-[2px] origin-left rounded-full bg-[var(--atelier-green)]" style={{ transform: `scaleX(${progress.ratio})` }} />
-            <span className="absolute top-[12px] size-4 -translate-x-1/2 rounded-full border-[3px] border-[#c3ff73] bg-[#263420] shadow-[0_0_0_4px_rgba(182,255,54,0.08)]" style={{ left: `${progress.percent}%` }} aria-hidden="true" />
+            <span className="absolute top-[12px] size-4 -translate-x-1/2 rounded-full border-[3px] border-[var(--atelier-green-hover)] bg-[#263420] shadow-[0_0_0_4px_rgba(167,216,26,0.08)]" style={{ left: `${progress.percent}%` }} aria-hidden="true" />
           </div>
           <div className="mt-2 flex items-start justify-between gap-4 text-xs">
             <div><span className="block font-medium text-white/80">Início</span><span className="mt-1 block text-white/45">{dateFormatter.format(displayedPeriod.start)}</span></div>
@@ -304,7 +304,7 @@ export function GoalForm({
         <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em]">Marcos da meta</h2>
         <p className="mt-1 text-sm text-white/50">Defina os resultados que o time quer alcançar neste ciclo.</p>
       </div>
-      <button type="submit" disabled={pending || importPending || importerBusy || customGoalSavePending} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 py-2.5 text-sm font-semibold text-[#11170b] hover:bg-[#c7ff69] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto">
+      <button type="submit" disabled={pending || importPending || importerBusy || customGoalSavePending} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 py-2.5 text-sm font-semibold text-[#11170b] hover:bg-[var(--atelier-green-hover)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto">
         {importPending ? 'Salvando alterações…' : pending || importerBusy || customGoalSavePending ? 'Salvando metas…' : 'Salvar metas'}
       </button>
     </div>
@@ -400,7 +400,7 @@ export function GoalForm({
                   aria-valuetext={progressPercent === null ? 'Defina uma meta para calcular o progresso' : `${progressPercent}% da meta`}
                   className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.12]"
                 >
-                  <span className="block h-full origin-left rounded-full bg-gradient-to-r from-[#81e986] to-[var(--atelier-green)] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)]" style={{ transform: `scaleX(${progressWidth / 100})` }} />
+                  <span className="block h-full origin-left rounded-full bg-gradient-to-r from-[var(--atelier-green)] to-[var(--atelier-green-hover)] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)]" style={{ transform: `scaleX(${progressWidth / 100})` }} />
                 </div>
                 <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-white/45">{progressPercent === null ? '—' : `${progressPercent}%`}</span>
               </div>

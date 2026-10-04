@@ -51,7 +51,7 @@ export default async function GoalsPage() {
       eyebrow="Planejamento da equipe"
       title="Metas da equipe"
       description="Alinhe os objetivos do time por ciclo e acompanhe os resultados no painel e nos relatórios."
-      action={<Link className="text-sm text-[var(--atelier-green)] hover:text-[#d1ff8e]" href="/relatorios">Ver relatórios →</Link>}
+      action={<Link className="text-sm text-[var(--atelier-green)] hover:text-[var(--atelier-green-hover)]" href="/relatorios">Ver relatórios →</Link>}
     />
     <GoalCenter
       weeklyPeriod={weeklyPeriod}

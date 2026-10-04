@@ -173,7 +173,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   return <section className="mx-auto max-w-[1480px] px-5 py-8 md:px-8 md:py-10 xl:px-10">
     <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">Atelier Approach</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">Arvello</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.045em] text-white md:text-[2.1rem]">Visão operacional</h1>
         <p className="mt-2 max-w-[60ch] text-sm text-white/55">Indicadores registrados no CRM para {periodLabel.toLowerCase()}.</p>
       </div>
@@ -301,7 +301,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     </div>
 
     <footer className="mt-8 flex flex-col gap-1 border-t border-white/[0.07] pt-4 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
-      <span><span className="font-medium text-white/65">Atelier Approach</span> · CRM para prospecção de serviços automotivos</span>
+      <span><span className="font-medium text-white/65">Arvello</span> · CRM para prospecção de serviços automotivos</span>
     </footer>
   </section>;
 }

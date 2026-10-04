@@ -217,7 +217,7 @@ export function GoalImporter({ onApply, disabled = false, onActivityChange }: {
           <button type="button" disabled={busy || applying} onClick={() => setReviewOpen(false)} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-white/[0.09] px-3 py-2 text-xs font-medium text-white/55 transition hover:bg-white/[0.05] hover:text-white disabled:opacity-50">
             <XIcon size={14} aria-hidden="true" /> Fechar revisão
           </button>
-          <button type="button" disabled={busy || applying} onClick={() => void apply()} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 py-2 text-xs font-semibold text-[#11170b] transition hover:bg-[#c7ff69] disabled:cursor-wait disabled:opacity-60">{applying ? 'Aplicando e salvando…' : 'Aplicar e salvar metas'}</button>
+          <button type="button" disabled={busy || applying} onClick={() => void apply()} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 py-2 text-xs font-semibold text-[#11170b] transition hover:bg-[var(--atelier-green-hover)] disabled:cursor-wait disabled:opacity-60">{applying ? 'Aplicando e salvando…' : 'Aplicar e salvar metas'}</button>
         </div>
       </div>
     </fieldset>}

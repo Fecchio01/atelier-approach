@@ -125,7 +125,7 @@ export function CustomGoalMetricRow({
 
     <div className="mt-3 flex items-center gap-2.5">
       <div role="progressbar" aria-label={`Progresso de ${goalLabel}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressWidth} aria-valuetext={`${percent}% da meta`} className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.12]">
-        <span className="block h-full origin-left rounded-full bg-gradient-to-r from-[#81e986] to-[var(--atelier-green)] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)]" style={{ transform: `scaleX(${progressWidth / 100})` }} />
+        <span className="block h-full origin-left rounded-full bg-gradient-to-r from-[var(--atelier-green)] to-[var(--atelier-green-hover)] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)]" style={{ transform: `scaleX(${progressWidth / 100})` }} />
       </div>
       <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-white/45">{percent}%</span>
     </div>

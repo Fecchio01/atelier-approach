@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { ChartLineUpIcon, MagnifyingGlassIcon, SquaresFourIcon } from '@phosphor-icons/react/dist/ssr';
 
 import { signIn } from '@/lib/auth';
+import { BrandLogo } from '@/components/brand-logo';
 import { LoginSubmitButton } from '@/components/login-submit-button';
 
 const steps = [
@@ -30,10 +31,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
 
   return <main className="grid min-h-dvh bg-[#080c0e] text-white lg:grid-cols-[minmax(0,1.08fr)_minmax(390px,0.92fr)]">
     <section className="relative isolate hidden overflow-hidden border-r border-white/10 px-[clamp(3rem,6vw,7rem)] pb-12 pt-12 lg:flex lg:flex-col">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-80" style={{ background: 'radial-gradient(circle at 12% 12%, rgba(182,255,54,.16), transparent 30%), linear-gradient(120deg, transparent 65%, rgba(182,255,54,.045) 65.1%, transparent 65.3%), repeating-linear-gradient(0deg, transparent 0, transparent 54px, rgba(255,255,255,.035) 55px)' }} />
-      <div className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-xl border border-[var(--atelier-green)]/35 bg-[var(--atelier-green)]/10 text-xl font-black text-[var(--atelier-green)]">A</span>
-        <div><span className="block text-lg font-semibold tracking-[-0.04em]">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span><span className="block text-[10px] font-medium uppercase tracking-[0.24em] text-white/40">Sua operação comercial</span></div>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-80" style={{ background: 'radial-gradient(circle at 12% 12%, rgba(167,216,26,.16), transparent 30%), linear-gradient(120deg, transparent 65%, rgba(167,216,26,.045) 65.1%, transparent 65.3%), repeating-linear-gradient(0deg, transparent 0, transparent 54px, rgba(255,255,255,.035) 55px)' }} />
+      <div className="flex flex-col items-start gap-2">
+        <BrandLogo className="w-[172px]" priority />
+        <span className="pl-1 text-[10px] font-medium uppercase tracking-[0.24em] text-white/40">Sua operação comercial</span>
       </div>
 
       <div className="mt-16 max-w-xl lg:my-auto lg:py-14">
@@ -48,9 +49,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     </section>
 
     <section className="relative flex min-h-dvh items-start justify-center overflow-hidden px-5 py-8 sm:items-center sm:px-10 sm:py-12 lg:min-h-0 lg:px-[clamp(2.5rem,6vw,7rem)]" aria-labelledby="login-title">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_0%,rgba(182,255,54,.1),transparent_45%)] lg:hidden" />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_0%,rgba(167,216,26,.1),transparent_45%)] lg:hidden" />
       <div className="relative w-full max-w-[440px]">
-        <div className="mb-6 flex items-center gap-3 lg:hidden"><span className="flex size-10 items-center justify-center rounded-xl border border-[var(--atelier-green)]/35 bg-[var(--atelier-green)]/10 text-xl font-black text-[var(--atelier-green)]">A</span><span className="text-lg font-semibold tracking-[-0.04em]">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span></div>
+        <div className="mb-6 flex items-center lg:hidden"><BrandLogo className="w-[154px]" priority /></div>
 
         <div className="mb-6 lg:hidden">
           <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--atelier-green)]">Pesquisa · CRM · Resultados</p>
@@ -65,7 +66,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
 
         <div className="rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-7 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
-          <div className="mb-5 flex items-center gap-2 text-xs font-medium text-white/55 lg:mb-10"><span className="size-2 rounded-full bg-[var(--atelier-green)] shadow-[0_0_18px_rgba(182,255,54,.7)]" /> Acesso à equipe Atelier</div>
+          <div className="mb-5 flex items-center gap-2 text-xs font-medium text-white/55 lg:mb-10"><span className="size-2 rounded-full bg-[var(--atelier-green)] shadow-[0_0_18px_rgba(167,216,26,.55)]" /> Acesso à equipe Arvello</div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--atelier-green)]">Bem-vindo de volta</p>
           <h2 id="login-title" className="mt-3 text-[clamp(1.75rem,7vw,2.2rem)] font-semibold tracking-[-0.055em] lg:text-5xl">Entrar na plataforma</h2>
           <p className="mt-3 max-w-[37ch] text-sm leading-5 text-white/55 lg:mt-4 lg:leading-6">Use seu e-mail e sua senha para continuar de onde parou.</p>

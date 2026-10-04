@@ -2,8 +2,12 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Atelier Approach',
-  description: 'Aplicação interna Atelier Approach'
+  title: 'Arvello',
+  applicationName: 'Arvello',
+  description: 'Plataforma comercial Arvello',
+  icons: {
+    icon: '/brand/arvello-mark.svg'
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

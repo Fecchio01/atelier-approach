@@ -31,13 +31,13 @@ export function MobileNavigation({
   user,
   onSignOut,
   onNavigate,
-  brandMark
+  brandLogo
 }: {
   pathname: string;
   user: { name: string; email: string };
   onSignOut: () => Promise<void>;
   onNavigate: () => void;
-  brandMark: ReactNode;
+  brandLogo: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -65,11 +65,10 @@ export function MobileNavigation({
   }
 
   return <>
-    <header data-atelier-floating className="sticky top-0 z-30 border-b border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] backdrop-blur-md md:hidden">
+    <header data-atelier-floating className="sticky top-0 z-30 border-b border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl backdrop-saturate-150 md:hidden">
       <div className="flex min-h-16 items-center justify-between gap-2 px-4 py-2">
         <Link href="/" prefetch={false} onClick={onNavigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
-          {brandMark}
-          <span className="truncate text-sm">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span>
+          {brandLogo}
         </Link>
         <div className="flex shrink-0 items-center gap-1">
           <button
@@ -102,11 +101,10 @@ export function MobileNavigation({
       className="fixed inset-0 m-0 h-[100dvh] max-h-none w-full max-w-none border-0 p-0 text-white open:block"
     >
       <div className="flex h-full min-h-0">
-        <aside data-mobile-navigation-panel data-atelier-floating className="flex h-full w-[min(20rem,calc(100vw-3.5rem))] min-w-0 flex-col border-r border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[12px_0_40px_rgba(0,0,0,0.24)]">
+        <aside data-mobile-navigation-panel data-atelier-floating className="flex h-full w-[min(20rem,calc(100vw-3.5rem))] min-w-0 flex-col border-r border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[12px_0_40px_rgba(0,0,0,0.32)] backdrop-blur-xl backdrop-saturate-150">
           <div className="flex min-h-12 items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
             <Link href="/" prefetch={false} onClick={navigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
-              {brandMark}
-              <span className="truncate text-sm">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span>
+              {brandLogo}
             </Link>
             <button type="button" aria-label="Fechar menu" onClick={closeDrawer} className="flex size-11 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/[0.06] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
               <XIcon size={21} aria-hidden="true" />
@@ -149,7 +147,18 @@ export function MobileNavigation({
       </div>
     </dialog>
     <style>{`
-      #mobile-navigation-dialog::backdrop { background: rgba(3, 5, 6, 0.75); }
+      #mobile-navigation-dialog {
+        opacity: 0;
+        transition: opacity var(--atelier-motion-duration) var(--atelier-motion-easing),
+          display var(--atelier-motion-duration) allow-discrete,
+          overlay var(--atelier-motion-duration) allow-discrete;
+      }
+      #mobile-navigation-dialog[open] { opacity: 1; }
+      #mobile-navigation-dialog::backdrop {
+        background: rgba(3, 5, 6, 0);
+        transition: background-color var(--atelier-motion-duration) var(--atelier-motion-easing);
+      }
+      #mobile-navigation-dialog[open]::backdrop { background: rgba(3, 5, 6, 0.75); }
       #mobile-navigation-dialog [data-mobile-navigation-panel] {
         transform: translateX(-12px);
         opacity: 0;
@@ -161,9 +170,17 @@ export function MobileNavigation({
         opacity: 1;
       }
       @starting-style {
+        #mobile-navigation-dialog[open] { opacity: 0; }
+        #mobile-navigation-dialog[open]::backdrop { background: rgba(3, 5, 6, 0); }
         #mobile-navigation-dialog[open] [data-mobile-navigation-panel] {
           transform: translateX(-12px);
           opacity: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #mobile-navigation-dialog [data-mobile-navigation-panel] {
+          transform: none;
+          transition: opacity var(--atelier-motion-duration) ease;
         }
       }
       @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {

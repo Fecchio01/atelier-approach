@@ -68,8 +68,8 @@ export async function createReportPdf({ title, subtitle, exportedAt, sections }:
   const document = await PDFDocument.create();
   document.setTitle(printableText(title));
   document.setSubject(printableText(subtitle));
-  document.setAuthor('Atelier Approach');
-  document.setCreator('Atelier Approach');
+  document.setAuthor('Arvello');
+  document.setCreator('Arvello');
 
   const regularFont = await document.embedFont(StandardFonts.Helvetica);
   const boldFont = await document.embedFont(StandardFonts.HelveticaBold);
@@ -81,7 +81,7 @@ export async function createReportPdf({ title, subtitle, exportedAt, sections }:
 
   const drawHeader = (currentPage: typeof page) => {
     currentPage.drawRectangle({ x: 0, y: pageHeight - 8, width: pageWidth, height: 8, color: lime });
-    currentPage.drawText('ATELIER APPROACH', { x: margin, y: pageHeight - 35, size: 9, font: boldFont, color: ink });
+    currentPage.drawText('ARVELLO', { x: margin, y: pageHeight - 35, size: 9, font: boldFont, color: ink });
     currentPage.drawText('RELATORIOS COMERCIAIS', { x: pageWidth - margin - 122, y: pageHeight - 35, size: 8, font: regularFont, color: muted });
     currentPage.drawText(printableText(title), { x: margin, y: pageHeight - 75, size: 21, font: boldFont, color: ink });
 
@@ -129,7 +129,7 @@ export async function createReportPdf({ title, subtitle, exportedAt, sections }:
   const pages = document.getPages();
   pages.forEach((currentPage, index) => {
     currentPage.drawRectangle({ x: margin, y: 37, width: pageWidth - margin * 2, height: 1, color: line });
-    currentPage.drawText('Atelier Approach | Relatorio gerado a partir dos dados do CRM.', {
+    currentPage.drawText('Arvello | Relatorio gerado a partir dos dados do CRM.', {
       x: margin, y: 24, size: 7.5, font: regularFont, color: muted
     });
     const pageNumber = `${index + 1} / ${pages.length}`;

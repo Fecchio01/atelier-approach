@@ -8,7 +8,7 @@ export function LoginSubmitButton() {
 
   return <button
     aria-busy={pending}
-    className="group flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[#c9ff72] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--atelier-green)] disabled:cursor-wait disabled:opacity-70 lg:min-h-12"
+    className="group flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[var(--atelier-green-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--atelier-green)] disabled:cursor-wait disabled:opacity-70 lg:min-h-12"
     disabled={pending}
     type="submit"
   >

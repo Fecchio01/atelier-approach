@@ -6,13 +6,7 @@ import { usePathname } from 'next/navigation';
 import { SignOutIcon } from '@phosphor-icons/react';
 import { appRoutes as routes, MobileNavigation } from './mobile-navigation';
 import { ReportPeriodNavigationProvider } from './report-period-navigation-state';
-
-function AtelierMark({ className = 'size-9' }: { className?: string }) {
-  return <svg className={`${className} shrink-0 text-[var(--atelier-green)]`} viewBox="0 0 40 40" role="img" aria-label="Marca Atelier Approach">
-    <path d="M20 2 39 37h-9L20 19 10 37H1L20 2Z" fill="currentColor" />
-    <path d="m20 17-6 12h12l-6-12Z" fill="#090d10" />
-  </svg>;
-}
+import { BrandLogo } from './brand-logo';
 
 export function AppShell({ children, user, onSignOut }: { children: React.ReactNode; user: { name: string; email: string }; onSignOut: () => Promise<void> }) {
   const pathname = usePathname();
@@ -21,11 +15,8 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
 
   return <main className="min-h-[100dvh] text-white md:grid md:grid-cols-[176px_minmax(0,1fr)] xl:grid-cols-[196px_minmax(0,1fr)]">
     <aside className="hidden min-h-[100dvh] flex-col border-r border-[var(--atelier-line)] bg-[#090d10] px-3 py-6 md:sticky md:top-0 md:flex md:h-[100dvh] md:overflow-y-auto xl:px-4">
-      <Link href="/" prefetch={false} onClick={rememberSearchPosition} className="flex items-center gap-2.5 px-2">
-        <AtelierMark />
-        <span className="min-w-0">
-          <span className="block text-[17px] font-semibold leading-[1.05] tracking-[-0.045em]">Atelier <span className="text-[var(--atelier-green)]">Approach</span></span>
-        </span>
+      <Link href="/" prefetch={false} onClick={rememberSearchPosition} aria-label="Arvello — painel" className="flex min-h-[62px] items-center px-1">
+        <BrandLogo className="w-[150px]" priority />
       </Link>
       <nav aria-label="Navegação principal" className="mt-8 grid gap-1">
         {routes.map((route) => {
@@ -51,7 +42,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
         user={user}
         onSignOut={onSignOut}
         onNavigate={rememberSearchPosition}
-        brandMark={<AtelierMark className="size-7" />}
+        brandLogo={<BrandLogo className="w-[126px]" priority />}
       />
       <ReportPeriodNavigationProvider>{children}</ReportPeriodNavigationProvider>
     </div>
