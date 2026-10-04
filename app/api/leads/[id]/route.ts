@@ -2,6 +2,7 @@ import { ActivityType, Channel, FollowUpState, LeadStage, Prisma } from '@prisma
 
 import { getCurrentUser } from '../../../../lib/auth';
 import { prisma } from '../../../../lib/db';
+import { summarizeServiceItems } from '../../../../lib/service-sales';
 
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
 
@@ -12,6 +13,7 @@ type CrmUpdate = {
   followUpId?: unknown;
   saleValue?: unknown;
   mrr?: unknown;
+  serviceIds?: unknown;
   activity?: { channel?: unknown; note?: unknown };
 };
 
@@ -56,6 +58,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ error: 'Valores monetários devem ser não negativos.' }, { status: 400 });
   }
   const hasFinancials = hasSaleValue || hasMrr;
+  const hasServiceIds = Object.prototype.hasOwnProperty.call(body, 'serviceIds');
+  if (hasServiceIds && (!Array.isArray(body.serviceIds) || body.serviceIds.some((serviceId) => typeof serviceId !== 'string' || !serviceId.trim()))) {
+    return Response.json({ error: 'Seleção de serviços inválida.' }, { status: 400 });
+  }
+  const serviceIds = hasServiceIds ? body.serviceIds as string[] : undefined;
+  if (serviceIds && new Set(serviceIds).size !== serviceIds.length) {
+    return Response.json({ error: 'Não selecione o mesmo serviço mais de uma vez.' }, { status: 400 });
+  }
+  if (serviceIds?.length && hasFinancials) {
+    return Response.json({ error: 'Informe os serviços ou os valores manuais, não os dois.' }, { status: 400 });
+  }
 
   const followUpAction = body.followUpAction;
   if (followUpAction !== undefined && !isFollowUpAction(followUpAction)) {
@@ -96,12 +109,31 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (stage && stage !== lead.stage) {
       const now = new Date();
       const leadData: Prisma.LeadUpdateInput = { stage };
+      let selectedServices: { id: string; name: string; price: Prisma.Decimal; billingType: 'ONE_TIME' | 'MONTHLY' }[] = [];
       if (stage === 'WON') {
-        leadData.saleValue = hasSaleValue ? body.saleValue as number : 0;
-        leadData.mrr = hasMrr ? body.mrr as number : 0;
+        if (serviceIds?.length) {
+          selectedServices = await tx.serviceCatalogItem.findMany({ where: { id: { in: serviceIds }, isActive: true } });
+          if (selectedServices.length !== serviceIds.length) throw new Error('INVALID_SERVICE_SELECTION');
+        }
+        const summary = summarizeServiceItems(selectedServices.map(({ price, billingType }) => ({ price: price.toString(), billingType })));
+        const saleValue = selectedServices.length
+          ? summary.saleValue
+          : hasSaleValue ? body.saleValue as number : 0;
+        const mrr = selectedServices.length
+          ? summary.mrr
+          : hasMrr ? body.mrr as number : 0;
+        leadData.saleValue = saleValue;
+        leadData.mrr = mrr;
         leadData.wonAt = now;
         leadData.wonById = user.id;
       } else if (lead.stage === 'WON') {
+        const activeSale = await tx.saleEvent.findFirst({
+          where: { leadId: id, reversedAt: null },
+          orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }]
+        });
+        if (activeSale) {
+          await tx.saleEvent.update({ where: { id: activeSale.id }, data: { reversedAt: now, reversedById: user.id } });
+        }
         leadData.saleValue = null;
         leadData.mrr = null;
         leadData.wonAt = null;
@@ -111,7 +143,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       await tx.stageHistory.create({ data: { leadId: id, actorId: user.id, fromStage: lead.stage, toStage: stage } });
 
       if (stage === 'WON') {
-        await tx.saleEvent.create({ data: { leadId: id, actorId: user.id, saleValue: hasSaleValue ? body.saleValue as number : 0, mrr: hasMrr ? body.mrr as number : 0, occurredAt: now } });
+        await tx.saleEvent.create({ data: {
+          leadId: id,
+          actorId: user.id,
+          saleValue: leadData.saleValue as number,
+          mrr: leadData.mrr as number,
+          occurredAt: now,
+          ...(selectedServices.length ? { lineItems: { create: selectedServices.map((service) => ({
+            serviceId: service.id,
+            serviceName: service.name,
+            price: service.price,
+            billingType: service.billingType
+          })) } } : {})
+        } });
         await tx.followUp.updateMany({
           where: { leadId: id, state: 'PENDING' },
           data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id }
@@ -132,11 +176,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             ? `Lead reaberto para ${stage}.`
             : `Etapa alterada para ${stage}.`;
       await tx.activity.create({ data: { leadId: id, actorId: user.id, type, note } });
+      if (lead.stage === 'WON' && stage !== 'WON') {
+        await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'SALE_REVERSED', note: `Negócio reaberto para ${stage}; venda revertida.` } });
+      }
 
     }
 
     if (hasFinancials && lead.stage === 'WON' && !stage) {
-      const sale = await tx.saleEvent.findFirst({ where: { leadId: id }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] });
+      const sale = await tx.saleEvent.findFirst({ where: { leadId: id, reversedAt: null }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] });
       const previousSaleValue = Number(sale?.saleValue ?? lead.saleValue ?? 0);
       const previousMrr = Number(sale?.mrr ?? lead.mrr ?? 0);
       const saleValue = hasSaleValue ? body.saleValue as number : previousSaleValue;
@@ -186,7 +233,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return updated;
   }).catch((error: unknown) => {
-    if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'FINANCIALS_REQUIRE_WON'].includes(error.message)) return error.message;
+    if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'FINANCIALS_REQUIRE_WON', 'INVALID_SERVICE_SELECTION'].includes(error.message)) return error.message;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_FOUND') return null;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_PENDING') return false;
     throw error;
@@ -195,6 +242,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (updatedLead === 'LEAD_NOT_FOUND') return Response.json({ error: 'Lead não encontrado.' }, { status: 404 });
   if (updatedLead === 'ALREADY_WON') return Response.json({ error: 'Este lead já está marcado como ganho. Reabra-o antes de registrar uma nova venda.' }, { status: 409 });
   if (updatedLead === 'FINANCIALS_REQUIRE_WON') return Response.json({ error: 'Os valores financeiros só podem ser alterados em um negócio ganho.' }, { status: 400 });
+  if (updatedLead === 'INVALID_SERVICE_SELECTION') return Response.json({ error: 'Um ou mais serviços não existem ou estão arquivados. Nenhuma alteração foi salva.' }, { status: 400 });
   if (updatedLead === null) return Response.json({ error: 'Follow-up não encontrado para este lead.' }, { status: 404 });
   if (updatedLead === false) return Response.json({ error: 'Este follow-up já foi encerrado.' }, { status: 409 });
   return Response.json({ lead: updatedLead });

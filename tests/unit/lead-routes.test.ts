@@ -228,6 +228,103 @@ describe('lead routes', () => {
     await expect(prisma.followUp.findUniqueOrThrow({ where: { id: followUp.id } })).resolves.toMatchObject({ state: 'CANCELLED', cancelledById: 'internal-equipe' });
   });
 
+  test('closes with multiple services and preserves immutable sale snapshots', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/service-sale-snapshots' } });
+    const setup = await Promise.all([
+      prisma.serviceCatalogItem.create({ data: { name: 'Implantação', price: '1250.00', billingType: 'ONE_TIME' } }),
+      prisma.serviceCatalogItem.create({ data: { name: 'Plano mensal', price: '299.90', billingType: 'MONTHLY' } }),
+      prisma.serviceCatalogItem.create({ data: { name: 'Suporte mensal', price: '100.10', billingType: 'MONTHLY' } })
+    ]);
+
+    const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceIds: setup.map((service) => service.id) })
+    }), { params: Promise.resolve({ id: lead.id }) });
+
+    expect(response.status).toBe(200);
+    await prisma.serviceCatalogItem.update({ where: { id: setup[0].id }, data: { name: 'Implantação atualizada', price: '9999.00' } });
+    const sale = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id }, include: { lineItems: true } });
+    expect(Number(sale.saleValue)).toBe(1650);
+    expect(Number(sale.mrr)).toBe(400);
+    expect(sale.lineItems).toHaveLength(3);
+    expect(sale.lineItems.map(({ serviceName, price, billingType }) => ({ serviceName, price: Number(price), billingType }))).toEqual(expect.arrayContaining([
+      { serviceName: 'Implantação', price: 1250, billingType: 'ONE_TIME' },
+      { serviceName: 'Plano mensal', price: 299.9, billingType: 'MONTHLY' },
+      { serviceName: 'Suporte mensal', price: 100.1, billingType: 'MONTHLY' }
+    ]));
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({ stage: 'WON', saleValue: expect.anything(), mrr: expect.anything() });
+  });
+
+  test.each([
+    ['missing', 'missing-service-id'],
+    ['archived', 'archived-service-id']
+  ])('rejects %s service IDs atomically without creating a sale', async (kind, invalidId) => {
+    const lead = await prisma.lead.create({ data: { osmId: `node/invalid-service-${kind}` } });
+    const valid = await prisma.serviceCatalogItem.create({ data: { name: 'Serviço válido', price: '500', billingType: 'ONE_TIME' } });
+    const archived = kind === 'archived'
+      ? await prisma.serviceCatalogItem.create({ data: { name: 'Serviço arquivado', price: '100', billingType: 'MONTHLY', isActive: false } })
+      : null;
+    const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceIds: [valid.id, archived?.id ?? invalidId] })
+    }), { params: Promise.resolve({ id: lead.id }) });
+
+    expect(response.status).toBe(400);
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({ stage: 'CONTACTED', saleValue: null, mrr: null });
+    await expect(prisma.saleEvent.count({ where: { leadId: lead.id } })).resolves.toBe(0);
+    await expect(prisma.stageHistory.count({ where: { leadId: lead.id } })).resolves.toBe(0);
+    await expect(prisma.activity.count({ where: { leadId: lead.id } })).resolves.toBe(0);
+  });
+
+  test('keeps closing without selected services compatible at zero values', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/no-service-selection' } });
+    const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceIds: [] })
+    }), { params: Promise.resolve({ id: lead.id }) });
+
+    expect(response.status).toBe(200);
+    const sale = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id }, include: { lineItems: true } });
+    expect(Number(sale.saleValue)).toBe(0);
+    expect(Number(sale.mrr)).toBe(0);
+    expect(sale.lineItems).toHaveLength(0);
+  });
+
+  test('reopening marks the active sale reversed and audits the actor without deleting snapshots', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/audited-sale-reversal' } });
+    const service = await prisma.serviceCatalogItem.create({ data: { name: 'Plano preservado', price: '89.90', billingType: 'MONTHLY' } });
+    const close = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceIds: [service.id] })
+    }), { params: Promise.resolve({ id: lead.id }) });
+    expect(close.status).toBe(200);
+    const originalSale = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id }, include: { lineItems: true } });
+
+    const reopen = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage: 'CONTACTED' })
+    }), { params: Promise.resolve({ id: lead.id }) });
+
+    expect(reopen.status).toBe(200);
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({ stage: 'CONTACTED', saleValue: null, mrr: null, wonAt: null, wonById: null });
+    const reversedSale = await prisma.saleEvent.findUniqueOrThrow({ where: { id: originalSale.id }, include: { lineItems: true } });
+    expect(reversedSale.reversedAt).toEqual(expect.any(Date));
+    expect(reversedSale.reversedById).toBe('internal-equipe');
+    expect(reversedSale.lineItems).toMatchObject([{ serviceId: service.id, serviceName: 'Plano preservado', price: expect.anything(), billingType: 'MONTHLY' }]);
+    await expect(prisma.activity.findFirstOrThrow({ where: { leadId: lead.id, type: 'SALE_REVERSED' } })).resolves.toMatchObject({ actorId: 'internal-equipe', note: expect.stringContaining('Negócio reaberto') });
+    await expect(prisma.saleEvent.count({ where: { leadId: lead.id } })).resolves.toBe(1);
+  });
+
+  test('reclosing after reversal creates a distinct active sale event', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/reclosed-sale-events' } });
+    const service = await prisma.serviceCatalogItem.create({ data: { name: 'Serviço recontratado', price: '250', billingType: 'ONE_TIME' } });
+    const patch = (body: object) => PATCH(new Request(`http://localhost/api/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify(body) }), { params: Promise.resolve({ id: lead.id }) });
+    expect((await patch({ stage: 'WON', serviceIds: [service.id] })).status).toBe(200);
+    const first = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id } });
+    expect((await patch({ stage: 'CONTACTED' })).status).toBe(200);
+    expect((await patch({ stage: 'WON', serviceIds: [service.id] })).status).toBe(200);
+    const sales = await prisma.saleEvent.findMany({ where: { leadId: lead.id } });
+    expect(sales).toHaveLength(2);
+    expect(sales.find((sale) => sale.id === first.id)).toMatchObject({ reversedAt: expect.any(Date), reversedById: 'internal-equipe' });
+    const active = sales.find((sale) => sale.id !== first.id);
+    expect(active).toMatchObject({ reversedAt: null, saleValue: expect.anything() });
+  });
+
   test('supplements a persisted sale without changing its identity or counting another sale', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/financial-complement' } });
     expect((await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify({ stage: 'WON' }) }), { params: Promise.resolve({ id: lead.id }) })).status).toBe(200);
@@ -340,7 +437,7 @@ describe('lead routes', () => {
 // exercises financial transactions without requiring a migrated PostgreSQL enum.
 describe('sale financial contract without database', () => {
   type TestLead = { id: string; stage: string; saleValue: number | null; mrr: number | null; wonAt: Date | null; wonById: string | null };
-  type TestSale = { id: string; leadId: string; actorId: string; saleValue: number; mrr: number; occurredAt: Date };
+  type TestSale = { id: string; leadId: string; actorId: string; saleValue: number; mrr: number; occurredAt: Date; reversedAt: Date | null; reversedById: string | null };
   let lead: TestLead;
   let sales: TestSale[];
   let activities: { type: string; note: string }[];
@@ -357,8 +454,8 @@ describe('sale financial contract without database', () => {
       lead: { findUnique: async () => ({ ...lead }), update: async ({ data }: { data: Partial<TestLead> }) => (lead = { ...lead, ...data }) },
       stageHistory: { create: async () => ({}) },
       saleEvent: {
-        create: async ({ data }: { data: Omit<TestSale, 'id'> }) => { const sale = { id: `sale-${sales.length + 1}`, ...data }; sales.push(sale); return sale; },
-        findFirst: async () => sales.toSorted((a, b) => b.occurredAt.valueOf() - a.occurredAt.valueOf())[0] ?? null,
+        create: async ({ data }: { data: Omit<TestSale, 'id' | 'reversedAt' | 'reversedById'> }) => { const sale = { id: `sale-${sales.length + 1}`, reversedAt: null, reversedById: null, ...data }; sales.push(sale); return sale; },
+        findFirst: async () => sales.filter((sale) => sale.reversedAt === null).toSorted((a, b) => b.occurredAt.valueOf() - a.occurredAt.valueOf())[0] ?? null,
         update: async ({ where, data }: { where: { id: string }; data: Partial<TestSale> }) => { const sale = sales.find((item) => item.id === where.id)!; Object.assign(sale, data); return sale; }
       },
       activity: { create: async ({ data }: { data: { type: string; note: string } }) => { activities.push(data); return data; } },
@@ -413,7 +510,10 @@ describe('sale financial contract without database', () => {
       expect((await patch({ stage: 'WON' })).status).toBe(200);
       const current = { ...sales[1] };
       expect((await patch({ saleValue: 400 })).status).toBe(200);
-      expect(sales).toEqual([original, { ...current, saleValue: 400 }]);
+      expect(sales).toEqual([
+        { ...original, reversedAt: new Date('2026-09-01T12:00:00Z'), reversedById: 'internal-equipe' },
+        { ...current, saleValue: 400 }
+      ]);
     } finally { vi.useRealTimers(); }
   });
 
