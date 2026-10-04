@@ -1,4 +1,4 @@
-import { customGoalIcons, type CustomGoalIcon, type CustomGoalMetric } from './custom-goals';
+import { customGoalIcons, customGoalGroupKeys, type CustomGoalGroup, type CustomGoalIcon, type CustomGoalMetric } from './custom-goals';
 import type { GoalMetricKey } from './metrics';
 
 export type ReviewedGoalSuggestion = {
@@ -9,6 +9,7 @@ export type ReviewedGoalSuggestion = {
   current: string;
   destination: GoalMetricKey | 'custom';
   icon: CustomGoalIcon;
+  group?: CustomGoalGroup;
 };
 
 export function applyGoalSuggestions(
@@ -32,7 +33,8 @@ export function applyGoalSuggestions(
       continue;
     }
 
-    if (usedIds.has(suggestion.id) || !customGoalIcons.includes(suggestion.icon)) continue;
+    if (usedIds.has(suggestion.id) || !customGoalIcons.includes(suggestion.icon)
+      || suggestion.group !== undefined && !customGoalGroupKeys.includes(suggestion.group)) continue;
     const unit = suggestion.unit?.trim();
     customGoals.push({
       id: suggestion.id,
@@ -41,6 +43,7 @@ export function applyGoalSuggestions(
       target,
       current,
       icon: suggestion.icon,
+      ...(suggestion.group ? { group: suggestion.group } : {}),
       source: 'manual'
     });
     usedIds.add(suggestion.id);

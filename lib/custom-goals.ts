@@ -16,6 +16,20 @@ export const customGoalSourceLabels: Record<CustomGoalSource, string> = {
 
 export type CustomGoalIcon = typeof customGoalIcons[number];
 
+export const customGoalGroupKeys = ['prospecting', 'progress', 'revenue', 'vehicles', 'operations', 'other'] as const;
+export type CustomGoalGroup = typeof customGoalGroupKeys[number];
+
+export const customGoalGroups: Record<CustomGoalGroup, { label: string; description: string; icon: CustomGoalIcon }> = {
+  prospecting: { label: 'Prospecção', description: 'Novas conversas e oportunidades para o time.', icon: 'prospecting' },
+  progress: { label: 'Avanço', description: 'Relacionamentos que seguem pelo funil.', icon: 'progress' },
+  revenue: { label: 'Receita', description: 'Resultados que se transformam em crescimento.', icon: 'currency' },
+  vehicles: { label: 'Veículos', description: 'Entregas, carros e metas relacionadas à frota.', icon: 'car' },
+  operations: { label: 'Operação', description: 'Serviços, reparos e entregas do time.', icon: 'wrench' },
+  other: { label: 'Outros indicadores', description: 'Outras metas personalizadas da equipe.', icon: 'target' }
+};
+
+const customGoalGroupSet = new Set<string>(customGoalGroupKeys);
+
 export type CustomGoalMetric = {
   id: string;
   name: string;
@@ -23,6 +37,7 @@ export type CustomGoalMetric = {
   target: number;
   current: number;
   icon?: CustomGoalIcon;
+  group?: CustomGoalGroup;
   source?: CustomGoalSource;
 };
 
@@ -50,6 +65,28 @@ export function inferCustomGoalIcon(label: string, metricUnit?: string): CustomG
 export function getCustomGoalIcon(goal: Pick<CustomGoalMetric, 'name' | 'unit' | 'icon'>): CustomGoalIcon {
   if (goal.icon && goal.icon !== 'target' && customGoalIcons.includes(goal.icon)) return goal.icon;
   return inferCustomGoalIcon(goal.name, goal.unit);
+}
+
+export function inferCustomGoalGroup(label: string, metricUnit?: string): CustomGoalGroup {
+  const normalized = normalizeGoalText(`${label} ${metricUnit ?? ''}`);
+  if (/r\$|\breais?\b|receita|faturamento|faturar|\bmrr\b|valor|recorrencia/.test(normalized)) return 'revenue';
+  if (/carro|veiculo|automovel|moto|frota/.test(normalized)) return 'vehicles';
+  if (/servic|reparo|manutenc|oficina|estetica/.test(normalized)) return 'operations';
+  if (/reuniao|agenda|retorno|follow[ -]?ups?|visita|prazo|aprovad|confirmad|concluid|finaliz|entreg|dor(?:es)?|oportunidade|venda|acordo|contrato|negociacao/.test(normalized)) return 'progress';
+  if (/prospeccao|abordagem|interesse|contato|lead|conversa|empresa|repeti|perfil|atendimento|cliente|pessoa|equipe/.test(normalized)) return 'prospecting';
+  return 'other';
+}
+
+export function getCustomGoalGroup(goal: Pick<CustomGoalMetric, 'name' | 'unit' | 'group'>): CustomGoalGroup {
+  return goal.group && customGoalGroupSet.has(goal.group) ? goal.group : inferCustomGoalGroup(goal.name, goal.unit);
+}
+
+export function groupCustomGoals(goals: CustomGoalMetric[]): Record<CustomGoalGroup, CustomGoalMetric[]> {
+  const grouped: Record<CustomGoalGroup, CustomGoalMetric[]> = {
+    prospecting: [], progress: [], revenue: [], vehicles: [], operations: [], other: []
+  };
+  for (const goal of goals) grouped[getCustomGoalGroup(goal)].push(goal);
+  return grouped;
 }
 
 export function getCustomGoalCurrent(goal: CustomGoalMetric, actuals: GoalMetricActuals): number {
@@ -90,7 +127,7 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
   for (const candidate of value) {
     if (!isRecord(candidate)) return { ok: false, message: 'Revise os dados das metas personalizadas.' };
 
-    const { id, name, unit, target, current, icon, source } = candidate;
+    const { id, name, unit, target, current, icon, group, source } = candidate;
     if (typeof id !== 'string' || !validId.test(id) || seenIds.has(id)) {
       return { ok: false, message: 'Cada meta personalizada precisa de um identificador único válido.' };
     }
@@ -107,6 +144,9 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
     if (icon !== undefined && (typeof icon !== 'string' || !iconSet.has(icon))) {
       return { ok: false, message: 'Escolha um dos ícones disponíveis para a meta.' };
     }
+    if (group !== undefined && (typeof group !== 'string' || !customGoalGroupSet.has(group))) {
+      return { ok: false, message: 'Escolha um tema disponível para a meta personalizada.' };
+    }
     if (source !== undefined && (typeof source !== 'string' || !Object.hasOwn(customGoalSourceLabels, source))) {
       return { ok: false, message: 'Escolha uma origem disponível para o progresso da meta.' };
     }
@@ -120,6 +160,7 @@ export function parseCustomGoalMetrics(input: unknown): CustomGoalParseResult {
       target,
       current,
       ...(icon ? { icon: icon as CustomGoalIcon } : {}),
+      ...(group ? { group: group as CustomGoalGroup } : {}),
       ...(source ? { source: source as CustomGoalSource } : {})
     });
   }

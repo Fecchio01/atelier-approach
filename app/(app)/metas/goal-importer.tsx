@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ArrowDownIcon, FilePdfIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react';
 
-import { customGoalIconLabels, customGoalIcons, inferCustomGoalIcon, type CustomGoalIcon } from '@/lib/custom-goals';
+import { customGoalGroupKeys, customGoalGroups, customGoalIconLabels, customGoalIcons, inferCustomGoalGroup, inferCustomGoalIcon, type CustomGoalIcon, type CustomGoalGroup } from '@/lib/custom-goals';
 import type { GoalMetricKey } from '@/lib/metrics';
 import { parseGoalDocumentText } from '@/lib/goal-pdf';
 import { readGoalPdfText } from '@/lib/read-goal-pdf';
@@ -26,10 +26,10 @@ function makeRows(targets: Partial<Record<GoalMetricKey, number>>, custom: Array
   const fixed = Object.entries(targets).flatMap(([key, target]) => {
     const metric = metrics.find((item) => item.key === key as GoalMetricKey);
     if (!metric || target === undefined) return [];
-    return [{ id: crypto.randomUUID(), name: metric.label, unit: metric.unit, target: String(target), current: '0', destination: metric.key, icon: inferCustomGoalIcon(metric.label, metric.unit) }];
+    return [{ id: crypto.randomUUID(), name: metric.label, unit: metric.unit, target: String(target), current: '0', destination: metric.key, icon: inferCustomGoalIcon(metric.label, metric.unit), group: inferCustomGoalGroup(metric.label, metric.unit) }];
   });
   const customRows = custom.map((goal) => ({
-    id: crypto.randomUUID(), name: goal.name, unit: goal.unit, target: String(goal.target), current: String(goal.current), destination: 'custom' as const, icon: inferCustomGoalIcon(goal.name, goal.unit)
+    id: crypto.randomUUID(), name: goal.name, unit: goal.unit, target: String(goal.target), current: String(goal.current), destination: 'custom' as const, icon: inferCustomGoalIcon(goal.name, goal.unit), group: inferCustomGoalGroup(goal.name, goal.unit)
   }));
   return [...fixed, ...customRows];
 }
@@ -70,6 +70,17 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
     setNotice('');
   }
 
+  function updateRowText(row: ImportableDraft, changes: Pick<ImportableDraft, 'name'> | Pick<ImportableDraft, 'unit'>) {
+    const currentName = 'name' in changes ? changes.name : row.name;
+    const currentUnit = 'unit' in changes ? changes.unit : row.unit;
+    const inferredBefore = inferCustomGoalGroup(row.name, row.unit);
+    const currentGroup = row.group ?? inferredBefore;
+    updateRow(row.id, {
+      ...changes,
+      ...(currentGroup === inferredBefore ? { group: inferCustomGoalGroup(currentName, currentUnit) } : {})
+    });
+  }
+
   function apply() {
     onApply(rows);
     setNotice('Sugestões aplicadas ao formulário. Confira e salve o ciclo para concluir.');
@@ -101,7 +112,7 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
         {rows.map((row, index) => <article key={row.id} className="grid min-w-0 gap-3 rounded-xl border border-white/[0.08] bg-black/15 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(128px,0.75fr)]">
           <div className="grid min-w-0 gap-2">
             <label className="grid gap-1 text-[10px] text-white/45">Nome sugerido
-              <input aria-label={`Nome sugerido ${index + 1}`} maxLength={80} value={row.name} onChange={(event) => updateRow(row.id, { name: event.target.value })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
+              <input aria-label={`Nome sugerido ${index + 1}`} maxLength={80} value={row.name} onChange={(event) => updateRowText(row, { name: event.target.value })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-[10px] text-white/45">Meta
@@ -121,7 +132,12 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
             </label>
             {row.destination === 'custom' && <>
               <label className="grid gap-1 text-[10px] text-white/45">Unidade (opcional)
-                <input aria-label={`Unidade sugerida ${index + 1}`} maxLength={24} value={row.unit ?? ''} onChange={(event) => updateRow(row.id, { unit: event.target.value })} placeholder="Ex.: carros, R$" className="h-9 w-full rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-xs text-white outline-none focus:border-[var(--atelier-green)]/50" />
+                <input aria-label={`Unidade sugerida ${index + 1}`} maxLength={24} value={row.unit ?? ''} onChange={(event) => updateRowText(row, { unit: event.target.value })} placeholder="Ex.: carros, R$" className="h-9 w-full rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-xs text-white outline-none focus:border-[var(--atelier-green)]/50" />
+              </label>
+              <label className="grid gap-1 text-[10px] text-white/45">Grupo temático
+                <select aria-label={`Grupo temático da sugestão ${index + 1}`} value={row.group ?? inferCustomGoalGroup(row.name, row.unit)} onChange={(event) => updateRow(row.id, { group: event.target.value as CustomGoalGroup })} className="h-9 w-full rounded-md border border-white/[0.09] bg-[#171e22] px-2 text-xs text-white outline-none focus:border-[var(--atelier-green)]/50">
+                  {customGoalGroupKeys.map((group) => <option key={group} value={group}>{customGoalGroups[group].label}</option>)}
+                </select>
               </label>
               <label className="grid gap-1 text-[10px] text-white/45">Ícone
                 <select aria-label={`Ícone sugerido ${index + 1}`} value={row.icon} onChange={(event) => updateRow(row.id, { icon: event.target.value as CustomGoalIcon })} className="h-9 w-full rounded-md border border-white/[0.09] bg-[#171e22] px-2 text-xs text-white outline-none focus:border-[var(--atelier-green)]/50">
@@ -136,7 +152,7 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
         </article>)}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
-        <button type="button" onClick={() => setRows((previous) => [...previous, { id: crypto.randomUUID(), name: '', target: '', current: '0', destination: 'custom', icon: 'target' }])} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-white/65 hover:bg-white/[0.05] hover:text-white">
+        <button type="button" onClick={() => setRows((previous) => [...previous, { id: crypto.randomUUID(), name: '', target: '', current: '0', destination: 'custom', icon: 'target', group: 'other' }])} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-white/65 hover:bg-white/[0.05] hover:text-white">
           <PlusIcon size={14} aria-hidden="true" /> Adicionar outra sugestão
         </button>
         <button type="button" onClick={apply} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-4 py-2 text-xs font-semibold text-[#11170b] transition hover:bg-[#c7ff69]">Aplicar sugestões revisadas</button>

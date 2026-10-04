@@ -1,15 +1,15 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { ArrowsClockwiseIcon, CalendarBlankIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, XIcon } from '@phosphor-icons/react';
+import { ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, TargetIcon, WrenchIcon, XIcon } from '@phosphor-icons/react';
 
 import { applyGoalSuggestions } from '@/lib/goal-import-state';
-import type { CustomGoalMetric } from '@/lib/custom-goals';
+import { customGoalGroupKeys, customGoalGroups, groupCustomGoals, type CustomGoalGroup, type CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { saveMonthlyGoal, saveWeeklyGoal } from './actions';
 import { initialGoalActionState, type GoalActionState } from './goal-form-state';
-import { CustomGoalMetrics } from './custom-goal-metrics';
+import { CustomGoalMetricRow } from './custom-goal-metrics';
 import { GoalImporter } from './goal-importer';
 
 type GoalRecord = {
@@ -58,6 +58,17 @@ const metricGroups = [
     ]
   }
 ] as const;
+
+const metricGroupIcons = {
+  prospecting: PaperPlaneTiltIcon,
+  progress: ArrowsClockwiseIcon,
+  revenue: CurrencyCircleDollarIcon,
+  vehicles: CarProfileIcon,
+  operations: WrenchIcon,
+  other: TargetIcon
+} as const;
+
+const primaryGroupKeys = new Set<CustomGoalGroup>(['prospecting', 'progress', 'revenue']);
 
 type GoalTargetField = typeof metricGroups[number]['fields'][number]['key'];
 type GoalTargetDraft = Record<GoalTargetField, string>;
@@ -109,6 +120,7 @@ export function GoalForm({
   const [draft, setDraft] = useState(() => goalDraftFromRecord(goal));
   const [customGoals, setCustomGoals] = useState(() => goal?.customGoals ?? []);
   const [editingField, setEditingField] = useState<GoalTargetField | null>(null);
+  const [editingCustomGoalId, setEditingCustomGoalId] = useState<string | null>(null);
   const [monthlyStartDayDraft, setMonthlyStartDayDraft] = useState(String(monthlyStartDay));
   const numericStartDay = Number(monthlyStartDayDraft);
   const displayedPeriod = kind === 'MONTHLY' && Number.isInteger(numericStartDay) && numericStartDay >= 1 && numericStartDay <= 31
@@ -124,6 +136,23 @@ export function GoalForm({
     setDraft((current) => ({ ...current, ...merged.targets }));
     setCustomGoals(merged.customGoals);
   }
+
+  function updateCustomGoal(id: string, changes: Partial<CustomGoalMetric>) {
+    setCustomGoals((current) => current.map((item) => item.id === id ? { ...item, ...changes } : item));
+  }
+
+  function addCustomGoal() {
+    const id = crypto.randomUUID();
+    setCustomGoals((current) => [...current, { id, name: '', target: 1, current: 0, icon: 'target', group: 'other', source: 'manual' }]);
+    setEditingCustomGoalId(id);
+  }
+
+  function removeCustomGoal(id: string) {
+    setCustomGoals((current) => current.filter((item) => item.id !== id));
+    setEditingCustomGoalId((current) => current === id ? null : current);
+  }
+
+  const customGoalsByGroup = groupCustomGoals(customGoals);
 
   return <form action={formAction} className="space-y-6">
     <input type="hidden" name="customGoals" value={JSON.stringify(customGoals)} />
@@ -182,6 +211,17 @@ export function GoalForm({
         {pending ? 'Salvando metas…' : 'Salvar metas'}
       </button>
     </div>
+
+    <section aria-labelledby="custom-goals-heading" className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-4">
+        <div>
+          <h3 id="custom-goals-heading" className="font-semibold text-white/90">Indicadores personalizados</h3>
+          <p className="mt-1 text-xs leading-5 text-white/45">Metas organizadas dentro do tema correspondente para o time acompanhar o ciclo.</p>
+        </div>
+        <button type="button" onClick={addCustomGoal} disabled={customGoals.length >= 30} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/35 px-3 py-2 text-xs font-semibold text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08] active:scale-[0.98] disabled:opacity-40">
+          <PlusIcon size={15} aria-hidden="true" /> Adicionar indicador
+        </button>
+      </div>
 
     <div className="grid gap-4 xl:grid-cols-3">
       {metricGroups.map(({ key, title, description, Icon, fields }) => <section key={key} aria-labelledby={`${key}-heading`} className="rounded-2xl border border-white/[0.08] bg-[#11171b]/85 p-4 sm:p-5">
@@ -258,11 +298,42 @@ export function GoalForm({
               </div>
             </div>;
           })}
+          {customGoalsByGroup[key].map((customGoal, index) => <CustomGoalMetricRow
+            key={customGoal.id}
+            goal={customGoal}
+            index={index}
+            actuals={actuals}
+            isEditing={editingCustomGoalId === customGoal.id}
+            onToggle={() => setEditingCustomGoalId((current) => current === customGoal.id ? null : customGoal.id)}
+            onChange={(changes) => updateCustomGoal(customGoal.id, changes)}
+            onRemove={() => removeCustomGoal(customGoal.id)}
+          />)}
         </div>
       </section>)}
+      {customGoalGroupKeys.filter((key): key is Exclude<CustomGoalGroup, 'prospecting' | 'progress' | 'revenue'> => !primaryGroupKeys.has(key) && customGoalsByGroup[key].length > 0).map((groupKey) => {
+        const { label, description } = customGoalGroups[groupKey];
+        const GroupIcon = metricGroupIcons[groupKey];
+        return <section key={groupKey} aria-labelledby={`${groupKey}-heading`} className="rounded-2xl border border-white/[0.08] bg-[#11171b]/85 p-4 sm:p-5">
+          <div className="flex items-start gap-3 border-b border-white/[0.07] pb-4">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><GroupIcon size={20} weight="regular" /></span>
+            <div><h3 id={`${groupKey}-heading`} className="font-semibold text-white/90">{label}</h3><p className="mt-1 text-xs leading-5 text-white/45">{description}</p></div>
+          </div>
+          <div className="divide-y divide-white/[0.06]">
+            {customGoalsByGroup[groupKey].map((customGoal, index) => <CustomGoalMetricRow
+              key={customGoal.id}
+              goal={customGoal}
+              index={index}
+              actuals={actuals}
+              isEditing={editingCustomGoalId === customGoal.id}
+              onToggle={() => setEditingCustomGoalId((current) => current === customGoal.id ? null : customGoal.id)}
+              onChange={(changes) => updateCustomGoal(customGoal.id, changes)}
+              onRemove={() => removeCustomGoal(customGoal.id)}
+            />)}
+          </div>
+        </section>;
+      })}
     </div>
-
-    <CustomGoalMetrics goals={customGoals} actuals={actuals} onChange={setCustomGoals} />
+    </section>
 
     <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.07] pt-5">
       <p role="status" aria-live="polite" className={`text-sm ${state.status === 'error' ? 'text-red-300' : state.status === 'saved' ? 'text-[var(--atelier-green)]' : 'text-white/45'}`}>

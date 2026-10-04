@@ -3,6 +3,14 @@ import { describe, expect, test } from 'vitest';
 import { applyGoalSuggestions, type ReviewedGoalSuggestion } from '../../lib/goal-import-state';
 
 describe('reviewed goal suggestions', () => {
+  test('saves the reviewer-selected thematic group with a custom PDF metric', () => {
+    const result = applyGoalSuggestions({}, [], [
+      { id: 'pdf-pain', name: 'Dores confirmadas', target: '3', current: '1', destination: 'custom', icon: 'checklist', group: 'progress' }
+    ]);
+
+    expect(result.customGoals[0]).toMatchObject({ name: 'Dores confirmadas', group: 'progress' });
+  });
+
   test('PDF custom names never infer an automatic source and existing sources survive', () => {
     const result = applyGoalSuggestions({}, [{ id: 'existing', name: 'Vendas', target: 5, current: 2, source: 'sales' }], [
       { id: 'pdf', name: 'Abordagens', target: '20', current: '3', destination: 'custom', icon: 'target' }

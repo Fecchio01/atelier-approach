@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { getCustomGoalCurrent, getCustomGoalIcon, inferCustomGoalIcon, parseCustomGoalMetrics, type CustomGoalMetric } from '../../lib/custom-goals';
+import * as goalGrouping from '../../lib/custom-goals';
 
 describe('custom team goals', () => {
   const actuals = { approaches: 20, interests: 4, meetings: 3, sales: 2, revenue: 500, mrr: 100, followUpsCompleted: 6, conversionRate: 10 };
@@ -22,6 +23,46 @@ describe('custom team goals', () => {
     expect(getCustomGoalIcon({ name: 'Carros entregues', icon: 'target' })).toBe('car');
     expect(getCustomGoalIcon({ name: 'Meta sem categoria', icon: 'target' })).toBe('target');
     expect(getCustomGoalIcon({ name: 'Carros entregues', icon: 'star' })).toBe('star');
+  });
+
+  test.each([
+    ['Conversas humanas', undefined, 'prospecting'],
+    ['Repetições / fora do perfil', undefined, 'prospecting'],
+    ['Empresas aprovadas', undefined, 'progress'],
+    ['Dores confirmadas', undefined, 'progress'],
+    ['Oportunidade real', undefined, 'progress'],
+    ['Follow-ups vencidos', undefined, 'progress'],
+    ['Faturamento', 'R$', 'revenue'],
+    ['Carros entregues', 'carros', 'vehicles'],
+    ['Manutenções realizadas', undefined, 'operations'],
+    ['Outro objetivo sem tema conhecido', undefined, 'other']
+  ])('assigns %s to its thematic group', (name, unit, expectedGroup) => {
+    const helpers = goalGrouping as unknown as {
+      inferCustomGoalGroup?: (label: string, metricUnit?: string) => string;
+    };
+    expect(helpers.inferCustomGoalGroup?.(name, unit)).toBe(expectedGroup);
+  });
+
+  test('groups individual metrics inside shared thematic cards, including legacy goals', () => {
+    const helpers = goalGrouping as unknown as {
+      groupCustomGoals?: (goals: CustomGoalMetric[]) => Record<string, CustomGoalMetric[]>;
+    };
+    const goals: CustomGoalMetric[] = [
+      { id: 'conversations', name: 'Conversas humanas', target: 10, current: 2 },
+      { id: 'approved', name: 'Empresas aprovadas', target: 50, current: 0, group: 'progress' },
+      { id: 'pain', name: 'Dores confirmadas', target: 3, current: 1 }
+    ];
+
+    const groups = helpers.groupCustomGoals?.(goals);
+    expect(groups?.prospecting.map(({ id }) => id)).toEqual(['conversations']);
+    expect(groups?.progress.map(({ id }) => id)).toEqual(['approved', 'pain']);
+    expect(groups?.other).toEqual([]);
+  });
+
+  test('persists a recognized group and rejects an unsupported group value', () => {
+    const valid = parseCustomGoalMetrics([{ id: 'goal', name: 'Vendas aprovadas', target: 4, current: 1, group: 'progress' }]);
+    expect(valid).toMatchObject({ ok: true, goals: [{ group: 'progress' }] });
+    expect(parseCustomGoalMetrics([{ id: 'goal', name: 'Meta', target: 4, current: 1, group: 'untrusted-group' }])).toMatchObject({ ok: false });
   });
 
   test('legacy and explicit manual sources use stored progress', () => {
