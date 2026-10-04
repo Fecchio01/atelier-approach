@@ -88,8 +88,9 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await inferredMetricName.fill('Indicador livre');
     await restoredAfterThemeMove.getByLabel(/^Meta do indicador /).last().fill('9');
     await restoredAfterThemeMove.getByLabel(/^Progresso do indicador /).last().fill('3');
-    await inferredMetricName.fill('Receita recorrente');
-    await expect(restoredAfterThemeMove.getByLabel(/^Nome do indicador /)).toHaveCount(1);
+    await inferredMetricName.fill('');
+    await inferredMetricName.pressSequentially('Receita recorrente');
+    await expect(inferredMetricName).toHaveValue('Receita recorrente');
     await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Funil' }).click();
     await expect(page).toHaveURL(/\/crm$/);
     const weeklyAfterInferredMove = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });

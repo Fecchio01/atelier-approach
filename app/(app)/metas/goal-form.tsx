@@ -4,7 +4,7 @@ import { useActionState, useState } from 'react';
 import { ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, TargetIcon, WrenchIcon, XIcon } from '@phosphor-icons/react';
 
 import { applyGoalSuggestions, createGoalSaveFormData, removePdfImportedCustomGoals } from '@/lib/goal-import-state';
-import { customGoalGroupKeys, customGoalGroups, getCustomGoalGroup, groupCustomGoals, type CustomGoalGroup, type CustomGoalMetric } from '@/lib/custom-goals';
+import { customGoalGroupKeys, customGoalGroups, getCustomGoalGroup, groupCustomGoals, inferCustomGoalGroup, type CustomGoalGroup, type CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { removeImportedPdfGoals, saveCustomGoalsForCycle, saveMonthlyGoal, saveWeeklyGoal } from './actions';
@@ -154,9 +154,17 @@ export function GoalForm({
     }
   }
 
-  function commitCustomGoals() {
+  function commitCustomGoal(id: string, inferredGroup?: CustomGoalGroup) {
     if (!customGoalsDirty || pending || importPending || importerBusy || customGoalSavePending) return;
-    void persistCustomGoalList(customGoals);
+    const nextCustomGoals = inferredGroup
+      ? customGoals.map((item) => item.id === id ? { ...item, group: inferredGroup } : item)
+      : customGoals;
+    const previousGoal = customGoals.find((item) => item.id === id);
+    const updatedGoal = nextCustomGoals.find((item) => item.id === id);
+    if (previousGoal && updatedGoal && getCustomGoalGroup(previousGoal) !== getCustomGoalGroup(updatedGoal)) {
+      setCustomGoals(nextCustomGoals);
+    }
+    void persistCustomGoalList(nextCustomGoals);
   }
 
   async function applyImportedSuggestions(suggestions: Parameters<typeof applyGoalSuggestions>[2]): Promise<GoalActionState> {
@@ -407,7 +415,7 @@ export function GoalForm({
             disabled={pending || importPending || importerBusy || customGoalSavePending}
             onToggle={() => setEditingCustomGoalId((current) => current === customGoal.id ? null : customGoal.id)}
             onChange={(changes) => updateCustomGoal(customGoal.id, changes)}
-            onCommit={commitCustomGoals}
+            onCommit={commitCustomGoal}
             onRemove={() => void removeCustomGoal(customGoal.id)}
           />)}
         </div>
@@ -430,7 +438,7 @@ export function GoalForm({
               disabled={pending || importPending || importerBusy || customGoalSavePending}
               onToggle={() => setEditingCustomGoalId((current) => current === customGoal.id ? null : customGoal.id)}
               onChange={(changes) => updateCustomGoal(customGoal.id, changes)}
-              onCommit={commitCustomGoals}
+              onCommit={commitCustomGoal}
               onRemove={() => void removeCustomGoal(customGoal.id)}
             />)}
           </div>

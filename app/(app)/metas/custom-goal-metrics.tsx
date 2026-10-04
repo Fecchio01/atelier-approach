@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import {
   ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, ChartLineUpIcon, CheckSquareOffsetIcon,
   CurrencyCircleDollarIcon, HandshakeIcon, PaperPlaneTiltIcon, PencilSimpleIcon, StarIcon, TargetIcon,
@@ -53,7 +54,7 @@ export function CustomGoalMetricRow({
   disabled?: boolean;
   onToggle: () => void;
   onChange: (changes: Partial<CustomGoalMetric>) => void;
-  onCommit: () => void;
+  onCommit: (id: string, inferredGroup?: CustomGoalGroup) => void;
   onRemove: () => void;
 }) {
   const icon = getCustomGoalIcon(goal);
@@ -68,22 +69,31 @@ export function CustomGoalMetricRow({
     : 0;
   const progressWidth = Math.min(100, Math.max(0, percent));
   const goalLabel = goal.name || `Indicador ${index + 1}`;
+  const shouldInferGroupOnCommit = useRef<boolean | null>(null);
 
   function updateGoal(changes: Partial<CustomGoalMetric>) {
-    const nextName = changes.name ?? goal.name;
-    const nextUnit = changes.unit ?? goal.unit;
-    const followsName = getCustomGoalGroup(goal) === inferCustomGoalGroup(goal.name, goal.unit);
-    onChange({
-      ...changes,
-      ...(followsName && ('name' in changes || 'unit' in changes)
-        ? { group: inferCustomGoalGroup(nextName, nextUnit) }
-        : {})
-    });
+    if ('name' in changes || 'unit' in changes) {
+      if (shouldInferGroupOnCommit.current === null) {
+        shouldInferGroupOnCommit.current = getCustomGoalGroup(goal) === inferCustomGoalGroup(goal.name, goal.unit);
+      }
+      onChange(changes);
+      return;
+    }
+
+    if ('group' in changes) {
+      const nextGroup = changes.group ?? getCustomGoalGroup(goal);
+      shouldInferGroupOnCommit.current = nextGroup === inferCustomGoalGroup(goal.name, goal.unit);
+    }
+    onChange(changes);
   }
 
   return <div className="py-4 first:pt-4 last:pb-1" onBlur={(event) => {
     const nextFocus = event.relatedTarget;
-    if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) onCommit();
+    if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) {
+      const inferredGroup = shouldInferGroupOnCommit.current ? inferCustomGoalGroup(goal.name, goal.unit) : undefined;
+      shouldInferGroupOnCommit.current = null;
+      onCommit(goal.id, inferredGroup);
+    }
   }}>
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(132px,152px)] items-center gap-3">
       <div className="min-w-0">
