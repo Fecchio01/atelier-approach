@@ -1,31 +1,23 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import * as React from 'react';
 
 const mocks = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 vi.mock('../../lib/auth', () => ({ getCurrentUser: mocks.getCurrentUser }));
+vi.mock('../../components/daily-close-control', () => ({ DailyCloseControl: () => null }));
+vi.mock('../../components/report-pdf-download', () => ({ ReportPdfDownload: () => null }));
+vi.mock('../../components/report-period-navigation', () => ({ ReportPeriodNavigation: () => null }));
 
 import { prisma } from '../../lib/db';
 import * as reportModule from '../../lib/reports';
-import { listRecentDailyReports, reopenCurrentDailyReport } from '../../lib/daily-reports';
+import type { DailyReportSnapshot } from '../../lib/reports';
+import { closeCurrentDailyReport, getDailyReportForDate, listRecentDailyReports, reopenCurrentDailyReport } from '../../lib/daily-reports';
 import * as reportRouteModule from '../../app/api/reports/route';
+import * as reportPdfModule from '../../lib/report-pdf';
+import { DailyReportView } from '../../components/daily-report-view';
+import * as dailyReportsModule from '../../lib/daily-reports';
 
-type DailySnapshot = {
-  summary: {
-    approaches: number;
-    interests: number;
-    meetings: number;
-    sales: number;
-    revenue: number;
-    mrr: number;
-    followUpsCompleted: number;
-    members: Array<{ memberId: string; wins: number; revenue: number; mrr: number }>;
-  };
-  actions: Array<{
-    type: string;
-    leadName: string | null;
-    actorName: string | null;
-    occurredAt: Date | string;
-  }>;
-};
+type DailySnapshot = DailyReportSnapshot;
 
 type DailyReportBuilder = (input: { from: Date; to: Date; closedAt: Date }) => Promise<DailySnapshot>;
 type CloseResponse = { report: { closedAt: string; snapshot: DailySnapshot }; created: boolean };
@@ -35,8 +27,15 @@ type ReopenDelete = () => Promise<Response>;
 const builder = (reportModule as unknown as Record<string, unknown>).buildDailyReportSnapshot as DailyReportBuilder | undefined;
 const post = (reportRouteModule as unknown as Record<string, unknown>).POST as ClosePost | undefined;
 const deleteReport = (reportRouteModule as unknown as Record<string, unknown>).DELETE as ReopenDelete | undefined;
+const originalPrismaTransaction = prisma.$transaction;
 
 describe('daily report snapshots', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Object.defineProperty(prisma, '$transaction', { configurable: true, writable: true, value: originalPrismaTransaction });
+  });
+
   beforeEach(async () => {
     mocks.getCurrentUser.mockReset();
     mocks.getCurrentUser.mockResolvedValue({ id: 'daily-report-member' });
@@ -188,6 +187,52 @@ describe('daily report snapshots', () => {
     expect(snapshot.summary.members).toEqual(expect.arrayContaining([
       expect.objectContaining({ memberId: 'legacy-member', wins: 1, revenue: 400, mrr: 40 }),
       expect.objectContaining({ memberId: 'event-member', wins: 1, revenue: 600, mrr: 60 })
+    ]));
+  });
+
+  test('an open-day snapshot excludes a reversed sale but keeps its action, without mutating a saved snapshot', async () => {
+    expect(builder).toBeTypeOf('function');
+    if (!builder) return;
+
+    const from = new Date('2026-09-29T03:00:00.000Z');
+    const to = new Date('2026-09-30T03:00:00.000Z');
+    const firstClose = new Date('2026-09-29T13:00:00.000Z');
+    const lead = await prisma.lead.create({ data: {
+      osmId: 'daily-reversed-sale', name: 'Oficina Reaberta', stage: 'WON', saleValue: 500, mrr: 50,
+      wonAt: new Date('2026-09-29T12:30:00.000Z'), wonById: 'daily-report-member'
+    } });
+    const sale = await prisma.saleEvent.create({ data: {
+      leadId: lead.id, actorId: 'daily-report-member', saleValue: 500, mrr: 50, occurredAt: new Date('2026-09-29T12:30:00.000Z')
+    } });
+    const closed = await closeCurrentDailyReport('daily-report-member', firstClose);
+    expect(closed.report.snapshot.summary).toMatchObject({ sales: 1, revenue: 500, mrr: 50 });
+
+    await prisma.saleEvent.update({ where: { id: sale.id }, data: { reversedAt: new Date('2026-09-29T13:30:00.000Z'), reversedById: 'daily-report-member' } });
+    await prisma.lead.update({ where: { id: lead.id }, data: { stage: 'CONTACTED', saleValue: null, mrr: null, wonAt: null, wonById: null } });
+    await prisma.activity.create({ data: {
+      leadId: lead.id, actorId: 'daily-report-member', type: 'SALE_REVERSED', note: 'Venda revertida.', createdAt: new Date('2026-09-29T13:30:00.000Z')
+    } });
+
+    const openSnapshot = await builder({ from, to, closedAt: new Date('2026-09-29T14:00:00.000Z') });
+    expect(openSnapshot.summary).toMatchObject({ sales: 0, revenue: 0, mrr: 0 });
+    expect(openSnapshot.actions).toContainEqual(expect.objectContaining({ type: 'SALE_REVERSED', note: 'Venda revertida.' }));
+
+    const unchanged = await getDailyReportForDate(firstClose);
+    expect(unchanged?.snapshot).toEqual(closed.report.snapshot);
+
+    const reportWithReversal = { ...unchanged!, snapshot: openSnapshot };
+    vi.stubGlobal('React', React);
+    const html = renderToStaticMarkup(React.createElement(DailyReportView, {
+      date: '2026-09-29', report: reportWithReversal, recent: [], todayReport: true, todayHref: '/relatorios?period=day&date=2026-09-29'
+    }));
+    expect(html).toContain('Venda revertida');
+
+    const createPdf = vi.spyOn(reportPdfModule, 'createReportPdf').mockResolvedValue(new Uint8Array([1]));
+    vi.spyOn(dailyReportsModule, 'getDailyReportForDate').mockResolvedValue(reportWithReversal);
+    const pdfResponse = await reportRouteModule.GET(new Request('http://localhost/api/reports?format=pdf&period=day&date=2026-09-29'));
+    expect(pdfResponse.status).toBe(200);
+    expect(createPdf.mock.calls.at(-1)?.[0].sections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Ações do dia', lines: expect.arrayContaining([expect.stringContaining('Venda revertida')]) })
     ]));
   });
 

@@ -17,9 +17,28 @@ import { closeCurrentDailyReport, getDailyReportForDate } from '../../lib/daily-
 import { GET } from '../../app/api/reports/route';
 import * as reportModule from '../../lib/reports';
 import * as reportRouteModule from '../../app/api/reports/route';
+import * as reportPdfModule from '../../lib/report-pdf';
+
+const prismaDelegateMethods = [
+  { delegate: prisma.lead, methods: { findMany: prisma.lead.findMany } },
+  { delegate: prisma.activity, methods: { findMany: prisma.activity.findMany } },
+  { delegate: prisma.followUp, methods: { findMany: prisma.followUp.findMany } },
+  { delegate: prisma.saleEvent, methods: { findMany: prisma.saleEvent.findMany } },
+  { delegate: prisma.stageHistory, methods: { findMany: prisma.stageHistory.findMany } },
+  { delegate: prisma.dailyReport, methods: { findUnique: prisma.dailyReport.findUnique, createMany: prisma.dailyReport.createMany } }
+];
+
+function restorePrismaDelegateSpies() {
+  vi.restoreAllMocks();
+  for (const { delegate, methods } of prismaDelegateMethods) {
+    for (const [method, original] of Object.entries(methods)) {
+      Object.defineProperty(delegate, method, { configurable: true, writable: true, value: original });
+    }
+  }
+}
 
 describe('meeting and follow-up projections without database writes', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(restorePrismaDelegateSpies);
 
   test.each(['week', 'month'] as const)('separates explicit meetings from historical follow-ups in %s reports', async (period) => {
     vi.spyOn(prisma.lead, 'findMany').mockResolvedValue([]);
@@ -64,6 +83,8 @@ describe('meeting and follow-up projections without database writes', () => {
 });
 
 describe('commercial reports', () => {
+  afterEach(restorePrismaDelegateSpies);
+
   beforeEach(async () => {
     mocks.getCurrentUser.mockResolvedValue({ id: 'ana' });
     await prisma.dailyReport.deleteMany();
@@ -111,6 +132,36 @@ describe('commercial reports', () => {
     expect(report.members).toContainEqual({ memberId: 'ana', approaches: 2, interests: 0, meetings: 0, wins: 1, sales: 1200, mrr: 297 });
     expect(report.members).toContainEqual({ memberId: 'bia', approaches: 1, interests: 0, meetings: 0, wins: 0, sales: 0, mrr: 0 });
     expect(report.notes).toEqual({ total: 3, recent: ['Aguardando retorno.', 'Contato de acompanhamento.', 'Pediu proposta.'] });
+  });
+
+  test('excludes reversed sale events from period metrics and keeps reversal history in the exported PDF', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'report-reversed-sale', name: 'Oficina Reaberta', stage: 'CONTACTED' } });
+    const occurredAt = new Date('2026-09-10T12:00:00.000Z');
+    await prisma.activity.createMany({ data: [
+      { leadId: lead.id, actorId: 'ana', type: 'CONTACT', channel: 'WHATSAPP', note: 'Abordagem inicial.', createdAt: new Date('2026-09-09T10:00:00.000Z') },
+      { leadId: lead.id, actorId: 'bia', type: 'SALE_REVERSED', channel: null, note: 'Venda revertida.', createdAt: new Date('2026-09-11T10:00:00.000Z') }
+    ] });
+    await prisma.saleEvent.createMany({ data: [
+      { leadId: lead.id, actorId: 'ana', saleValue: 1200, mrr: 120, occurredAt, reversedAt: new Date('2026-09-11T10:00:00.000Z'), reversedById: 'bia' },
+      { leadId: lead.id, actorId: 'bia', saleValue: 500, mrr: 50, occurredAt: new Date('2026-09-12T10:00:00.000Z') }
+    ] });
+
+    const range = { from: new Date('2026-09-07T03:00:00.000Z'), to: new Date('2026-09-14T03:00:00.000Z') };
+    const report = await buildReport(range);
+
+    expect(report.goalActuals).toMatchObject({ sales: 1, revenue: 500, mrr: 50, conversionRate: 100 });
+    expect(report.revenue).toEqual({ sales: 500, mrr: 50 });
+    expect(report.channels).toContainEqual({ channel: 'WHATSAPP', approaches: 1, wins: 1, conversionRate: 1 });
+    expect(report.notes.recent).toContain('Venda revertida.');
+    const createPdf = vi.spyOn(reportPdfModule, 'createReportPdf');
+    const response = await GET(new Request('http://localhost/api/reports?format=pdf&period=week&from=2026-09-07T03%3A00%3A00.000Z&to=2026-09-14T03%3A00%3A00.000Z'));
+
+    expect(response.status).toBe(200);
+    const sections = createPdf.mock.calls.at(-1)?.[0].sections;
+    expect(sections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Resumo do período', lines: expect.arrayContaining(['Ganhos: 1', 'Receita vendida: R$ 500,00']) }),
+      expect.objectContaining({ title: 'Resumo de anotações', lines: expect.arrayContaining(['Nota: Venda revertida.']) })
+    ]));
   });
 
   test('recommends reducing overdue follow-ups from the measured report, without a predictive claim', () => {

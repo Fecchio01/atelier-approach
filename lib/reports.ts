@@ -93,7 +93,7 @@ export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: D
         select: { completedAt: true }
       }),
       tx.saleEvent.findMany({
-        where: { occurredAt: eventRange },
+        where: { occurredAt: eventRange, reversedAt: null },
         select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true }
       }),
       tx.stageHistory.findMany({
@@ -203,7 +203,7 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
       ] },
       select: { dueDate: true, state: true, completedAt: true, cancelledAt: true }
     }),
-    prisma.saleEvent.findMany({ where: { occurredAt: { gte: range.from, lt: range.to } } }),
+    prisma.saleEvent.findMany({ where: { occurredAt: { gte: range.from, lt: range.to }, reversedAt: null } }),
     prisma.stageHistory.findMany({ where: { createdAt: { gte: range.from, lt: range.to } } })
   ]);
   const approaches = activities.filter((activity) => activity.type === 'CONTACT' || !activity.type);

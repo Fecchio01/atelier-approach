@@ -14,11 +14,30 @@ vi.mock('@phosphor-icons/react/dist/ssr', () => {
     PaperPlaneTiltIcon: Icon, TargetIcon: Icon, UserIcon: Icon, UsersThreeIcon: Icon };
 });
 
-import { getDashboardMetrics, upsertTeamGoal } from '../../lib/metrics';
+import { getDashboardMetrics, getTeamGoalActualsByPeriod, upsertTeamGoal } from '../../lib/metrics';
 import { prisma } from '../../lib/db';
 
+const prismaDelegateMethods = [
+  { delegate: prisma.teamGoalSettings, methods: { findUnique: prisma.teamGoalSettings.findUnique } },
+  { delegate: prisma.goal, methods: { findMany: prisma.goal.findMany } },
+  { delegate: prisma.lead, methods: { findMany: prisma.lead.findMany } },
+  { delegate: prisma.activity, methods: { findMany: prisma.activity.findMany } },
+  { delegate: prisma.stageHistory, methods: { findMany: prisma.stageHistory.findMany } },
+  { delegate: prisma.saleEvent, methods: { findMany: prisma.saleEvent.findMany } },
+  { delegate: prisma.followUp, methods: { findMany: prisma.followUp.findMany } }
+];
+
+function restorePrismaDelegateSpies() {
+  vi.restoreAllMocks();
+  for (const { delegate, methods } of prismaDelegateMethods) {
+    for (const [method, original] of Object.entries(methods)) {
+      Object.defineProperty(delegate, method, { configurable: true, writable: true, value: original });
+    }
+  }
+}
+
 describe('dashboard follow-up query and presentation', () => {
-  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+  afterEach(() => { restorePrismaDelegateSpies(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
   test('loads five future pending reminders independently of all period completions', async () => {
     vi.stubGlobal('React', React);
@@ -31,7 +50,7 @@ describe('dashboard follow-up query and presentation', () => {
     ] as never);
     vi.spyOn(prisma.activity, 'findMany').mockResolvedValue([]);
     vi.spyOn(prisma.stageHistory, 'findMany').mockResolvedValue([]);
-    vi.spyOn(prisma.saleEvent, 'findMany').mockResolvedValue([]);
+    const saleEventQuery = vi.spyOn(prisma.saleEvent, 'findMany').mockResolvedValue([]);
     const completion = { leadId: 'lead', ownerId: 'ana', state: 'COMPLETED', dueDate: new Date('2026-09-10T12:00:00Z'), completedAt: new Date('2026-09-12T10:00:00Z') };
     const followUps = vi.spyOn(prisma.followUp, 'findMany')
       .mockResolvedValueOnce(Array.from({ length: 8 }, (_, index) => ({ ...completion, id: `done-${index}` })) as never)
@@ -41,6 +60,7 @@ describe('dashboard follow-up query and presentation', () => {
       }] as never);
     const { default: Home } = await import('../../app/(app)/page');
     const html = renderToStaticMarkup(await Home({ searchParams: Promise.resolve({ period: 'week' }) }));
+    expect(saleEventQuery.mock.calls[0][0]).toMatchObject({ where: { reversedAt: null } });
     expect(followUps.mock.calls[0][0]).not.toHaveProperty('take');
     expect(followUps.mock.calls[0][0]).toMatchObject({ where: { OR: [
       { state: 'PENDING', dueDate: { lt: new Date('2026-09-13T03:00:00Z') } },
@@ -59,6 +79,8 @@ describe('dashboard follow-up query and presentation', () => {
 });
 
 describe('getDashboardMetrics', () => {
+  afterEach(restorePrismaDelegateSpies);
+
   test.each([
     ['CONTACT', 'Marcar MEETING na próxima semana'],
     ['CONTACT', 'Etapa alterada para MEETING.'],
@@ -191,6 +213,37 @@ describe('getDashboardMetrics', () => {
       ana: { sales: 1200, won: 1 },
       bia: { sales: 800, won: 1 }
     });
+  });
+
+  test('excludes reversed sales from revenue, MRR, conversion, and personal results while keeping a later sale', () => {
+    const metrics = getDashboardMetrics([{
+      id: 'reclosed-lead', stage: 'WON', saleValue: 500, mrr: 50,
+      wonAt: new Date('2026-09-10T12:00:00.000Z'), wonById: 'bia',
+      activities: [{ actorId: 'ana', type: 'CONTACT', createdAt: new Date('2026-09-08T10:00:00.000Z') }],
+      followUps: [],
+      saleEvents: [
+        { actorId: 'ana', saleValue: 1200, mrr: 120, occurredAt: new Date('2026-09-09T12:00:00.000Z'), reversedAt: new Date('2026-09-10T11:00:00.000Z') },
+        { actorId: 'bia', saleValue: 500, mrr: 50, occurredAt: new Date('2026-09-10T12:00:00.000Z'), reversedAt: null }
+      ] as never
+    }], { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z') });
+
+    expect(metrics).toMatchObject({ sales: 500, mrr: 50, won: 1 });
+    expect(metrics.goalActuals).toMatchObject({ sales: 1, revenue: 500, mrr: 50, conversionRate: 100 });
+    expect(metrics.personalResults).toEqual({ ana: { approaches: 1, interests: 0, meetings: 0, sales: 0, won: 0 }, bia: { approaches: 0, interests: 0, meetings: 0, sales: 500, won: 1 } });
+  });
+
+  test('uses only active sales for team goal actuals', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'goal-reversed-sale', stage: 'CONTACTED' } });
+    await prisma.saleEvent.createMany({ data: [
+      { leadId: lead.id, actorId: 'ana', saleValue: 1200, mrr: 120, occurredAt: new Date('2026-09-09T12:00:00Z'), reversedAt: new Date('2026-09-10T12:00:00Z'), reversedById: 'bia' },
+      { leadId: lead.id, actorId: 'bia', saleValue: 500, mrr: 50, occurredAt: new Date('2026-09-11T12:00:00Z') }
+    ] });
+
+    const [actuals] = await getTeamGoalActualsByPeriod([{
+      kind: 'WEEKLY', start: new Date('2026-09-07T03:00:00Z'), end: new Date('2026-09-14T03:00:00Z')
+    }]);
+
+    expect(actuals).toMatchObject({ sales: 1, revenue: 500, mrr: 50 });
   });
 
   test('does not count an old win again after a current-week activity', () => {

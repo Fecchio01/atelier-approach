@@ -6,7 +6,7 @@ import type { CustomGoalMetric } from './custom-goals';
 
 export type MetricActivity = { actorId: string; type?: ActivityType; createdAt: Date; note?: string };
 export type MetricStageEvent = { actorId: string; toStage: LeadStage; createdAt: Date };
-export type MetricSaleEvent = { actorId: string; saleValue: MetricNumber; mrr: MetricNumber; occurredAt: Date };
+export type MetricSaleEvent = { actorId: string; saleValue: MetricNumber; mrr: MetricNumber; occurredAt: Date; reversedAt?: Date | null };
 
 export type MetricFollowUp = {
   id?: string;
@@ -122,7 +122,7 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
       if (isMeetingStage(event.toStage)) member(event.actorId).meetings += 1;
     }
     for (const sale of lead.saleEvents ?? []) {
-      if (!inRange(sale.occurredAt, range)) continue;
+      if (sale.reversedAt || !inRange(sale.occurredAt, range)) continue;
       member(sale.actorId).sales += Number(sale.saleValue);
       member(sale.actorId).won += 1;
       mrr += Number(sale.mrr);
@@ -197,7 +197,7 @@ export async function getTeamGoalActualsByPeriod(
       select: { leadId: true, actorId: true, toStage: true, createdAt: true }
     }),
     database.saleEvent.findMany({
-      where: { occurredAt: { gte: dataFrom, lt: dataTo } },
+      where: { occurredAt: { gte: dataFrom, lt: dataTo }, reversedAt: null },
       select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true }
     }),
     database.followUp.findMany({

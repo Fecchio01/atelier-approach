@@ -7,7 +7,7 @@ import { getTeamGoalProgress, getTeamGoalTargets, type GoalMetricKey } from '../
 import { normalizeFunnelStage, stageLabels } from '../../../lib/funnel';
 import { getGoalPeriodWindow } from '../../../lib/goal-periods';
 import { prisma } from '../../../lib/db';
-import type { Channel } from '@prisma/client';
+import type { ActivityType, Channel } from '@prisma/client';
 
 function parseDate(value: string | null) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -26,7 +26,7 @@ const numberFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 
 const channelLabels: Record<Channel, string> = {
   WHATSAPP: 'WhatsApp', PHONE: 'Telefone', EMAIL: 'E-mail', INSTAGRAM: 'Instagram', IN_PERSON: 'Presencial', OTHER: 'Outro'
 };
-const activityLabels = {
+const activityLabels: Record<ActivityType, string> = {
   CONTACT: 'Abordagem registrada',
   STAGE_CHANGE: 'Etapa atualizada',
   FOLLOW_UP_SCHEDULED: 'Follow-up agendado',
@@ -34,6 +34,7 @@ const activityLabels = {
   FOLLOW_UP_CANCELLED: 'Follow-up cancelado',
   SALE_WON: 'Negócio ganho',
   SALE_FINANCIALS_UPDATED: 'Valores da venda atualizados',
+  SALE_REVERSED: 'Venda revertida',
   LEAD_REOPENED: 'Empresa reaberta',
   DISCARDED: 'Empresa descartada'
 } as const;

@@ -111,7 +111,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } }),
     prisma.activity.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }),
     prisma.stageHistory.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, toStage: true, createdAt: true } }),
-    prisma.saleEvent.findMany({ where: { occurredAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true } }),
+    prisma.saleEvent.findMany({ where: { occurredAt: { gte: dataFrom, lt: dataTo }, reversedAt: null }, select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true } }),
     prisma.followUp.findMany({
       where: { OR: [
         { state: 'PENDING', dueDate: { lt: today.end } },
