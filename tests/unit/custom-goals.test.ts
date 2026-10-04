@@ -1,9 +1,28 @@
 import { describe, expect, test } from 'vitest';
 
-import { getCustomGoalCurrent, parseCustomGoalMetrics, type CustomGoalMetric } from '../../lib/custom-goals';
+import { getCustomGoalCurrent, getCustomGoalIcon, inferCustomGoalIcon, parseCustomGoalMetrics, type CustomGoalMetric } from '../../lib/custom-goals';
 
 describe('custom team goals', () => {
   const actuals = { approaches: 20, interests: 4, meetings: 3, sales: 2, revenue: 500, mrr: 100, followUpsCompleted: 6, conversionRate: 10 };
+
+  test.each([
+    ['Carros entregues', undefined, 'car'],
+    ['Empresas aprovadas', undefined, 'checklist'],
+    ['Conversas humanas', undefined, 'users'],
+    ['Dores confirmadas', undefined, 'checklist'],
+    ['Oportunidade real', undefined, 'star'],
+    ['Repetições / fora do perfil', undefined, 'chart'],
+    ['Follow-ups vencidos', undefined, 'calendar'],
+    ['Faturamento', 'R$', 'currency']
+  ])('assigns a relevant icon to %s', (name, unit, expectedIcon) => {
+    expect(inferCustomGoalIcon(name, unit)).toBe(expectedIcon);
+  });
+
+  test('uses semantic icons for generic legacy targets while preserving explicit icons', () => {
+    expect(getCustomGoalIcon({ name: 'Carros entregues', icon: 'target' })).toBe('car');
+    expect(getCustomGoalIcon({ name: 'Meta sem categoria', icon: 'target' })).toBe('target');
+    expect(getCustomGoalIcon({ name: 'Carros entregues', icon: 'star' })).toBe('star');
+  });
 
   test('legacy and explicit manual sources use stored progress', () => {
     const goal: CustomGoalMetric = { id: 'legacy', name: 'Carros', target: 5, current: 2 };

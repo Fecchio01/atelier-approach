@@ -1,6 +1,12 @@
 import type { GoalMetricActuals, GoalMetricKey } from './metrics';
 
-export const customGoalIcons = ['target', 'car', 'users', 'currency', 'chart', 'checklist', 'star', 'handshake', 'calendar', 'wrench', 'trophy'] as const;
+export const customGoalIcons = ['target', 'prospecting', 'progress', 'car', 'users', 'currency', 'chart', 'checklist', 'star', 'handshake', 'calendar', 'wrench', 'trophy'] as const;
+
+export const customGoalIconLabels: Record<typeof customGoalIcons[number], string> = {
+  target: 'Alvo', prospecting: 'Prospecção', progress: 'Avanço', car: 'Carro', users: 'Pessoas',
+  currency: 'Receita', chart: 'Gráfico', checklist: 'Checklist', star: 'Oportunidade',
+  handshake: 'Acordo', calendar: 'Calendário', wrench: 'Serviço', trophy: 'Conquista'
+};
 
 export type CustomGoalSource = 'manual' | GoalMetricKey;
 export const customGoalSourceLabels: Record<CustomGoalSource, string> = {
@@ -19,6 +25,32 @@ export type CustomGoalMetric = {
   icon?: CustomGoalIcon;
   source?: CustomGoalSource;
 };
+
+function normalizeGoalText(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+export function inferCustomGoalIcon(label: string, metricUnit?: string): CustomGoalIcon {
+  const normalized = normalizeGoalText(`${label} ${metricUnit ?? ''}`);
+  if (/r\$|\breais?\b|receita|faturamento|faturar|\bmrr\b|valor/.test(normalized)) return 'currency';
+  if (/carro|veiculo|automovel|moto/.test(normalized)) return 'car';
+  if (/reuniao|agenda|retorno|follow[ -]?ups?|visita|prazo/.test(normalized)) return 'calendar';
+  if (/aprovad|confirmad|concluid|finaliz|entreg/.test(normalized)) return 'checklist';
+  if (/oportunidade|destaque/.test(normalized)) return 'star';
+  if (/venda|acordo|contrato|parceria|negociacao/.test(normalized)) return 'handshake';
+  if (/servico|reparo|manutencao|oficina|estetica/.test(normalized)) return 'wrench';
+  if (/repeti|perfil|taxa|conversao|desempenho|crescimento/.test(normalized)) return 'chart';
+  if (/premio|conquista|objetivo/.test(normalized)) return 'trophy';
+  if (/prospeccao|abordagem|contato|lead/.test(normalized)) return 'prospecting';
+  if (/avanco|pipeline|etapa/.test(normalized)) return 'progress';
+  if (/equipe|cliente|pessoa|atendimento|conversa|empresa/.test(normalized)) return 'users';
+  return 'target';
+}
+
+export function getCustomGoalIcon(goal: Pick<CustomGoalMetric, 'name' | 'unit' | 'icon'>): CustomGoalIcon {
+  if (goal.icon && goal.icon !== 'target' && customGoalIcons.includes(goal.icon)) return goal.icon;
+  return inferCustomGoalIcon(goal.name, goal.unit);
+}
 
 export function getCustomGoalCurrent(goal: CustomGoalMetric, actuals: GoalMetricActuals): number {
   return !goal.source || goal.source === 'manual' ? goal.current : actuals[goal.source];

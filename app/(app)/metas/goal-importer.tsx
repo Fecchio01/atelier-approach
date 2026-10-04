@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ArrowDownIcon, FilePdfIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react';
 
-import { customGoalIcons, type CustomGoalIcon } from '@/lib/custom-goals';
+import { customGoalIconLabels, customGoalIcons, inferCustomGoalIcon, type CustomGoalIcon } from '@/lib/custom-goals';
 import type { GoalMetricKey } from '@/lib/metrics';
 import { parseGoalDocumentText } from '@/lib/goal-pdf';
 import { readGoalPdfText } from '@/lib/read-goal-pdf';
@@ -22,26 +22,14 @@ const metrics: Array<{ key: GoalMetricKey; label: string; unit?: string }> = [
 
 type ImportableDraft = Omit<ReviewedGoalSuggestion, 'id'> & { id: string };
 
-function inferIcon(name: string, unit?: string): CustomGoalIcon {
-  const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  if (/carro|veiculo|automovel|moto/.test(normalized)) return 'car';
-  if (/equipe|cliente|pessoa|atendimento/.test(normalized)) return 'users';
-  if (unit === 'R$' || /receita|faturamento|valor/.test(normalized)) return 'currency';
-  if (/reuniao|agenda|retorno/.test(normalized)) return 'calendar';
-  if (/venda|acordo|contrato/.test(normalized)) return 'handshake';
-  if (/servico|reparo|manutencao/.test(normalized)) return 'wrench';
-  if (/concluid|finaliz|entreg/.test(normalized)) return 'checklist';
-  return 'target';
-}
-
 function makeRows(targets: Partial<Record<GoalMetricKey, number>>, custom: Array<{ name: string; unit?: string; target: number; current: number }>): ImportableDraft[] {
   const fixed = Object.entries(targets).flatMap(([key, target]) => {
     const metric = metrics.find((item) => item.key === key as GoalMetricKey);
     if (!metric || target === undefined) return [];
-    return [{ id: crypto.randomUUID(), name: metric.label, unit: metric.unit, target: String(target), current: '0', destination: metric.key, icon: inferIcon(metric.label, metric.unit) }];
+    return [{ id: crypto.randomUUID(), name: metric.label, unit: metric.unit, target: String(target), current: '0', destination: metric.key, icon: inferCustomGoalIcon(metric.label, metric.unit) }];
   });
   const customRows = custom.map((goal) => ({
-    id: crypto.randomUUID(), name: goal.name, unit: goal.unit, target: String(goal.target), current: String(goal.current), destination: 'custom' as const, icon: inferIcon(goal.name, goal.unit)
+    id: crypto.randomUUID(), name: goal.name, unit: goal.unit, target: String(goal.target), current: String(goal.current), destination: 'custom' as const, icon: inferCustomGoalIcon(goal.name, goal.unit)
   }));
   return [...fixed, ...customRows];
 }
@@ -137,7 +125,7 @@ export function GoalImporter({ onApply }: { onApply: (suggestions: ReviewedGoalS
               </label>
               <label className="grid gap-1 text-[10px] text-white/45">Ícone
                 <select aria-label={`Ícone sugerido ${index + 1}`} value={row.icon} onChange={(event) => updateRow(row.id, { icon: event.target.value as CustomGoalIcon })} className="h-9 w-full rounded-md border border-white/[0.09] bg-[#171e22] px-2 text-xs text-white outline-none focus:border-[var(--atelier-green)]/50">
-                  {customGoalIcons.map((icon) => <option key={icon} value={icon}>{icon}</option>)}
+                  {customGoalIcons.map((icon) => <option key={icon} value={icon}>{customGoalIconLabels[icon]}</option>)}
                 </select>
               </label>
             </>}
