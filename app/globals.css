@@ -36,11 +36,7 @@ body {
 }
 
 button, a, input, select, textarea {
-  transition:
-    border-color var(--atelier-motion-duration) var(--atelier-motion-easing),
-    background-color var(--atelier-motion-duration) var(--atelier-motion-easing),
-    color var(--atelier-motion-duration) var(--atelier-motion-easing),
-    transform var(--atelier-motion-duration) var(--atelier-motion-easing);
+  transition: transform var(--atelier-motion-duration) var(--atelier-motion-easing);
 }
 button:active, a:active { transform: translateY(1px); }
 input, select, textarea { color-scheme: dark; }
