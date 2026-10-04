@@ -63,6 +63,8 @@
 
 ### Task 2: Fechamento e reversão transacionais
 
+**Prerequisite after Task 1 review:** if the isolated database at `TEST_DATABASE_URL` is missing a Prisma migration, seed only uniquely identified migration fixtures in schema `atelier_test`. Apply required DDL via the connected Supabase privileged migration runner with `SET search_path TO atelier_test`, then synchronize the matching Prisma migration record using `prisma migrate resolve --applied` through the isolated URL. Verify reconciliation against the fixtures, then delete only the fixtures created for this check. Do this before Task 2's route tests so those tests use the generated schema. Never point this prerequisite at production; never run `prisma migrate deploy` with the runtime `atelier_app` role, which lacks enum ownership.
+
 **Files:**
 - Modify: `app/api/leads/[id]/route.ts` — aceitar `serviceIds`, calcular e salvar venda e snapshots, reverter venda ativa ao sair de `WON`.
 - Modify: `prisma/schema.prisma` / migration from Task 1 only if required by the tested relation (do not introduce a second competing migration).
@@ -152,8 +154,8 @@
 - [ ] **Step 2: Qualidade estática** — executar `npm run typecheck`, `npm run lint` e `git diff --check`; esperado: sem erros.
 - [ ] **Step 3: E2E completo relevante** — executar `npx playwright test tests/e2e/commercial-sales-follow-up.spec.ts tests/e2e/crm-modal.spec.ts tests/e2e/crm-to-dashboard.spec.ts tests/e2e/daily-close.spec.ts tests/e2e/mobile-responsiveness.spec.ts`; esperado: fluxos sem regressão em mobile e desktop.
 - [ ] **Step 4: Build** — executar `npm run build`; esperado: compilação de produção com schema e rota de banco atualizados.
-- [ ] **Step 5: Conferir migrações em banco de teste** — confirmar que a URL-alvo usa somente o schema isolado `atelier_test`; aplicar as migrações Prisma pendentes nesse schema e verificar colunas, tipos, índices e reconciliação de vendas legadas com fixtures. Não resetar nem limpar outro schema.
-- [ ] **Step 6: Conferir e migrar produção** — verificar status e schema Supabase de produção; aplicar as migrações Prisma aditivas pendentes na ordem e validar os novos campos sem reescrever snapshots diários nem apagar dados.
+- [ ] **Step 5: Conferir migrações no schema de teste** — confirmar o histórico Prisma no schema isolado `atelier_test`; confirmar a migração Task 1 (já pode ter sido aplicada como pré-requisito da Task 2), validar colunas e tipos e registrar a verificação de reconciliação feita com fixtures. Não resetar nem limpar outro schema.
+- [ ] **Step 6: Conferir e migrar produção** — verificar status e schema Supabase de produção; aplicar DDL aditivo na ordem com o runner Supabase privilegiado, sincronizar cada versão em `_prisma_migrations` via `prisma migrate resolve --applied` usando a URL de produção, e validar os novos campos sem reescrever snapshots diários nem apagar dados. Não executar `prisma migrate deploy` como `atelier_app`, que não possui os tipos enum.
 - [ ] **Step 7: Publicar** — revisar diff/segredos, enviar commits da feature ao GitHub e promover a versão validada para produção no Vercel, conforme preferência já registrada; abrir a URL de produção e fazer smoke test de login, configurações comerciais, fechamento/reabertura e follow-up.
 
 ## Handoff
