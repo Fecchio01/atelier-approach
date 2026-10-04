@@ -38,27 +38,27 @@
 ### Task 1: Persistência, catálogo de serviços e configurações comerciais
 
 **Files:**
-- Modify: `prisma/schema.prisma` — `ServiceBillingType`, catálogo, snapshots de venda, reversão e configuração compartilhada de CRM.
+- Modify: `prisma/schema.prisma` — `ServiceBillingType`, `ActivityType.SALE_REVERSED`, catálogo, snapshots de venda, reversão e configuração compartilhada de CRM.
 - Create: `prisma/migrations/20261004000000_crm_service_catalog_reversible_sales/migration.sql` — migração aditiva e reconciliação legada.
 - Create: `lib/service-sales.ts` — totais monetários puros.
 - Create: `lib/commercial-settings.ts` — acesso compartilhado e fallback do prazo padrão de follow-up.
 - Create: `app/api/services/route.ts` e `app/api/services/[id]/route.ts` — CRUD autenticado; exclusão lógica/arquivamento.
 - Create: `app/api/commercial-settings/route.ts` — ler e salvar `followUpDelayDays`.
-- Test: `tests/unit/service-sales.test.ts`, `tests/unit/service-routes.test.ts`, `tests/unit/commercial-settings.test.ts`, `tests/unit/crm-commercial-migration.test.ts`.
+- Test: `tests/unit/service-sales.test.ts`, `tests/unit/service-routes.test.ts`, `tests/unit/commercial-settings.test.ts`.
 
 **Interfaces:**
 - Produz: `summarizeServiceItems(items: readonly { price: string | number; billingType: 'ONE_TIME' | 'MONTHLY' }[]): { saleValue: number; mrr: number }` soma centavos inteiros; itens mensais contam em `saleValue` e `mrr`, únicos somente em `saleValue`.
 - Produz: `getFollowUpDelayDays(database = prisma): Promise<number>` retorna o valor salvo ou 2 quando a configuração ainda não existe.
 - Produz: `GET /api/services` lista ativos; `POST` cria; `PATCH /api/services/[id]` edita ou arquiva via `isActive: false`. Item arquivado não é removido fisicamente.
 - Produz: `GET /api/commercial-settings` sempre retorna `followUpDelayDays` com fallback 2; `PATCH` aceita somente inteiro positivo.
-- Produz: `SaleEvent.reversedAt` e `reversedById` opcionais; `SaleLineItem` guarda cópia imutável do serviço, preço e tipo; `CrmSettings` é singleton compartilhado com `followUpDelayDays @default(2)`.
+- Produz: `SaleEvent.reversedAt` e `reversedById` opcionais; `SaleLineItem` guarda cópia imutável do serviço, preço e tipo; `ActivityType.SALE_REVERSED`; `CrmSettings` é singleton compartilhado com `followUpDelayDays @default(2)`.
 - Produz: a migração marca como revertidas vendas legadas de leads atualmente fora de `WON` e eventos anteriores à última atividade legada de reabertura, sem apagar dados ou alterar datas/valores originais.
 
-- [ ] **Step 1: Escrever testes RED** — testar a soma de itens únicos/recorrentes incluindo centavos; CRUD exige autenticação, valida preço/tipo/nome, omite arquivados e arquivar não exclui; configuração ausente retorna 2 e PATCH rejeita zero, fração e string inválida; a migração contém os campos/índices e reconciliação de eventos legados.
-- [ ] **Step 2: Confirmar falha** — executar `npx vitest run tests/unit/service-sales.test.ts tests/unit/service-routes.test.ts tests/unit/commercial-settings.test.ts tests/unit/crm-commercial-migration.test.ts`; falhar especificamente por modelos, rotas e cálculo inexistentes.
+- [ ] **Step 1: Escrever testes RED** — testar a soma de itens únicos/recorrentes incluindo centavos; CRUD exige autenticação, valida preço/tipo/nome, omite arquivados e arquivar não exclui; configuração ausente retorna 2 e PATCH rejeita zero, fração e string inválida.
+- [ ] **Step 2: Confirmar falha** — executar `npx vitest run tests/unit/service-sales.test.ts tests/unit/service-routes.test.ts tests/unit/commercial-settings.test.ts`; falhar especificamente por modelos, rotas e cálculo inexistentes.
 - [ ] **Step 3: Implementar schema e migração** — adicionar os enums/modelos e relações especificados; usar tipo decimal PostgreSQL para preços e valores. Gerar/adicionar a migração sem apagar dados; marcar vendas legadas inconsistentes usando estado de etapa e histórico `LEAD_REOPENED`.
 - [ ] **Step 4: Implementar cálculo e APIs** — implementar `summarizeServiceItems`, validação monetária, rotas autenticadas de catálogo e configuração, com arquivamento lógico e fallback de 2 dias.
-- [ ] **Step 5: Verificar GREEN** — rodar os quatro arquivos Vitest, `npx prisma validate` e `npx prisma generate`; novos testes passam e os modelos gerados são válidos.
+- [ ] **Step 5: Verificar GREEN** — rodar os três arquivos Vitest, `npx prisma validate` e `npx prisma generate`; novos testes passam e os modelos gerados são válidos. A migração deve ser validada executando-a em banco de teste isolado na Task 6; não verificar DDL por asserções de texto.
 - [ ] **Step 6: Commit** — `feat: add commercial service catalog and settings`.
 
 ### Task 2: Fechamento e reversão transacionais
@@ -146,13 +146,15 @@
 
 **Files:**
 - Verify: migrations, APIs, métricas, telas e testes das Tasks 1–5; corrigir somente falhas relacionadas à especificação.
+- Modify: `README.md` — corrigir a instrução obsoleta que classifica as migrações PostgreSQL atuais do Prisma como legadas/SQLite.
 
 - [ ] **Step 1: Testes unitários** — executar `npm test`; esperado: toda a suíte Vitest passa. Registrar e corrigir falhas introduzidas pela mudança.
 - [ ] **Step 2: Qualidade estática** — executar `npm run typecheck`, `npm run lint` e `git diff --check`; esperado: sem erros.
 - [ ] **Step 3: E2E completo relevante** — executar `npx playwright test tests/e2e/commercial-sales-follow-up.spec.ts tests/e2e/crm-modal.spec.ts tests/e2e/crm-to-dashboard.spec.ts tests/e2e/daily-close.spec.ts tests/e2e/mobile-responsiveness.spec.ts`; esperado: fluxos sem regressão em mobile e desktop.
 - [ ] **Step 4: Build** — executar `npm run build`; esperado: compilação de produção com schema e rota de banco atualizados.
-- [ ] **Step 5: Conferir migração remota antes de produção** — confirmar acesso/configuração do Supabase de produção e estado de migrações; aplicar apenas a migração revisada desta feature e verificar os modelos/endpoints antes do deploy.
-- [ ] **Step 6: Publicar** — revisar diff/segredos, enviar commits da feature ao GitHub e promover a versão validada para produção no Vercel, conforme preferência já registrada; abrir a URL de produção e fazer smoke test de login, configurações comerciais, fechamento/reabertura e follow-up.
+- [ ] **Step 5: Conferir migrações em banco de teste** — confirmar que a URL-alvo usa somente o schema isolado `atelier_test`; aplicar as migrações Prisma pendentes nesse schema e verificar colunas, tipos, índices e reconciliação de vendas legadas com fixtures. Não resetar nem limpar outro schema.
+- [ ] **Step 6: Conferir e migrar produção** — verificar status e schema Supabase de produção; aplicar as migrações Prisma aditivas pendentes na ordem e validar os novos campos sem reescrever snapshots diários nem apagar dados.
+- [ ] **Step 7: Publicar** — revisar diff/segredos, enviar commits da feature ao GitHub e promover a versão validada para produção no Vercel, conforme preferência já registrada; abrir a URL de produção e fazer smoke test de login, configurações comerciais, fechamento/reabertura e follow-up.
 
 ## Handoff
 
