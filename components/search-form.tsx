@@ -102,14 +102,14 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
   }
 
   return (
-    <form aria-busy={isLoading} className="grid gap-5 rounded-2xl border border-white/[0.09] bg-[#111411] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)] md:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto] md:items-end" onSubmit={handleSubmit}>
+    <form aria-busy={isLoading} className="grid min-w-0 gap-5 rounded-2xl border border-white/[0.09] bg-[var(--atelier-surface)] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.12)] sm:p-5 md:grid-cols-2 xl:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto] md:items-end" onSubmit={handleSubmit}>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         Nicho
-        <input readOnly value={FIXED_NICHE} className="min-h-11 rounded-lg border border-[var(--atelier-green)]/50 bg-black/30 px-3 text-white outline-none" />
+        <input readOnly value={FIXED_NICHE} className="min-h-11 min-w-0 rounded-lg border border-[var(--atelier-green)]/50 bg-[#171e22] px-3 text-white outline-none" />
       </label>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         País
-        <select name="country" required value={filters.country} onChange={(event) => onFiltersChange({ ...filters, country: event.target.value })} className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none focus:border-[var(--atelier-green)]">
+        <select name="country" required value={filters.country} onChange={(event) => onFiltersChange({ ...filters, country: event.target.value })} className="min-h-11 min-w-0 rounded-lg border border-white/20 bg-[#171e22] px-3 text-white outline-none focus:border-[var(--atelier-green)]">
           <option value="BR">Brasil</option>
         </select>
       </label>
@@ -119,7 +119,7 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
           name="region"
           value={filters.region}
           onChange={(event) => onFiltersChange({ ...filters, region: event.target.value, city: '' })}
-          className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none placeholder:text-white/40 focus:border-[var(--atelier-green)]"
+          className="min-h-11 min-w-0 rounded-lg border border-white/20 bg-[#171e22] px-3 text-white outline-none placeholder:text-white/40 focus:border-[var(--atelier-green)]"
         >
           <option value="">Todos os estados</option>
           {REGIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -133,24 +133,24 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
           value={filters.city}
           onChange={(event) => onFiltersChange({ ...filters, city: event.target.value })}
           placeholder={filters.region ? 'Ex.: Campinas' : 'Selecione um estado primeiro'}
-          className="min-h-11 rounded-lg border border-white/20 bg-black/30 px-3 text-white outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:opacity-40 focus:border-[var(--atelier-green)]"
+          className="min-h-11 min-w-0 rounded-lg border border-white/20 bg-[#171e22] px-3 text-white outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:opacity-40 focus:border-[var(--atelier-green)]"
         />
       </label>
       <button
         type="submit"
         disabled={isLoading}
-        className="min-h-11 w-full rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-black transition hover:bg-[#d2ff55] disabled:cursor-wait disabled:opacity-60 md:w-auto"
+        className="min-h-11 w-full rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-black transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[#d2ff55] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 xl:w-auto"
       >
         {isLoading ? 'Pesquisando…' : 'Pesquisar'}
       </button>
-      <div className="grid gap-3 border-t border-white/[0.08] pt-4 text-sm md:col-span-5 md:grid-cols-[1fr_auto] md:items-center">
+      <div className="grid gap-3 border-t border-white/[0.08] pt-4 text-sm md:col-span-2 xl:col-span-5 xl:grid-cols-[1fr_auto] xl:items-center">
         <p className="text-white/55">Todos os estabelecimentos encontrados serão exibidos; os canais disponíveis ficam no topo.</p>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
-          <input name="includeWorked" checked={filters.includeWorked} onChange={(event) => onFiltersChange({ ...filters, includeWorked: event.target.checked })} type="checkbox" />
+          <input name="includeWorked" checked={filters.includeWorked} onChange={(event) => onFiltersChange({ ...filters, includeWorked: event.target.checked })} type="checkbox" className="shrink-0 accent-[var(--atelier-green)]" />
           Mostrar empresas já trabalhadas
         </label>
       </div>
-      {error ? <p role="alert" className="text-sm text-red-200 md:col-span-5">{error}</p> : null}
+      {error ? <p role="alert" className="rounded-lg border border-red-300/25 bg-[#281a1e] p-3 text-sm leading-6 text-red-200 md:col-span-2 xl:col-span-5">{error}</p> : null}
     </form>
   );
 }

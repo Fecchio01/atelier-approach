@@ -141,7 +141,7 @@ export function GoalImporter({ onApply, disabled = false, onActivityChange }: {
 
   const interactionDisabled = disabled || busy || applying;
 
-  return <section aria-labelledby="goal-import-heading" aria-busy={interactionDisabled} className="rounded-2xl border border-[var(--atelier-green)]/20 bg-[linear-gradient(118deg,rgba(27,37,32,0.64),rgba(17,22,27,0.92))] p-4 sm:p-5">
+  return <section aria-labelledby="goal-import-heading" aria-busy={interactionDisabled} className="min-w-0 rounded-2xl border border-[var(--atelier-green)]/20 bg-[linear-gradient(118deg,#1b2520,#11161b)] p-4 sm:p-5 [&_button]:transition-[transform,opacity] [&_button]:duration-[var(--atelier-motion-duration)] [&_button]:ease-[var(--atelier-motion-easing)]">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="flex min-w-0 items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.09] text-[var(--atelier-green)]"><FilePdfIcon size={19} aria-hidden="true" /></span>
@@ -150,7 +150,7 @@ export function GoalImporter({ onApply, disabled = false, onActivityChange }: {
           <p className="mt-1 max-w-2xl text-xs leading-5 text-white/50">O arquivo é lido no seu navegador e não é enviado. As metas reconhecidas são aplicadas e salvas automaticamente; depois você pode ajustá-las nos indicadores.</p>
         </div>
       </div>
-      <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--atelier-green)]/40 px-3.5 py-2 text-xs font-semibold text-[var(--atelier-green)] transition hover:bg-[var(--atelier-green)]/[0.08] has-[:disabled]:cursor-wait has-[:disabled]:opacity-55">
+      <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--atelier-green)]/40 px-3.5 py-2 text-xs font-semibold text-[var(--atelier-green)] transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[var(--atelier-green)]/[0.08] active:scale-[0.98] has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-3 has-[:focus-visible]:outline-[var(--atelier-green)] has-[:disabled]:cursor-wait has-[:disabled]:opacity-55">
         <ArrowDownIcon size={15} aria-hidden="true" />
         {busy ? 'Importando e salvando…' : fileName ? 'Escolher outro PDF' : 'Selecionar PDF'}
         <input aria-label="Importar metas de PDF" type="file" accept="application/pdf,.pdf" disabled={interactionDisabled} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void handleFile(file); }} className="sr-only" />
@@ -162,12 +162,12 @@ export function GoalImporter({ onApply, disabled = false, onActivityChange }: {
     </div> : <>
     {fileName && <p className="mt-3 truncate text-xs text-white/45">Arquivo local: <span className="text-white/65">{fileName}</span></p>}
     {busy && <p role="status" className="mt-4 text-sm text-white/65">Lendo o PDF e salvando as metas reconhecidas neste ciclo…</p>}
-    {error && <p role="alert" className="mt-4 text-sm text-red-300">{error}</p>}
+    {error && <p role="alert" className="mt-4 rounded-lg border border-red-300/25 bg-[#281a1e] p-3 text-sm leading-6 text-red-300">{error}</p>}
 
     {rows.length > 0 && reviewOpen && <fieldset disabled={interactionDisabled} className="mt-4 min-w-0 space-y-3 disabled:opacity-60">
       <p className="text-xs font-medium text-white/65">O salvamento automático falhou. Corrija nome, alvo, progresso, destino ou grupo e tente novamente.</p>
       <div className="grid gap-3 lg:grid-cols-2">
-        {rows.map((row, index) => <article key={row.id} className="grid min-w-0 gap-3 rounded-xl border border-white/[0.08] bg-black/15 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(128px,0.75fr)]">
+        {rows.map((row, index) => <article key={row.id} className="grid min-w-0 gap-3 rounded-xl border border-white/[0.08] bg-[#11161b] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(128px,0.75fr)]">
           <div className="grid min-w-0 gap-2">
             <label className="grid gap-1 text-[10px] text-white/45">Nome sugerido
               <input aria-label={`Nome sugerido ${index + 1}`} maxLength={80} value={row.name} onChange={(event) => updateRowText(row, { name: event.target.value })} className="h-9 min-w-0 rounded-md border border-white/[0.09] bg-[#171e22] px-2.5 text-sm text-white outline-none focus:border-[var(--atelier-green)]/50" />

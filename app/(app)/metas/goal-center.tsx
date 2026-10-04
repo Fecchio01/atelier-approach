@@ -55,7 +55,7 @@ export function GoalCenter({
           aria-selected={selectedKind === kind}
           aria-controls={`goal-panel-${kind.toLowerCase()}`}
           onClick={() => setSelectedKind(kind)}
-          className={`min-h-10 min-w-24 rounded-lg px-4 text-sm font-medium ${selectedKind === kind ? 'bg-[var(--atelier-green)] text-[#101507]' : 'text-white/55 hover:text-white'}`}
+          className={`min-h-10 min-w-24 rounded-lg px-4 text-sm font-medium transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] active:scale-[0.98] ${selectedKind === kind ? 'bg-[var(--atelier-green)] text-[#101507]' : 'text-white/55 hover:bg-white/[0.05] hover:text-white'}`}
         >{label}</button>)}
       </div>
     </div>

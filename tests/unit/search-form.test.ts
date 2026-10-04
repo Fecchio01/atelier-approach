@@ -35,7 +35,10 @@ test('keeps automotive aesthetics fixed and does not expose narrowing filters', 
 test('keeps the country field from overlapping the fixed niche field', () => {
   const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
 
-  expect(formSource).toContain('md:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto]');
+  expect(formSource).toContain('md:grid-cols-2');
+  expect(formSource).toContain('xl:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto]');
+  expect(formSource).toContain('md:col-span-2 xl:col-span-5');
+  expect(formSource).not.toContain('md:col-span-5');
   expect(formSource).toContain('grid min-w-0 gap-2 text-sm font-medium');
 });
 

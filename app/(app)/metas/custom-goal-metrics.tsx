@@ -87,7 +87,7 @@ export function CustomGoalMetricRow({
     onChange(changes);
   }
 
-  return <div className="py-4 first:pt-4 last:pb-1" onBlur={(event) => {
+  return <div className="py-4 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] first:pt-4 last:pb-1" onBlur={(event) => {
     const nextFocus = event.relatedTarget;
     if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) {
       const inferredGroup = shouldInferGroupOnCommit.current ? inferCustomGoalGroup(goal.name, goal.unit) : undefined;
@@ -114,10 +114,10 @@ export function CustomGoalMetricRow({
           <span className="block text-[10px] font-medium leading-4 text-white/45">Meta</span>
           <span className="block truncate text-sm font-semibold leading-5 text-white/85">{formatValue(goal.target, goal.unit)}</span>
         </div>
-        <button type="button" aria-label={`Remover ${goalLabel}`} disabled={disabled} onClick={onRemove} className="flex size-8 shrink-0 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-red-400/10 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-300 active:scale-[0.98] disabled:cursor-wait disabled:opacity-50">
+        <button type="button" aria-label={`Remover ${goalLabel}`} disabled={disabled} onClick={onRemove} className="flex size-8 shrink-0 items-center justify-center rounded-md text-white/40 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-red-400/10 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-300 active:scale-[0.98] disabled:cursor-wait disabled:opacity-50">
           <TrashIcon size={15} aria-hidden="true" />
         </button>
-        <button type="button" aria-label={`${isEditing ? 'Fechar edição de' : 'Editar'} ${goalLabel}`} aria-expanded={isEditing} aria-controls={`custom-goal-edit-${goal.id}`} disabled={disabled} onClick={onToggle} className="flex size-8 shrink-0 items-center justify-center rounded-md text-white/55 transition-colors hover:bg-white/[0.07] hover:text-[var(--atelier-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-50">
+        <button type="button" aria-label={`${isEditing ? 'Fechar edição de' : 'Editar'} ${goalLabel}`} aria-expanded={isEditing} aria-controls={`custom-goal-edit-${goal.id}`} disabled={disabled} onClick={onToggle} className="flex size-8 shrink-0 items-center justify-center rounded-md text-white/55 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-white/[0.07] hover:text-[var(--atelier-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-50">
           {isEditing ? <XIcon size={16} aria-hidden="true" /> : <PencilSimpleIcon size={16} aria-hidden="true" />}
         </button>
       </div>
@@ -125,7 +125,7 @@ export function CustomGoalMetricRow({
 
     <div className="mt-3 flex items-center gap-2.5">
       <div role="progressbar" aria-label={`Progresso de ${goalLabel}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressWidth} aria-valuetext={`${percent}% da meta`} className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.12]">
-        <span className="block h-full rounded-full bg-gradient-to-r from-[#81e986] to-[var(--atelier-green)] transition-[width] duration-300" style={{ width: `${progressWidth}%` }} />
+        <span className="block h-full origin-left rounded-full bg-gradient-to-r from-[#81e986] to-[var(--atelier-green)] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)]" style={{ transform: `scaleX(${progressWidth / 100})` }} />
       </div>
       <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-white/45">{percent}%</span>
     </div>

@@ -59,6 +59,10 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await weeklyCustom.getByRole('button', { name: 'Fechar edição de Conversas da equipe' }).click();
     await expect(weeklyCustom.getByLabel(/^Nome do indicador /)).toHaveCount(0);
     await expect(weeklyCustom.getByRole('progressbar', { name: 'Progresso de Conversas da equipe' })).toHaveAttribute('aria-valuetext', '50% da meta');
+    const customGoalCard = weeklyCustom.getByRole('progressbar', { name: 'Progresso de Conversas da equipe' }).locator('xpath=../..');
+    const cardTransition = await customGoalCard.evaluate((card) => getComputedStyle(card).transitionProperty);
+    expect(cardTransition).toContain('transform');
+    expect(cardTransition).toContain('opacity');
 
     // Moving a focused editor between theme sections unmounts its row. The latest
     // values must be persisted by the move itself, without relying on blur.

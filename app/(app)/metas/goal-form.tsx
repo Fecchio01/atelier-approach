@@ -251,10 +251,10 @@ export function GoalForm({
 
   const customGoalsByGroup = groupCustomGoals(customGoals);
 
-  return <form action={formAction} className="space-y-6">
+  return <form action={formAction} className="space-y-6 [&_button]:transition-[transform,opacity] [&_button]:duration-[var(--atelier-motion-duration)] [&_button]:ease-[var(--atelier-motion-easing)]">
     <input type="hidden" name="customGoals" value={JSON.stringify(customGoals)} />
     <GoalImporter key={importerRevision} disabled={importPending || customGoalSavePending || pending} onActivityChange={setImporterBusy} onApply={applyImportedSuggestions} />
-    <section aria-label={kind === 'WEEKLY' ? 'Ciclo semanal atual' : 'Ciclo mensal atual'} className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(118deg,rgba(25,34,36,0.96),rgba(17,22,27,0.96))] p-4 sm:p-7">
+    <section aria-label={kind === 'WEEKLY' ? 'Ciclo semanal atual' : 'Ciclo mensal atual'} className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(118deg,#192224,#11161b)] p-4 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex items-start gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.055] text-[var(--atelier-green)]"><CalendarBlankIcon size={22} weight="regular" /></span>
@@ -286,7 +286,7 @@ export function GoalForm({
 
         {kind === 'MONTHLY' ? <label className="grid min-w-48 gap-2 text-xs font-medium text-white/65">
           Dia de início do ciclo mensal
-          <span className="flex items-center gap-2 rounded-xl border border-white/[0.09] bg-black/20 px-3 py-2.5 focus-within:border-[var(--atelier-green)]/55">
+          <span className="flex items-center gap-2 rounded-xl border border-white/[0.09] bg-[#171e22] px-3 py-2.5 focus-within:border-[var(--atelier-green)]/55">
             <CalendarBlankIcon size={17} className="shrink-0 text-white/40" />
             <input aria-label="Dia de início do ciclo mensal" name="monthlyStartDay" type="number" inputMode="numeric" min="1" max="31" step="1" required value={monthlyStartDayDraft} onChange={(event) => setMonthlyStartDayDraft(event.target.value)} className="w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-white/30" />
             <span className="shrink-0 text-xs text-white/45">de cada mês</span>
@@ -332,7 +332,7 @@ export function GoalForm({
       </div>
 
     <div className="grid gap-4 xl:grid-cols-3">
-      {metricGroups.map(({ key, title, description, Icon, fields }) => <section key={key} aria-labelledby={`${key}-heading`} className="rounded-2xl border border-white/[0.08] bg-[#11171b]/85 p-4 sm:p-5">
+      {metricGroups.map(({ key, title, description, Icon, fields }) => <section key={key} aria-labelledby={`${key}-heading`} className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#11171b] p-4 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] sm:p-5">
         <div className="flex items-start gap-3 border-b border-white/[0.07] pb-4">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><Icon size={20} weight="regular" /></span>
           <div><h3 id={`${key}-heading`} className="font-semibold text-white/90">{title}</h3><p className="mt-1 text-xs leading-5 text-white/45">{description}</p></div>
@@ -383,7 +383,7 @@ export function GoalForm({
                     aria-label={`${isEditing ? 'Fechar edição da' : 'Editar'} meta para ${field.label.toLowerCase()}`}
                     aria-pressed={isEditing}
                     onClick={() => setEditingField(isEditing ? null : field.key)}
-                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-white/55 transition-colors hover:bg-white/[0.07] hover:text-[var(--atelier-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] active:scale-[0.96]"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-white/55 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-white/[0.07] hover:text-[var(--atelier-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] active:scale-[0.96]"
                   >
                     {isEditing ? <XIcon size={16} weight="bold" aria-hidden="true" /> : <PencilSimpleIcon size={16} weight="regular" aria-hidden="true" />}
                   </button>
@@ -400,7 +400,7 @@ export function GoalForm({
                   aria-valuetext={progressPercent === null ? 'Defina uma meta para calcular o progresso' : `${progressPercent}% da meta`}
                   className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.12]"
                 >
-                  <span className="block h-full rounded-full bg-gradient-to-r from-[#81e986] to-[var(--atelier-green)] transition-[width] duration-300" style={{ width: `${progressWidth}%` }} />
+                  <span className="block h-full origin-left rounded-full bg-gradient-to-r from-[#81e986] to-[var(--atelier-green)] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)]" style={{ transform: `scaleX(${progressWidth / 100})` }} />
                 </div>
                 <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-white/45">{progressPercent === null ? '—' : `${progressPercent}%`}</span>
               </div>
@@ -423,7 +423,7 @@ export function GoalForm({
       {customGoalGroupKeys.filter((key): key is Exclude<CustomGoalGroup, 'prospecting' | 'progress' | 'revenue'> => !primaryGroupKeys.has(key) && customGoalsByGroup[key].length > 0).map((groupKey) => {
         const { label, description } = customGoalGroups[groupKey];
         const GroupIcon = metricGroupIcons[groupKey];
-        return <section key={groupKey} aria-labelledby={`${groupKey}-heading`} className="rounded-2xl border border-white/[0.08] bg-[#11171b]/85 p-4 sm:p-5">
+        return <section key={groupKey} aria-labelledby={`${groupKey}-heading`} className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#11171b] p-4 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] sm:p-5">
           <div className="flex items-start gap-3 border-b border-white/[0.07] pb-4">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><GroupIcon size={20} weight="regular" /></span>
             <div><h3 id={`${groupKey}-heading`} className="font-semibold text-white/90">{label}</h3><p className="mt-1 text-xs leading-5 text-white/45">{description}</p></div>
