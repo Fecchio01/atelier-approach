@@ -20,7 +20,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
   const initials = user.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'AA';
 
   return <main className="min-h-[100dvh] text-white md:grid md:grid-cols-[176px_minmax(0,1fr)] xl:grid-cols-[196px_minmax(0,1fr)]">
-    <aside className="hidden min-h-[100dvh] flex-col border-r border-white/[0.07] bg-[#090d10]/95 px-3 py-6 md:sticky md:top-0 md:flex md:h-[100dvh] md:overflow-y-auto xl:px-4">
+    <aside className="hidden min-h-[100dvh] flex-col border-r border-[var(--atelier-line)] bg-[#090d10] px-3 py-6 md:sticky md:top-0 md:flex md:h-[100dvh] md:overflow-y-auto xl:px-4">
       <Link href="/" prefetch={false} onClick={rememberSearchPosition} className="flex items-center gap-2.5 px-2">
         <AtelierMark />
         <span className="min-w-0">
@@ -31,7 +31,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
         {routes.map((route) => {
           const active = route.href === '/' ? pathname === '/' : pathname.startsWith(route.href);
           const Icon = route.Icon;
-          return <Link key={route.href} href={route.href} prefetch={false} scroll={route.href === '/pesquisa' ? false : undefined} onClick={rememberSearchPosition} aria-current={active ? 'page' : undefined} className={`flex min-h-11 items-center gap-3 rounded-r-lg border-l-2 px-3 text-sm transition-colors duration-200 ${active ? 'border-[var(--atelier-green)] bg-[var(--atelier-green)]/[0.08] font-semibold text-[var(--atelier-green)]' : 'border-transparent text-white/55 hover:bg-white/[0.045] hover:text-white'}`}>
+          return <Link key={route.href} href={route.href} prefetch={false} scroll={route.href === '/pesquisa' ? false : undefined} onClick={rememberSearchPosition} aria-current={active ? 'page' : undefined} className={`flex min-h-11 items-center gap-3 rounded-r-lg border-l-2 px-3 text-sm ${active ? 'border-[var(--atelier-green)] bg-[var(--atelier-green)]/[0.08] font-semibold text-[var(--atelier-green)]' : 'border-transparent text-white/55 hover:bg-white/[0.045] hover:text-white'}`}>
             <Icon size={19} weight="regular" aria-hidden="true" />
             <span>{route.label}</span>
           </Link>;

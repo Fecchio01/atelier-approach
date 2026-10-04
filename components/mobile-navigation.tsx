@@ -65,7 +65,7 @@ export function MobileNavigation({
   }
 
   return <>
-    <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#090d10]/90 backdrop-blur-xl md:hidden">
+    <header data-atelier-floating className="sticky top-0 z-30 border-b border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] backdrop-blur-md md:hidden">
       <div className="flex min-h-16 items-center justify-between gap-2 px-4 py-2">
         <Link href="/" prefetch={false} onClick={onNavigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
           {brandMark}
@@ -98,10 +98,11 @@ export function MobileNavigation({
       onClick={(event) => {
         if (!(event.target instanceof Element) || !event.target.closest('[data-mobile-navigation-panel]')) closeDrawer();
       }}
-      className="fixed inset-0 m-0 h-[100dvh] max-h-none w-full max-w-none bg-transparent p-0 text-white backdrop:bg-[#030506]/75 backdrop:backdrop-blur-[3px] open:block"
+      style={{ backgroundColor: 'transparent' }}
+      className="fixed inset-0 m-0 h-[100dvh] max-h-none w-full max-w-none border-0 p-0 text-white open:block"
     >
       <div className="flex h-full min-h-0">
-        <aside data-mobile-navigation-panel className="flex h-full w-[min(20rem,calc(100vw-3.5rem))] min-w-0 flex-col border-r border-white/[0.09] bg-[#0c1114] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[12px_0_40px_rgba(0,0,0,0.24)]">
+        <aside data-mobile-navigation-panel data-atelier-floating className="flex h-full w-[min(20rem,calc(100vw-3.5rem))] min-w-0 flex-col border-r border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[12px_0_40px_rgba(0,0,0,0.24)]">
           <div className="flex min-h-12 items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
             <Link href="/" prefetch={false} onClick={navigate} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
               {brandMark}
@@ -123,7 +124,7 @@ export function MobileNavigation({
                 scroll={route.href === '/pesquisa' ? false : undefined}
                 onClick={navigate}
                 aria-current={active ? 'page' : undefined}
-                className={`flex min-h-11 items-center gap-3 rounded-lg border-l-2 px-3 text-sm transition-colors ${active ? 'border-[var(--atelier-green)] bg-[var(--atelier-green)]/[0.08] font-semibold text-[var(--atelier-green)]' : 'border-transparent text-white/65 hover:bg-white/[0.045] hover:text-white'}`}
+                className={`flex min-h-11 items-center gap-3 rounded-lg border-l-2 px-3 text-sm ${active ? 'border-[var(--atelier-green)] bg-[var(--atelier-green)]/[0.08] font-semibold text-[var(--atelier-green)]' : 'border-transparent text-white/65 hover:bg-white/[0.045] hover:text-white'}`}
               >
                 <Icon size={19} weight="regular" aria-hidden="true" />
                 <span>{route.label}</span>
@@ -147,5 +148,27 @@ export function MobileNavigation({
         <div className="min-w-0 flex-1" aria-hidden="true" />
       </div>
     </dialog>
+    <style>{`
+      #mobile-navigation-dialog::backdrop { background: rgba(3, 5, 6, 0.75); }
+      #mobile-navigation-dialog [data-mobile-navigation-panel] {
+        transform: translateX(-12px);
+        opacity: 0;
+        transition: transform var(--atelier-motion-duration) var(--atelier-motion-easing),
+          opacity var(--atelier-motion-duration) var(--atelier-motion-easing);
+      }
+      #mobile-navigation-dialog[open] [data-mobile-navigation-panel] {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      @starting-style {
+        #mobile-navigation-dialog[open] [data-mobile-navigation-panel] {
+          transform: translateX(-12px);
+          opacity: 0;
+        }
+      }
+      @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        #mobile-navigation-dialog::backdrop { background: #030506; }
+      }
+    `}</style>
   </>;
 }

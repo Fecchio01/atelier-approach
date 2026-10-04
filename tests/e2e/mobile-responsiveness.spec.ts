@@ -23,6 +23,9 @@ test('opens and closes the mobile navigation drawer accessibly', async ({ page }
   await menuButton.click();
   const drawer = page.getByRole('dialog', { name: 'Navegação principal no menu mobile' });
   await expect(drawer).toBeVisible();
+  const panel = drawer.locator('[data-mobile-navigation-panel]');
+  await expect.poll(() => panel.evaluate((element) => getComputedStyle(element).transitionProperty)).toContain('transform');
+  await expect.poll(() => panel.evaluate((element) => getComputedStyle(element).transitionProperty)).toContain('opacity');
 
   for (const label of ['Painel', 'Funil', 'Empresas', 'Metas', 'Relatórios']) {
     await expect(drawer.getByRole('link', { name: label, exact: true })).toBeVisible();
@@ -43,6 +46,20 @@ test('opens and closes the mobile navigation drawer accessibly', async ({ page }
   await expect(page).toHaveURL(/\/metas$/);
   await expect(drawer).toBeHidden();
   await expectNoViewportOverflow(page);
+});
+
+test('mobile navigation remains operable with reduced motion', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await signIn(page);
+  const menuButton = page.getByRole('button', { name: 'Abrir menu' });
+  await menuButton.click();
+  const drawer = page.getByRole('dialog', { name: 'Navegação principal no menu mobile' });
+  await expect(drawer).toBeVisible();
+  await expect.poll(() => drawer.locator('[data-mobile-navigation-panel]').evaluate((element) => getComputedStyle(element).transitionDuration)).toMatch(/^0s(?:, 0s)*$/);
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+  await expect(menuButton).toBeFocused();
 });
 
 test('keeps dashboard, search, and profile usable without page overflow on phones', async ({ page }) => {
