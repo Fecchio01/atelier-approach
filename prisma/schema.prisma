@@ -53,6 +53,11 @@ enum GoalPeriodKind {
   MONTHLY
 }
 
+enum ServiceBillingType {
+  ONE_TIME
+  MONTHLY
+}
+
 model Lead {
   id           String         @id @default(cuid())
   osmId        String         @unique
@@ -104,16 +109,53 @@ model StageHistory {
 }
 
 model SaleEvent {
-  id         String   @id @default(cuid())
-  leadId     String
-  actorId    String
-  saleValue  Decimal
-  mrr        Decimal
-  occurredAt DateTime @default(now())
-  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  id           String         @id @default(cuid())
+  leadId       String
+  actorId      String
+  saleValue    Decimal
+  mrr          Decimal
+  occurredAt   DateTime       @default(now())
+  reversedAt   DateTime?
+  reversedById String?
+  lineItems    SaleLineItem[]
+  lead         Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId, occurredAt])
   @@index([occurredAt])
+  @@index([reversedAt, occurredAt])
+}
+
+model ServiceCatalogItem {
+  id          String             @id @default(cuid())
+  name        String
+  price       Decimal            @db.Decimal(12, 2)
+  billingType ServiceBillingType
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  saleItems   SaleLineItem[]
+
+  @@index([isActive, name])
+}
+
+model SaleLineItem {
+  id          String              @id @default(cuid())
+  saleEventId String
+  serviceId   String?
+  serviceName String
+  price       Decimal             @db.Decimal(12, 2)
+  billingType ServiceBillingType
+  saleEvent   SaleEvent           @relation(fields: [saleEventId], references: [id], onDelete: Cascade)
+  service     ServiceCatalogItem? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([saleEventId])
+  @@index([serviceId])
+}
+
+model CrmSettings {
+  id                String   @id @default("team")
+  followUpDelayDays Int      @default(2)
+  updatedAt         DateTime @updatedAt
 }
 
 model FollowUp {
