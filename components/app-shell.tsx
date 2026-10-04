@@ -16,7 +16,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
   return <main className="min-h-[100dvh] text-white md:grid md:grid-cols-[176px_minmax(0,1fr)] xl:grid-cols-[196px_minmax(0,1fr)]">
     <aside className="hidden min-h-[100dvh] flex-col border-r border-[var(--atelier-line)] bg-[#090d10] px-3 py-6 md:sticky md:top-0 md:flex md:h-[100dvh] md:overflow-y-auto xl:px-4">
       <Link href="/" prefetch={false} onClick={rememberSearchPosition} aria-label="Arvello — painel" className="flex min-h-[62px] items-center px-1">
-        <BrandLogo className="w-[150px]" priority />
+        <BrandLogo className="w-[136px] xl:w-[150px]" priority />
       </Link>
       <nav aria-label="Navegação principal" className="mt-8 grid gap-1">
         {routes.map((route) => {

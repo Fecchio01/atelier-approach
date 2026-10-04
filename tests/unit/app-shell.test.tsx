@@ -28,6 +28,8 @@ describe('AppShell brand navigation', () => {
 
     expect(markup).toContain('alt="Arvello"');
     expect(markup.match(/Sua operação comercial/g)).toHaveLength(3);
+    expect(markup).toContain('xl:w-[150px]');
+    expect(markup).toContain('w-full');
     expect(markup).not.toContain('Mais oficinas. Mais negócios.');
     const primaryNavigation = markup.match(/<nav aria-label="Navegação principal" class="[^"]*">([\s\S]*?)<\/nav>/);
     expect(primaryNavigation?.[1]?.match(/<svg\b/g)).toHaveLength(5);
