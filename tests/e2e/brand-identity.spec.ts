@@ -8,6 +8,11 @@ test('login shows the official Arvello identity and accent color on desktop and 
   await expect(page.locator('img[alt="Arvello"]:visible')).toHaveCount(1);
   await expect(page.locator('img[alt="Arvello"]:visible')).toHaveAttribute('src', '/brand/arvello.svg');
   await expect(page.locator('link[rel="icon"]').first()).toHaveAttribute('href', '/brand/arvello-mark.svg');
+  const wordmark = await page.request.get('/brand/arvello.svg');
+  const favicon = await page.request.get('/brand/arvello-mark.svg');
+  expect(wordmark.status()).toBe(200);
+  expect(await wordmark.text()).toContain('ARVELLO');
+  expect(favicon.status()).toBe(200);
 
   const submit = page.getByRole('button', { name: 'Entrar' });
   await expect(submit).toHaveCSS('background-color', 'rgb(167, 216, 26)');
