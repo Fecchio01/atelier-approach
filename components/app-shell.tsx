@@ -42,7 +42,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
         user={user}
         onSignOut={onSignOut}
         onNavigate={rememberSearchPosition}
-        brandLogo={<BrandLogo className="w-[126px]" priority />}
+        brandLogo={<BrandLogo className="w-[150px]" priority />}
       />
       <ReportPeriodNavigationProvider>{children}</ReportPeriodNavigationProvider>
     </div>

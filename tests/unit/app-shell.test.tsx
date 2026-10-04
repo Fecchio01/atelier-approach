@@ -16,7 +16,7 @@ import { AppShell } from '../../components/app-shell';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('AppShell brand navigation', () => {
-  test('renders the Atelier mark and a distinct icon for every primary destination', () => {
+  test('renders the Arvello logo lockup and a distinct icon for every primary destination', () => {
     vi.stubGlobal('React', React);
     const markup = renderToStaticMarkup(
       React.createElement(AppShell, {
@@ -26,7 +26,8 @@ describe('AppShell brand navigation', () => {
       })
     );
 
-    expect(markup).toContain('role="img" aria-label="Marca Atelier Approach"');
+    expect(markup).toContain('alt="Arvello"');
+    expect(markup.match(/Sua operação comercial/g)).toHaveLength(3);
     expect(markup).not.toContain('Mais oficinas. Mais negócios.');
     const primaryNavigation = markup.match(/<nav aria-label="Navegação principal" class="[^"]*">([\s\S]*?)<\/nav>/);
     expect(primaryNavigation?.[1]?.match(/<svg\b/g)).toHaveLength(5);

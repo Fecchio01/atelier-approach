@@ -33,8 +33,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <section className="relative isolate hidden overflow-hidden border-r border-white/10 px-[clamp(3rem,6vw,7rem)] pb-12 pt-12 lg:flex lg:flex-col">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-80" style={{ background: 'radial-gradient(circle at 12% 12%, rgba(167,216,26,.16), transparent 30%), linear-gradient(120deg, transparent 65%, rgba(167,216,26,.045) 65.1%, transparent 65.3%), repeating-linear-gradient(0deg, transparent 0, transparent 54px, rgba(255,255,255,.035) 55px)' }} />
       <div className="flex flex-col items-start gap-2">
-        <BrandLogo className="w-[172px]" priority />
-        <span className="pl-1 text-[10px] font-medium uppercase tracking-[0.24em] text-white/40">Sua operação comercial</span>
+        <BrandLogo className="w-[150px]" priority />
       </div>
 
       <div className="mt-16 max-w-xl lg:my-auto lg:py-14">
@@ -51,7 +50,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <section className="relative flex min-h-dvh items-start justify-center overflow-hidden px-5 py-8 sm:items-center sm:px-10 sm:py-12 lg:min-h-0 lg:px-[clamp(2.5rem,6vw,7rem)]" aria-labelledby="login-title">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_0%,rgba(167,216,26,.1),transparent_45%)] lg:hidden" />
       <div className="relative w-full max-w-[440px]">
-        <div className="mb-6 flex items-center lg:hidden"><BrandLogo className="w-[154px]" priority /></div>
+        <div className="mb-6 flex items-center lg:hidden"><BrandLogo className="w-[150px]" priority /></div>
 
         <div className="mb-6 lg:hidden">
           <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--atelier-green)]">Pesquisa · CRM · Resultados</p>

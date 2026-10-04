@@ -7,6 +7,9 @@ test('login shows the official Arvello identity and accent color on desktop and 
   await expect(page).toHaveTitle('Arvello');
   await expect(page.locator('img[alt="Arvello"]:visible')).toHaveCount(1);
   await expect(page.locator('img[alt="Arvello"]:visible')).toHaveAttribute('src', '/brand/arvello.svg');
+  await expect(page.getByText('Sua operação comercial', { exact: true })).toBeVisible();
+  await expect(page.locator('img[alt="Arvello"]:visible')).toHaveJSProperty('naturalWidth', 1225);
+  await expect(page.locator('img[alt="Arvello"]:visible')).toHaveJSProperty('naturalHeight', 310);
   await expect(page.locator('link[rel="icon"]').first()).toHaveAttribute('href', '/brand/arvello-mark.svg');
   const wordmark = await page.request.get('/brand/arvello.svg');
   const favicon = await page.request.get('/brand/arvello-mark.svg');
@@ -23,6 +26,7 @@ test('login shows the official Arvello identity and accent color on desktop and 
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('img[alt="Arvello"]:visible')).toHaveCount(1);
+  await expect(page.getByText('Sua operação comercial', { exact: true })).toBeVisible();
 });
 
 test('keeps useful but restrained feedback for reduced-motion preference', async ({ page }) => {
