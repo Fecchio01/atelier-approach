@@ -164,6 +164,35 @@ describe('commercial reports', () => {
     ]));
   });
 
+  test('keeps legacy wins without sale-event history beside active service sales and ignores reversed history', async () => {
+    const activeLead = await prisma.lead.create({ data: {
+      osmId: 'report-mixed-active', stage: 'WON', saleValue: 400, mrr: 40,
+      wonAt: new Date('2026-09-10T10:00:00.000Z'), wonById: 'ana'
+    } });
+    const legacyLead = await prisma.lead.create({ data: {
+      osmId: 'report-mixed-legacy', stage: 'WON', saleValue: 250, mrr: 25,
+      wonAt: new Date('2026-09-11T10:00:00.000Z'), wonById: 'bia'
+    } });
+    const reversedLead = await prisma.lead.create({ data: {
+      osmId: 'report-mixed-reversed', stage: 'WON', saleValue: 900, mrr: 90,
+      wonAt: new Date('2026-09-12T10:00:00.000Z'), wonById: 'ana'
+    } });
+    await prisma.saleEvent.createMany({ data: [
+      { leadId: activeLead.id, actorId: 'ana', saleValue: 400, mrr: 40, occurredAt: new Date('2026-09-10T10:00:00.000Z') },
+      { leadId: reversedLead.id, actorId: 'ana', saleValue: 900, mrr: 90, occurredAt: new Date('2026-09-12T10:00:00.000Z'), reversedAt: new Date('2026-09-12T11:00:00.000Z'), reversedById: 'bia' }
+    ] });
+
+    const report = await buildReport({ from: new Date('2026-09-07T03:00:00.000Z'), to: new Date('2026-09-14T03:00:00.000Z') });
+
+    expect(report.goalActuals).toMatchObject({ sales: 2, revenue: 650, mrr: 65 });
+    expect(report.revenue).toEqual({ sales: 650, mrr: 65 });
+    expect(report.members).toEqual(expect.arrayContaining([
+      expect.objectContaining({ memberId: 'ana', wins: 1, sales: 400, mrr: 40 }),
+      expect.objectContaining({ memberId: 'bia', wins: 1, sales: 250, mrr: 25 })
+    ]));
+    expect(report.members).not.toContainEqual(expect.objectContaining({ memberId: 'ana', sales: 1300 }));
+  });
+
   test('recommends reducing overdue follow-ups from the measured report, without a predictive claim', () => {
     const report = {
       conversion: { approaches: 3, wins: 1, rate: 0.33 },

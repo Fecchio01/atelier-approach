@@ -102,8 +102,12 @@ export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: D
       })
     ]);
 
-    const eventLeadIds = new Set(saleEvents.map((sale) => sale.leadId));
-    const legacyWins = leads.filter((lead) => lead.wonAt && !eventLeadIds.has(lead.id)).map((lead) => ({
+    const legacyCandidates = leads.filter((lead) => lead.wonAt);
+    const historicalEventLeadIds = legacyCandidates.length ? new Set((await tx.saleEvent.findMany({
+      where: { leadId: { in: legacyCandidates.map((lead) => lead.id) } },
+      select: { leadId: true }
+    })).map((sale) => sale.leadId)) : new Set<string>();
+    const legacyWins = legacyCandidates.filter((lead) => !historicalEventLeadIds.has(lead.id)).map((lead) => ({
       leadId: lead.id,
       actorId: lead.wonById ?? 'unknown',
       saleValue: lead.saleValue ?? 0,
@@ -209,7 +213,13 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
   const approaches = activities.filter((activity) => activity.type === 'CONTACT' || !activity.type);
   const interests = stageHistory.filter((event) => isInterestStage(event.toStage)).length;
   const meetings = stageHistory.filter((event) => isMeetingStage(event.toStage)).length;
-  const effectiveWins = wins.length ? wins : leads.filter((lead) => lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range)).map((lead) => ({ actorId: lead.wonById ?? 'unknown', leadId: lead.id, saleValue: lead.saleValue ?? 0, mrr: lead.mrr ?? 0, occurredAt: lead.wonAt! }));
+  const legacyCandidates = leads.filter((lead) => lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range));
+  const historicalEventLeadIds = legacyCandidates.length ? new Set((await prisma.saleEvent.findMany({
+    where: { leadId: { in: legacyCandidates.map((lead) => lead.id) } },
+    select: { leadId: true }
+  })).map((sale) => sale.leadId)) : new Set<string>();
+  const legacyWins = legacyCandidates.filter((lead) => !historicalEventLeadIds.has(lead.id)).map((lead) => ({ actorId: lead.wonById ?? 'unknown', leadId: lead.id, saleValue: lead.saleValue ?? 0, mrr: lead.mrr ?? 0, occurredAt: lead.wonAt! }));
+  const effectiveWins = [...wins, ...legacyWins];
   const winLeadIds = [...new Set(effectiveWins.map((sale) => sale.leadId))];
   const latestWinAt = effectiveWins.reduce<Date | null>((latest, sale) => !latest || sale.occurredAt > latest ? sale.occurredAt : latest, null);
   const contacts = winLeadIds.length && latestWinAt ? await prisma.activity.findMany({
