@@ -60,6 +60,47 @@ test('weekly and monthly goal tabs keep separate drafts and save their team targ
     await expect(weeklyCustom.getByLabel(/^Nome do indicador /)).toHaveCount(0);
     await expect(weeklyCustom.getByRole('progressbar', { name: 'Progresso de Conversas da equipe' })).toHaveAttribute('aria-valuetext', '50% da meta');
 
+    // Moving a focused editor between theme sections unmounts its row. The latest
+    // values must be persisted by the move itself, without relying on blur.
+    await weeklyCustom.getByRole('button', { name: 'Adicionar indicador' }).click();
+    const transientMetricName = weeklyCustom.getByLabel(/^Nome do indicador /).last();
+    await transientMetricName.fill('Indicador especial');
+    await weeklyCustom.getByLabel(/^Meta do indicador /).last().fill('12');
+    await weeklyCustom.getByLabel(/^Progresso do indicador /).last().fill('4');
+    await weeklyCustom.getByLabel(/^Tema do indicador /).last().selectOption('revenue');
+    await expect(weeklyCustom.getByLabel(/^Nome do indicador /)).toHaveCount(1);
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Funil' }).click();
+    await expect(page).toHaveURL(/\/crm$/);
+    const weeklyAfterThemeMove = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });
+    expect(weeklyAfterThemeMove?.customGoals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Indicador especial', group: 'revenue', target: 12, current: 4 })
+    ]));
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
+    await expect(page).toHaveURL(/\/metas$/);
+    await page.reload();
+    const restoredAfterThemeMove = page.getByRole('tabpanel', { name: 'Semanal' });
+    await expect(restoredAfterThemeMove.getByLabel('Indicador especial: 4 de 12')).toBeVisible();
+    await expect(restoredAfterThemeMove.getByLabel(/^Nome do indicador /)).toHaveCount(0);
+
+    // Renaming can also auto-infer a new group and unmount the focused editor.
+    await restoredAfterThemeMove.getByRole('button', { name: 'Adicionar indicador' }).click();
+    const inferredMetricName = restoredAfterThemeMove.getByLabel(/^Nome do indicador /).last();
+    await inferredMetricName.fill('Indicador livre');
+    await restoredAfterThemeMove.getByLabel(/^Meta do indicador /).last().fill('9');
+    await restoredAfterThemeMove.getByLabel(/^Progresso do indicador /).last().fill('3');
+    await inferredMetricName.fill('Receita recorrente');
+    await expect(restoredAfterThemeMove.getByLabel(/^Nome do indicador /)).toHaveCount(1);
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Funil' }).click();
+    await expect(page).toHaveURL(/\/crm$/);
+    const weeklyAfterInferredMove = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'WEEKLY' } });
+    expect(weeklyAfterInferredMove?.customGoals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Receita recorrente', group: 'revenue', target: 9, current: 3 })
+    ]));
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
+    await expect(page).toHaveURL(/\/metas$/);
+    await page.reload();
+    await expect(page.getByRole('tabpanel', { name: 'Semanal' }).getByLabel('Receita recorrente: 3 de 9')).toBeVisible();
+
     await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Funil' }).click();
     await expect(page).toHaveURL(/\/crm$/);
     await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
