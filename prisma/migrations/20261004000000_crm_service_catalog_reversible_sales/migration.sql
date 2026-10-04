@@ -1,4 +1,5 @@
 CREATE TYPE "ServiceBillingType" AS ENUM ('ONE_TIME', 'MONTHLY');
+ALTER TYPE "ActivityType" ADD VALUE 'SALE_REVERSED';
 
 ALTER TABLE "SaleEvent"
   ADD COLUMN "reversedAt" TIMESTAMP(3),
