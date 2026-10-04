@@ -179,9 +179,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <nav aria-label="Período do dashboard" className="flex w-fit rounded-lg border border-white/10 bg-[#111719] p-1">
-          {([['day', 'Hoje'], ['week', 'Semana'], ['month', 'Ciclo mensal']] as const).map(([value, label]) => <Link key={value} href={`/?period=${value}`} aria-current={period === value ? 'page' : undefined} className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors duration-200 sm:px-3.5 ${period === value ? 'bg-[var(--atelier-green)] text-[#101411]' : 'text-white/60 hover:text-white'}`}>{label}</Link>)}
+          {([['day', 'Hoje'], ['week', 'Semana'], ['month', 'Ciclo mensal']] as const).map(([value, label]) => <Link key={value} href={`/?period=${value}`} aria-current={period === value ? 'page' : undefined} className={`rounded-md px-3 py-2 text-xs font-semibold transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] active:scale-[0.98] sm:px-3.5 ${period === value ? 'bg-[var(--atelier-green)] text-[#101411]' : 'text-white/60 hover:text-white'}`}>{label}</Link>)}
         </nav>
-        <Link href="/pesquisa" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--atelier-green)] px-4 text-sm font-semibold text-[#101411] transition-transform duration-200 hover:-translate-y-px active:translate-y-px">
+        <Link href="/pesquisa" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--atelier-green)] px-4 text-sm font-semibold text-[#101411] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:-translate-y-px active:translate-y-px">
           <MagnifyingGlassIcon size={17} weight="bold" aria-hidden="true" />Pesquisar empresas
         </Link>
       </div>
@@ -192,7 +192,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     </div>
 
     <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {dashboardMetrics.map(({ label, value, detail, Icon }) => <article className="flex min-h-[112px] items-start gap-3.5 rounded-xl border border-white/[0.08] bg-[#111719] p-4 transition-colors duration-200 hover:border-white/[0.14] md:p-5" key={label}>
+      {dashboardMetrics.map(({ label, value, detail, Icon }) => <article className="flex min-h-[112px] items-start gap-3.5 rounded-xl border border-white/[0.08] bg-[#111719] p-4 transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:-translate-y-px hover:border-white/[0.14] md:p-5" key={label}>
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.035] text-[var(--atelier-green)]">
           <Icon size={20} weight="regular" aria-hidden="true" />
         </span>

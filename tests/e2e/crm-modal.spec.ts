@@ -86,6 +86,17 @@ test('CRM keeps details private to an accessible modal and preserves lead action
     await card.click();
     const modal = page.getByRole('dialog', { name });
     await expect(modal).toBeVisible();
+    const surface = modal.getByTestId('lead-modal-surface');
+    await expect(surface).toHaveCSS('transition-property', 'transform, opacity');
+    await expect(modal.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(modal).toHaveCount(0);
+    await expect(card).toBeFocused();
+    // Reopening immediately must retain the selected company and accept input.
+    await card.click();
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole('heading', { name, exact: true })).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
     await expect(modal.getByRole('link', { name: 'Instagram', exact: true })).toHaveAttribute('href', 'https://www.instagram.com/autobrilho/');
     await modal.getByRole('button', { name: 'Histórico', exact: true }).click();
     await expect(modal.getByText('Anotação que pertence apenas aos detalhes.')).toBeVisible();

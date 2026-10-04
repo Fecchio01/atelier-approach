@@ -55,7 +55,7 @@ export function LeadCard({ business, result, onApproached }: LeadCardProps) {
   }
 
   return (
-    <article className="group flex flex-col gap-5 rounded-2xl border border-white/[0.09] bg-[#111411] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)] transition hover:border-white/20">
+    <article className="group flex flex-col gap-5 rounded-2xl border border-white/[0.09] bg-[#111411] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:-translate-y-px hover:border-white/20">
       {business.imageUrl ? (
         // External Open Graph images are not part of a configured, trusted image host list.
         // eslint-disable-next-line @next/next/no-img-element
