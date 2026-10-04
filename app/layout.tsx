@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   applicationName: 'Arvello',
   description: 'Plataforma comercial Arvello',
   icons: {
-    icon: '/brand/arvello-mark.svg'
+    icon: '/brand/arvello_approach_sem_nome_fundo_preto.png'
   }
 };
 

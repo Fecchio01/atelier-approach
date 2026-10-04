@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1225" height="310" viewBox="145 200 1225 310">
-  <g transform="translate(95 150) scale(1.14)">
-    <path fill="#FFFFFF" d="M166 170 C190 130 223 82 258 68 C293 54 321 75 345 111 L468 302 L379 302 C355 302 339 293 323 270 L252 174 C238 156 222 151 202 158 Z"/>
-    <path fill="#A7D81A" d="M58 302 L151 177 C166 157 181 150 203 150 L279 150 L186 274 C171 294 156 302 132 302 Z"/>
-  </g>
-  <text x="790" y="330" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="126" font-weight="700" letter-spacing="-5">ARVELLO</text>
-</svg>

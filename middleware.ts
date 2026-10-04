@@ -9,8 +9,7 @@ export default auth((request) => {
   const { pathname } = request.nextUrl;
   const isRequiredAuthEndpoint =
     pathname === '/api/auth/csrf' || pathname === '/api/auth/callback/credentials';
-  const isPublicBrandAsset =
-    pathname === '/brand/arvello.svg' || pathname === '/brand/arvello-mark.svg';
+  const isPublicBrandAsset = pathname.startsWith('/brand/');
 
   if (pathname === '/login' || isRequiredAuthEndpoint || isPublicBrandAsset) {
     return NextResponse.next();

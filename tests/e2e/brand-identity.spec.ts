@@ -6,16 +6,17 @@ test('login shows the official Arvello identity and accent color on desktop and 
 
   await expect(page).toHaveTitle('Arvello');
   await expect(page.locator('img[alt="Arvello"]:visible')).toHaveCount(1);
-  await expect(page.locator('img[alt="Arvello"]:visible')).toHaveAttribute('src', '/brand/arvello.svg');
+  await expect(page.locator('img[alt="Arvello"]:visible')).toHaveAttribute('src', '/brand/arvello_approach_com_nome_fundo_preto.png');
   await expect(page.getByText('Sua operação comercial', { exact: true })).toBeVisible();
-  await expect(page.locator('img[alt="Arvello"]:visible')).toHaveJSProperty('naturalWidth', 1225);
-  await expect(page.locator('img[alt="Arvello"]:visible')).toHaveJSProperty('naturalHeight', 310);
-  await expect(page.locator('link[rel="icon"]').first()).toHaveAttribute('href', '/brand/arvello-mark.svg');
-  const wordmark = await page.request.get('/brand/arvello.svg');
-  const favicon = await page.request.get('/brand/arvello-mark.svg');
+  await expect(page.locator('img[alt="Arvello"]:visible')).toHaveJSProperty('naturalWidth', 1600);
+  await expect(page.locator('img[alt="Arvello"]:visible')).toHaveJSProperty('naturalHeight', 600);
+  await expect(page.locator('link[rel="icon"]').first()).toHaveAttribute('href', '/brand/arvello_approach_sem_nome_fundo_preto.png');
+  const wordmark = await page.request.get('/brand/arvello_approach_com_nome_fundo_preto.png');
+  const favicon = await page.request.get('/brand/arvello_approach_sem_nome_fundo_preto.png');
   expect(wordmark.status()).toBe(200);
-  expect(await wordmark.text()).toContain('ARVELLO');
+  expect(wordmark.headers()['content-type']).toContain('image/png');
   expect(favicon.status()).toBe(200);
+  expect(favicon.headers()['content-type']).toContain('image/png');
 
   const submit = page.getByRole('button', { name: 'Entrar' });
   await expect(submit).toHaveCSS('background-color', 'rgb(167, 216, 26)');
