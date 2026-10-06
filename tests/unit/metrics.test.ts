@@ -233,6 +233,7 @@ describe('getDashboardMetrics', () => {
   });
 
   test('uses only active sales for team goal actuals', async () => {
+    await prisma.lead.deleteMany();
     const lead = await prisma.lead.create({ data: { osmId: 'goal-reversed-sale', stage: 'CONTACTED' } });
     await prisma.saleEvent.createMany({ data: [
       { leadId: lead.id, actorId: 'ana', saleValue: 1200, mrr: 120, occurredAt: new Date('2026-09-09T12:00:00Z'), reversedAt: new Date('2026-09-10T12:00:00Z'), reversedById: 'bia' },

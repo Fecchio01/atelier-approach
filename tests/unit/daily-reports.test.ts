@@ -32,6 +32,7 @@ const originalPrismaTransaction = prisma.$transaction;
 describe('daily report snapshots', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     Object.defineProperty(prisma, '$transaction', { configurable: true, writable: true, value: originalPrismaTransaction });
   });
@@ -239,18 +240,23 @@ describe('daily report snapshots', () => {
   test('returns the original snapshot on retry and leaves weekly activity live', async () => {
     expect(post).toBeTypeOf('function');
     if (!post) return;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-29T13:00:00.000Z'));
 
     const lead = await prisma.lead.create({ data: { osmId: 'daily-immutable', name: 'Detailing do Bosque' } });
     const firstResponse = await post(new Request('http://localhost/api/reports', { method: 'POST' }));
     expect(firstResponse.status).toBe(200);
     const first = await firstResponse.json() as CloseResponse;
     expect(first.created).toBe(true);
+    expect(first.report.closedAt).toBe('2026-09-29T13:00:00.000Z');
+    expect(first.report.snapshot.summary.approaches).toBe(0);
 
     const lateCreatedAt = new Date(new Date(first.report.closedAt).getTime() + 60_000);
     await prisma.activity.create({
       data: { leadId: lead.id, actorId: 'daily-report-member', type: 'CONTACT', channel: 'WHATSAPP', note: 'Registrada depois do fechamento.', createdAt: lateCreatedAt }
     });
 
+    vi.setSystemTime(new Date('2026-09-29T13:02:00.000Z'));
     const retryResponse = await post(new Request('http://localhost/api/reports', { method: 'POST' }));
     expect(retryResponse.status).toBe(200);
     const retry = await retryResponse.json() as CloseResponse;

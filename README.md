@@ -23,7 +23,9 @@ AUTH_INTERNAL_EMAIL="equipe@exemplo.com"
 AUTH_INTERNAL_PASSWORD="uma-senha-forte"
 ```
 
-O banco está no projeto Supabase `gxvdqmfjawnktpqguvvr`, região `sa-east-1`. A aplicação acessa as tabelas no esquema privado `atelier` pelo servidor. As migrações antigas em `prisma/migrations` pertencem ao SQLite e não devem ser aplicadas ao PostgreSQL.
+O banco está no projeto Supabase `gxvdqmfjawnktpqguvvr`, região `sa-east-1`. A aplicação acessa as tabelas no esquema privado `atelier` pelo servidor. As migrações atuais em `prisma/migrations` são PostgreSQL; o histórico antigo de SQLite está arquivado em `prisma/legacy-sqlite-migrations` e não deve ser aplicado ao PostgreSQL.
+
+No Supabase, alterações de schema devem ser aplicadas em ordem com uma conexão privilegiada que possua as tabelas e os tipos enum. Depois de conferir o DDL aplicado, registre cada versão no histórico Prisma com `npx prisma migrate resolve --applied NOME_DA_MIGRACAO`, usando uma conexão direta ou o pool em modo sessão para o schema correspondente. Não execute `prisma migrate deploy` com a conta `atelier_app`: ela é a conta de execução da aplicação e não possui os tipos enum. Valide primeiro no schema isolado `atelier_test`; a URL de produção usa o schema `atelier`.
 
 Os testes usam o esquema isolado `atelier_test` e apagam seus dados no início de cada execução. Configure `TEST_DATABASE_URL` antes de rodá-los.
 
