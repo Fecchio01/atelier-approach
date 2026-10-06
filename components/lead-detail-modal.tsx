@@ -103,16 +103,17 @@ export function LeadDetailModal({ lead, services, followUpDelayDays, onClose, on
   }
 
   async function scheduleFollowUp(lead: CrmLead) {
-    const value = followUpAt[lead.id];
     const active = lead.followUps.find((followUp) => followUp.state === 'PENDING');
-    if (!value && active) {
+    if (!active) {
+      await updateLead(lead.id, { stage: 'FOLLOW_UP' });
+      return;
+    }
+    const value = followUpAt[lead.id];
+    if (!value) {
       setError('Informe a data e hora do follow-up.');
       return;
     }
-    const details = active
-      ? { followUpAction: 'RESCHEDULE', followUpId: active.id, followUpAt: new Date(value).toISOString() }
-      : { stage: 'FOLLOW_UP', ...(value ? { followUpAt: new Date(value).toISOString() } : {}) };
-    await updateLead(lead.id, details);
+    await updateLead(lead.id, { followUpAction: 'RESCHEDULE', followUpId: active.id, followUpAt: new Date(value).toISOString() });
   }
 
   async function closeLead(id: string) {
@@ -187,11 +188,11 @@ export function LeadDetailModal({ lead, services, followUpDelayDays, onClose, on
               </select>
             </label><button type="button" disabled={savingId === lead.id || stageDraft === 'WON' || stageDraft === normalizeFunnelStage(lead.stage)} onClick={() => saveStageChange(lead.id)} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">Salvar alterações</button></div>
             <div className="grid gap-2">
-              <p className="text-xs leading-5 text-white/55">Ao entrar em Follow-up, o retorno é agendado automaticamente em {followUpDelayDays} {followUpDelayDays === 1 ? 'dia' : 'dias'}. Você pode escolher outra data.</p>
+              <p className="text-xs leading-5 text-white/55">Ao entrar em Follow-up, o retorno é agendado automaticamente em {followUpDelayDays} {followUpDelayDays === 1 ? 'dia' : 'dias'}.</p>
               {activeFollowUp ? <p className="text-sm text-white/80">Retorno atual: <time dateTime={activeFollowUp.dueDate}>{dateTimeLabel(activeFollowUp.dueDate)}</time></p> : null}
-              <label className="grid gap-2 text-xs font-medium text-white/55">Data do follow-up (opcional para novo retorno)
+              {activeFollowUp ? <label className="grid gap-2 text-xs font-medium text-white/55">Nova data para reagendamento
               <input aria-label="Data do follow-up" type="datetime-local" value={followUpAt[lead.id] ?? ''} onChange={(event) => setFollowUpAt({ ...followUpAt, [lead.id]: event.target.value })} className="min-h-12 rounded-lg border border-white/[0.14] bg-[#11171c] px-3 text-sm text-white" />
-            </label><button type="button" disabled={savingId === lead.id || (!activeFollowUp && lead.stage === 'FOLLOW_UP')} onClick={() => scheduleFollowUp(lead)} className="min-h-11 rounded-lg border border-[var(--atelier-green)] px-3 text-sm font-semibold text-[var(--atelier-green)] disabled:opacity-60">{activeFollowUp ? 'Reagendar follow-up' : 'Agendar follow-up'}</button>
+            </label> : null}<button type="button" disabled={savingId === lead.id || (!activeFollowUp && lead.stage === 'FOLLOW_UP')} onClick={() => scheduleFollowUp(lead)} className="min-h-11 rounded-lg border border-[var(--atelier-green)] px-3 text-sm font-semibold text-[var(--atelier-green)] disabled:opacity-60">{activeFollowUp ? 'Reagendar follow-up' : 'Agendar follow-up'}</button>
               {activeFollowUp ? <div className="grid gap-2 sm:grid-cols-2">
                 <button type="button" disabled={savingId === lead.id} onClick={() => updateFollowUp(lead.id, activeFollowUp.id, 'COMPLETE')} className="min-h-11 rounded-lg border border-white/20 px-3 text-sm disabled:opacity-60">Concluir follow-up</button>
                 <button type="button" disabled={savingId === lead.id} onClick={() => updateFollowUp(lead.id, activeFollowUp.id, 'CANCEL')} className="min-h-11 rounded-lg border border-white/20 px-3 text-sm disabled:opacity-60">Cancelar follow-up</button>

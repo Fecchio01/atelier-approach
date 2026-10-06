@@ -151,6 +151,10 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
     expect(requests[0].body).toEqual({ stage: 'WON', serviceIds: [] });
     await page.getByRole('button', { name: 'Abrir lead' }).click();
+    await expect(modal.getByLabel('Data do follow-up', { exact: true })).toHaveCount(0);
+    await expect(modal.locator('input[type="datetime-local"]')).toHaveCount(0);
+    await expect(modal.getByText(/agendado automaticamente em 3 dias/)).toBeVisible();
+    await expect(modal.getByText(/Você pode escolher outra data/)).toHaveCount(0);
     await modal.getByRole('button', { name: 'Agendar follow-up', exact: true }).click();
     expect(requests[1].body).toEqual({ stage: 'FOLLOW_UP' });
     await page.getByRole('button', { name: 'Abrir lead' }).click();
@@ -186,6 +190,7 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     currentStage = 'FOLLOW_UP';
     await openComponents(page, 'pending');
     await page.getByRole('button', { name: 'Abrir lead' }).click();
+    await expect(modal.getByLabel('Data do follow-up', { exact: true })).toBeVisible();
     await expect(modal.locator('time[datetime="2027-01-10T15:30:00.000Z"]')).toBeVisible();
     await modal.getByRole('button', { name: 'Reagendar follow-up', exact: true }).click();
     await expect(modal.getByRole('alert')).toHaveText('Informe a data e hora do follow-up.');

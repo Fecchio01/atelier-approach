@@ -37,6 +37,7 @@ describe('commercial lead controls', () => {
     expect(html).not.toContain('value="WON"');
     expect(html).not.toContain('>Próxima ação</button>');
     expect(html).not.toContain('Canal da atividade');
+    expect(html).not.toContain('type="datetime-local"');
   });
 
   it('explains automatic scheduling and displays the pending follow-up date', () => {
