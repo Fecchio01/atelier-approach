@@ -22,9 +22,16 @@ describe('shared commercial settings', () => {
     expect((await PATCH(request({ followUpDelayDays: 3 }))).status).toBe(401);
     expect(mocks.upsert).not.toHaveBeenCalled();
   });
-  test.each([0, -1, 1.5, '3', 'bad', null])('rejects invalid delay %j', async (followUpDelayDays) => {
+  test.each([0, -1, 1.5, '3', 'bad', null, 3651, 2147483647])('rejects invalid delay %j', async (followUpDelayDays) => {
+    mocks.upsert.mockResolvedValue({ followUpDelayDays });
     expect((await PATCH(request({ followUpDelayDays }))).status).toBe(400);
     expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+  test('accepts the supported upper boundary and safely defaults old invalid settings', async () => {
+    mocks.upsert.mockResolvedValue({ followUpDelayDays: 3650 });
+    expect((await PATCH(request({ followUpDelayDays: 3650 }))).status).toBe(200);
+    mocks.findUnique.mockResolvedValue({ followUpDelayDays: 2147483647 });
+    expect(await getFollowUpDelayDays()).toBe(2);
   });
   test('upserts the shared singleton and exposes its saved interval', async () => {
     mocks.upsert.mockResolvedValue({ followUpDelayDays: 4 });

@@ -16,6 +16,10 @@ describe('getFollowUpDueDate', () => {
       new Date('2027-01-02T23:45:00.000Z')
     );
   });
+  test('supports the settings upper boundary and rejects delays beyond it', () => {
+    expect(getFollowUpDueDate(new Date('2026-01-01T12:00:00Z'), 3650).toISOString()).toBe('2035-12-30T12:00:00.000Z');
+    expect(() => getFollowUpDueDate(new Date('2026-01-01T12:00:00Z'), 3651)).toThrow(RangeError);
+  });
 
   test.each([
     [new Date(Number.NaN), 2],

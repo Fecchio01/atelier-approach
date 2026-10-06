@@ -4,6 +4,7 @@ import { useRef, useState, type FormEvent } from 'react';
 
 import type { CommercialServiceOption } from '@/lib/commercial-ui';
 import { parseServiceData } from '@/lib/service-sales';
+import { isValidFollowUpDelay, MAX_FOLLOW_UP_DELAY_DAYS } from '@/lib/follow-up-scheduling';
 
 type CatalogService = CommercialServiceOption & { isActive: boolean };
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -83,9 +84,9 @@ export function CommercialSettingsForm({ services: initialServices, followUpDela
   async function saveDelay(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = Number(delay);
-    if (!Number.isInteger(value) || value <= 0 || value > 2147483647) {
+    if (!isValidFollowUpDelay(value)) {
       setMessage(null);
-      setError('Informe um número inteiro positivo de dias.');
+      setError(`Informe um número inteiro entre 1 e ${MAX_FOLLOW_UP_DELAY_DAYS} dias.`);
       return;
     }
     const payload = await request('/api/commercial-settings', 'PATCH', { followUpDelayDays: value });
@@ -125,7 +126,7 @@ export function CommercialSettingsForm({ services: initialServices, followUpDela
       </div>
       <form onSubmit={saveDelay} className="grid min-w-0 gap-4 border-t border-white/10 pt-6 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
         <h3 className="font-semibold">Prazo de retorno</h3>
-        <label className="grid min-w-0 gap-2 text-sm">Intervalo do follow-up (dias)<input type="number" required min="1" max="2147483647" step="1" inputMode="numeric" disabled={busy} value={delay} onChange={(event) => setDelay(event.target.value)} className={inputClass} /></label>
+        <label className="grid min-w-0 gap-2 text-sm">Intervalo do follow-up (dias)<input type="number" required min="1" max={MAX_FOLLOW_UP_DELAY_DAYS} step="1" inputMode="numeric" disabled={busy} value={delay} onChange={(event) => setDelay(event.target.value)} className={inputClass} /></label>
         <p className="text-xs leading-5 text-white/50">Usado ao entrar em Follow-up sem escolher uma data. Retornos já agendados mantêm seu vencimento.</p>
         <button disabled={busy} className={buttonClass}>Salvar intervalo</button>
       </form>

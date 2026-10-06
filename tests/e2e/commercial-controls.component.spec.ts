@@ -15,6 +15,7 @@ test.beforeAll(async () => {
       import { createRoot } from 'react-dom/client';
       import { CommercialSettingsForm } from './components/commercial-settings-form';
       import { LeadDetailModal } from './components/lead-detail-modal';
+      import { KanbanBoard } from './components/kanban-board';
       const services = [
         { id: 'monthly', name: 'Plano mensal', price: '199.90', billingType: 'MONTHLY', isActive: true },
         { id: 'setup', name: 'Implantação', price: '500.00', billingType: 'ONE_TIME', isActive: true }
@@ -29,8 +30,14 @@ test.beforeAll(async () => {
       function App() {
         const [open, setOpen] = React.useState(false);
         const [result, setResult] = React.useState('');
+        const [boardLeads, setBoardLeads] = React.useState([lead]);
         return <main style={{ padding: 20 }}>
           <CommercialSettingsForm services={services} followUpDelayDays={3} />
+          {mode === 'board' && <>
+            <button onClick={() => setBoardLeads([{ ...lead, stage: 'WON' }])}>Confirmar ganho no servidor</button>
+            <button onClick={() => setBoardLeads([{ ...lead, stage: 'CONTACTED' }])}>Receber reabertura externa</button>
+            <KanbanBoard leads={boardLeads} services={services} followUpDelayDays={3} />
+          </>}
           <button onClick={() => setOpen(true)}>Abrir lead</button>
           <p data-testid="callback-result">{result}</p>
           {open && <LeadDetailModal lead={lead} services={services} followUpDelayDays={3}
@@ -41,7 +48,17 @@ test.beforeAll(async () => {
       createRoot(document.getElementById('root')).render(<App />);
     ` },
     bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic',
-    define: { 'process.env.NODE_ENV': '"production"' }
+    define: { 'process.env.NODE_ENV': '"production"' },
+    plugins: [{
+      name: 'router-test-boundary',
+      setup(builder) {
+        builder.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: 'router', namespace: 'test-router' }));
+        builder.onLoad({ filter: /.*/, namespace: 'test-router' }, () => ({
+          contents: 'const router = { refresh() {} }; export function useRouter() { return router; }',
+          loader: 'js'
+        }));
+      }
+    }]
   });
   script = bundle.outputFiles[0].text;
   const globals = (await readFile('app/globals.css', 'utf8')).replace('@import "tailwindcss";', '@import "tailwindcss" source(none);\n@source "../../components";');
@@ -58,6 +75,50 @@ async function openComponents(page: Page, mode = '') {
 }
 
 for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`follow-up interval boundary prevents unusable scheduling on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const saved: number[] = [];
+    await page.route('**/api/commercial-settings', async (route) => {
+      const { followUpDelayDays } = route.request().postDataJSON();
+      saved.push(followUpDelayDays);
+      await route.fulfill({ json: { followUpDelayDays } });
+    });
+    await openComponents(page);
+    const input = page.getByLabel('Intervalo do follow-up (dias)');
+    await input.fill('3651');
+    await page.getByRole('button', { name: 'Salvar intervalo' }).click();
+    expect(await input.evaluate((element: HTMLInputElement) => element.validity.rangeOverflow)).toBe(true);
+    expect(saved).toEqual([]);
+    await input.fill('3650');
+    await page.getByRole('button', { name: 'Salvar intervalo' }).click();
+    await expect(page.getByRole('status')).toContainText('3650 dias');
+    expect(saved).toEqual([3650]);
+  });
+  test(`board accepts server confirmation and a later external reopening on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    await page.route('**/api/leads/lead', async (route) => {
+      await pending;
+      await route.fulfill({ json: { lead: { stage: 'WON' } } });
+    });
+    await openComponents(page, 'board');
+    const approached = page.getByRole('region', { name: 'Funil CRM', exact: true }).locator('section[aria-label="Abordado"]');
+    const won = page.locator('section[aria-label="Ganho"]');
+    const card = page.getByRole('button', { name: 'Abrir detalhes de Oficina de teste' });
+    await card.click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Fechar negócio', exact: true }).click();
+    await expect(approached.locator('[data-lead-id="lead"]')).toHaveCount(1);
+    release();
+    await expect(won.locator('[data-lead-id="lead"]')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Confirmar ganho no servidor' }).click();
+    await expect(won.locator('[data-lead-id="lead"]')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Receber reabertura externa' }).click();
+    await expect(approached.locator('[data-lead-id="lead"]')).toHaveCount(1);
+    await expect(won.locator('[data-lead-id="lead"]')).toHaveCount(0);
+    await card.click();
+    await expect(page.getByRole('dialog').getByRole('button', { name: 'Fechar negócio', exact: true })).toBeVisible();
+  });
   test(`catalog edits, validation, archival and delay preserve drafts on ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     const requests: { url: string; data: Record<string, unknown> }[] = [];

@@ -38,6 +38,17 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
   const pageWasSuspended = useRef(false);
   useEffect(() => { setSelectedLeadId(focusedLeadId ?? null); }, [focusedLeadId]);
   useEffect(() => {
+    // Overrides are created only after PATCH succeeds. Retire them once the
+    // refreshed server props acknowledge the transition, so later tabs can win.
+    setStageOverrides((previous) => {
+      const pending = Object.entries(previous).filter(([id, stage]) => {
+        const lead = leads.find((item) => item.id === id);
+        return lead && normalizeFunnelStage(lead.stage) !== normalizeFunnelStage(stage);
+      });
+      return pending.length === Object.keys(previous).length ? previous : Object.fromEntries(pending);
+    });
+  }, [leads, stageOverrides]);
+  useEffect(() => {
     function refreshAfterResume() {
       if (document.visibilityState === 'hidden') {
         pageWasSuspended.current = true;

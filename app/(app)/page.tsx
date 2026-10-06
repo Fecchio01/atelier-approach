@@ -108,7 +108,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const today = getLocalDayWindow(now);
 
   const [leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps] = await Promise.all([
-    prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } }),
+    prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true, _count: { select: { saleEvents: true } } } }),
     prisma.activity.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }),
     prisma.stageHistory.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, toStage: true, createdAt: true } }),
     prisma.saleEvent.findMany({ where: { occurredAt: { gte: dataFrom, lt: dataTo }, reversedAt: null }, select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true } }),
@@ -138,6 +138,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const followUpsByLead = byLead([...followUps, ...upcomingFollowUps]);
   const metricLeads: MetricLead[] = leads.map((lead) => ({
     ...lead,
+    hasSaleHistory: lead._count?.saleEvents > 0,
     activities: (activitiesByLead.get(lead.id) ?? []).map(({ actorId, type, createdAt, note }) => ({ actorId, type, createdAt, note })),
     stageHistory: historyByLead.get(lead.id) ?? [],
     saleEvents: salesByLead.get(lead.id) ?? [],

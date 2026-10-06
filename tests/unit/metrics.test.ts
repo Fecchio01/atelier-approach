@@ -39,6 +39,40 @@ function restorePrismaDelegateSpies() {
 describe('dashboard follow-up query and presentation', () => {
   afterEach(() => { restorePrismaDelegateSpies(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+  test('dashboard and goal loaders retain legacy sales without reviving reversed-only history', async () => {
+    vi.stubGlobal('React', React);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2040-06-06T12:00:00Z'));
+    const prefix = `mixed-metrics-${crypto.randomUUID()}`;
+    const ids: string[] = [];
+    try {
+      for (const [suffix, value] of [['active', 500], ['legacy', 200], ['reversed', 900]] as const) {
+        const lead = await prisma.lead.create({ data: {
+          osmId: `${prefix}-${suffix}`, stage: 'WON', saleValue: value, mrr: value / 10,
+          wonAt: new Date(), wonById: 'ana'
+        } });
+        ids.push(lead.id);
+        if (suffix !== 'legacy') await prisma.saleEvent.create({ data: {
+          leadId: lead.id, actorId: 'ana', saleValue: value, mrr: value / 10,
+          // Even history outside the requested period must suppress legacy fallback.
+          occurredAt: suffix === 'reversed' ? new Date('2039-01-01T12:00:00Z') : new Date(),
+          reversedAt: suffix === 'reversed' ? new Date() : null
+        } });
+      }
+      const [actuals] = await getTeamGoalActualsByPeriod([{
+        kind: 'WEEKLY', start: new Date('2040-06-04T03:00:00Z'), end: new Date('2040-06-11T03:00:00Z')
+      }]);
+      expect(actuals).toMatchObject({ sales: 2, revenue: 700, mrr: 70 });
+      const { default: Home } = await import('../../app/(app)/page');
+      const html = renderToStaticMarkup(await Home({ searchParams: Promise.resolve({ period: 'day' }) }));
+      expect(html).toContain('2 negócios ganhos');
+      expect(html).toContain('R$ 700');
+      expect(html).not.toContain('R$ 1.600');
+    } finally {
+      await prisma.lead.deleteMany({ where: { id: { in: ids } } });
+    }
+  });
+
   test('loads five future pending reminders independently of all period completions', async () => {
     vi.stubGlobal('React', React);
     vi.useFakeTimers({ toFake: ['Date'] });

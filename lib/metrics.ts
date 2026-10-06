@@ -29,6 +29,7 @@ export type MetricLead = {
   activities: MetricActivity[];
   stageHistory?: MetricStageEvent[];
   saleEvents?: MetricSaleEvent[];
+  hasSaleHistory?: boolean;
   followUps: MetricFollowUp[];
 };
 
@@ -127,7 +128,7 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
       member(sale.actorId).won += 1;
       mrr += Number(sale.mrr);
     }
-    if (!(lead.saleEvents?.length) && lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range)) {
+    if (!lead.hasSaleHistory && !(lead.saleEvents?.length) && lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range)) {
       const owner = lead.wonById ?? 'unknown';
       member(owner).sales += Number(lead.saleValue ?? 0);
       member(owner).won += 1;
@@ -186,7 +187,7 @@ export async function getTeamGoalActualsByPeriod(
   const dataFrom = periods.reduce((earliest, period) => period.start < earliest ? period.start : earliest, periods[0].start);
   const dataTo = periods.reduce((latest, period) => period.end > latest ? period.end : latest, periods[0].end);
   const [leads, activities, stageHistory, saleEvents, followUps] = await Promise.all([
-    database.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } }),
+    database.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true, _count: { select: { saleEvents: true } } } }),
     database.activity.findMany({
       where: { createdAt: { gte: dataFrom, lt: dataTo } },
       select: { leadId: true, actorId: true, type: true, createdAt: true, note: true },
@@ -217,6 +218,7 @@ export async function getTeamGoalActualsByPeriod(
   const followUpsByLead = byLead(followUps);
   const metricLeads: MetricLead[] = leads.map((lead) => ({
     ...lead,
+    hasSaleHistory: lead._count?.saleEvents > 0,
     activities: activitiesByLead.get(lead.id) ?? [],
     stageHistory: historyByLead.get(lead.id) ?? [],
     saleEvents: salesByLead.get(lead.id) ?? [],
