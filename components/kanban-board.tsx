@@ -8,6 +8,7 @@ import { mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage }
 import { LeadDetailModal } from './lead-detail-modal';
 import { displayCompanyName } from '@/lib/display-name';
 import { visibleLeads } from '@/lib/kanban-visible-leads';
+import type { CommercialServiceOption } from '@/lib/commercial-ui';
 
 export type CrmLead = {
   id: string;
@@ -29,7 +30,7 @@ export type CrmLead = {
 };
 
 
-export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focusedLeadId?: string }) {
+export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays }: { leads: CrmLead[]; focusedLeadId?: string; services: CommercialServiceOption[]; followUpDelayDays: number }) {
   const router = useRouter();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(focusedLeadId ?? null);
   const [stageOverrides, setStageOverrides] = useState<Record<string, LeadStage>>({});
@@ -108,7 +109,7 @@ export function KanbanBoard({ leads, focusedLeadId }: { leads: CrmLead[]; focuse
       <div className="grid gap-4 md:grid-cols-2">{renderColumn('NO_RESPONSE')}</div>
     </section>
     <section className="mt-9 border-t border-red-300/[0.12] pt-6">{renderColumn('DISCARDED', 'Lixeira', 'Empresas descartadas ficam guardadas aqui, com o histórico preservado, sem voltar para a pesquisa.')}</section>
-    {selectedLead ? <LeadDetailModal key={selectedLead.id} lead={selectedLead} onClose={() => setSelectedLeadId(null)} onDeleted={(id) => {
+    {selectedLead ? <LeadDetailModal key={selectedLead.id} lead={selectedLead} services={services} followUpDelayDays={followUpDelayDays} onClose={() => setSelectedLeadId(null)} onDeleted={(id) => {
       setRemovedIds((previous) => [...previous, id]);
       setSelectedLeadId(null);
       router.refresh();

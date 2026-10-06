@@ -12,11 +12,32 @@ vi.mock('@/lib/auth', () => ({
   signOut: vi.fn()
 }));
 
+vi.mock('@/lib/db', () => ({ prisma: {
+  serviceCatalogItem: { findMany: vi.fn(async () => [
+    { id: 'monthly', name: 'Plano mensal', price: '199.90', billingType: 'MONTHLY', isActive: true },
+    { id: 'archived', name: 'Implantação antiga', price: '500.00', billingType: 'ONE_TIME', isActive: false }
+  ]) },
+  crmSettings: { findUnique: vi.fn(async () => ({ followUpDelayDays: 3 })) }
+} }));
+
 import SettingsPage from '../../app/(app)/configuracoes/page';
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('profile settings layout', () => {
+  test('renders shared commercial settings with active and archived services and current delay', async () => {
+    vi.stubGlobal('React', React);
+    const markup = renderToStaticMarkup(await SettingsPage({ searchParams: Promise.resolve({}) }));
+    expect(markup).toContain('Configurações comerciais');
+    expect(markup).toContain('Plano mensal');
+    expect(markup).toContain('199,90');
+    expect(markup).toContain('Implantação antiga');
+    expect(markup).toContain('Arquivado');
+    expect(markup).toContain('Editar Plano mensal');
+    expect(markup).toContain('Arquivar Plano mensal');
+    expect(markup).toContain('Intervalo do follow-up (dias)');
+    expect(markup).toContain('value="3"');
+  });
   test('places the account summary above the side-by-side profile and password forms', async () => {
     vi.stubGlobal('React', React);
     const markup = renderToStaticMarkup(await SettingsPage({ searchParams: Promise.resolve({}) }));

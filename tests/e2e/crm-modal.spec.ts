@@ -100,7 +100,10 @@ test('CRM keeps details private to an accessible modal and preserves lead action
     await expect(modal.getByRole('link', { name: 'Instagram', exact: true })).toHaveAttribute('href', 'https://www.instagram.com/autobrilho/');
     await modal.getByRole('button', { name: 'Histórico', exact: true }).click();
     await expect(modal.getByText('Anotação que pertence apenas aos detalhes.')).toBeVisible();
-    await modal.getByRole('button', { name: 'Próxima ação', exact: true }).click();
+    await modal.getByRole('button', { name: 'Contato', exact: true }).click();
+    await expect(modal.getByRole('button', { name: 'Próxima ação', exact: true })).toHaveCount(0);
+    await expect(modal.getByLabel('Canal da atividade')).toHaveCount(0);
+    await expect(modal.getByLabel('Nota da atividade')).toHaveCount(0);
     await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
     await expect(modal).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Ganho', exact: true }).getByRole('button', { name: `Abrir detalhes de ${name}` })).toHaveCount(1);
@@ -112,7 +115,6 @@ test('CRM keeps details private to an accessible modal and preserves lead action
       expect(Number(original.saleValue)).toBe(0);
       expect(Number(original.mrr)).toBe(0);
       await card.click();
-      await modal.getByRole('button', { name: 'Próxima ação', exact: true }).click();
       await modal.getByLabel('Valor da venda', { exact: true }).fill('1500');
       await modal.getByRole('button', { name: 'Salvar valores da venda', exact: true }).click();
       await expect(modal.getByRole('status')).toHaveText('Valores da venda salvos.');

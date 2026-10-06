@@ -5,6 +5,9 @@ import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr';
 import { getCurrentUser, signOut } from '@/lib/auth';
 import { changeMemberPassword } from '@/lib/member-credentials';
 import { ProfileForm } from '@/components/profile-form';
+import { CommercialSettingsForm } from '@/components/commercial-settings-form';
+import { getFollowUpDelayDays } from '@/lib/commercial-settings';
+import { prisma } from '@/lib/db';
 
 async function changePassword(formData: FormData) {
   'use server';
@@ -36,6 +39,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const user = await getCurrentUser();
   if (!user) redirect('/login');
   const params = await searchParams;
+  const [services, followUpDelayDays] = await Promise.all([
+    prisma.serviceCatalogItem.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
+    getFollowUpDelayDays()
+  ]);
   const initials = (user.name || 'Arvello').trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
 
   return <section className="mx-auto max-w-6xl px-5 pb-20 pt-9 md:px-8 md:pt-12">
@@ -70,5 +77,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </form>
       </section>
     </div>
+    <CommercialSettingsForm services={services.map(({ id, name, price, billingType, isActive }) => ({ id, name, price: price.toString(), billingType, isActive }))} followUpDelayDays={followUpDelayDays} />
   </section>;
 }

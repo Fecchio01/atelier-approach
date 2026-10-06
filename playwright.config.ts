@@ -3,8 +3,9 @@ import { defineConfig } from '@playwright/test';
 
 import { e2eCredentials } from './tests/e2e/credentials';
 
-const e2eBaseUrl = 'http://127.0.0.1:3001';
 loadEnvConfig(process.cwd());
+const e2ePort = Number(process.env.E2E_PORT ?? '3001');
+const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (!testDatabaseUrl || new URL(testDatabaseUrl).searchParams.get('schema') !== 'atelier_test') {
@@ -19,7 +20,7 @@ export default defineConfig({
     baseURL: e2eBaseUrl
   },
   webServer: {
-    command: 'npm run dev -- -p 3001',
+    command: `npm run dev -- -p ${e2ePort}`,
     url: e2eBaseUrl,
     reuseExistingServer: false,
     env: {
