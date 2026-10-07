@@ -32,15 +32,11 @@ test('dashboard remains usable at mobile width with reduced motion enabled', asy
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
-test('dashboard keeps its static accent when WebGL is unavailable', async ({ page }) => {
+test('dashboard does not create a decorative WebGL scene', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.addInitScript(() => {
-    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', { configurable: true, value: () => null });
-  });
   await signIn(page);
 
-  await expect(page.getByTestId('dashboard-scene-static-fallback')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Visão operacional' })).toBeVisible();
-  const canvas = page.getByTestId('dashboard-scene-canvas');
-  await expect(canvas).toHaveCSS('opacity', '0');
+  await expect(page.getByTestId('dashboard-scene-canvas')).toHaveCount(0);
+  await expect(page.getByTestId('dashboard-scene-static-fallback')).toHaveCount(0);
 });

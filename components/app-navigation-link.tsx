@@ -1,41 +1,25 @@
 'use client';
 
-import { useEffect, useRef, useState, type ComponentProps, type MouseEvent } from 'react';
+import { useState, type ComponentProps, type MouseEvent, type TouchEvent } from 'react';
 import Link from 'next/link';
 
 type LinkProps = Omit<ComponentProps<typeof Link>, 'prefetch' | 'onClick'> & {
   label: string;
   onNavigationStart?: (href: string, label: string, event: MouseEvent<HTMLAnchorElement>) => boolean;
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  onTouchStart?: (event: TouchEvent<HTMLAnchorElement>) => void;
 };
 
-export function AppNavigationLink({ href, label, onNavigationStart, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...props }: LinkProps) {
+export function AppNavigationLink({ href, label, onNavigationStart, onClick, onMouseEnter, onFocus, onTouchStart, ...props }: LinkProps) {
   const [shouldPrefetch, setShouldPrefetch] = useState(false);
-  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
-  }, []);
-
-  function scheduleIntentPrefetch() {
-    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
-    prefetchTimer.current = setTimeout(() => setShouldPrefetch(true), 160);
-  }
-
-  function cancelIntentPrefetch() {
-    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
-    prefetchTimer.current = null;
-    setShouldPrefetch(false);
-  }
 
   return <Link
     {...props}
     href={href}
     prefetch={shouldPrefetch ? null : false}
-    onMouseEnter={(event) => { onMouseEnter?.(event); scheduleIntentPrefetch(); }}
-    onMouseLeave={(event) => { onMouseLeave?.(event); cancelIntentPrefetch(); }}
-    onFocus={(event) => { onFocus?.(event); scheduleIntentPrefetch(); }}
-    onBlur={(event) => { onBlur?.(event); cancelIntentPrefetch(); }}
+    onMouseEnter={(event) => { onMouseEnter?.(event); setShouldPrefetch(true); }}
+    onFocus={(event) => { onFocus?.(event); setShouldPrefetch(true); }}
+    onTouchStart={(event) => { onTouchStart?.(event); setShouldPrefetch(true); }}
     onClick={(event) => {
       onClick?.(event);
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

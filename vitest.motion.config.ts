@@ -8,7 +8,7 @@ export default defineConfig({
     alias: { '@': path.dirname(fileURLToPath(import.meta.url)) }
   },
   test: {
-    include: ['tests/unit/motion-primitives.test.tsx', 'tests/unit/dashboard-ambient-scene.test.tsx', 'tests/unit/commercial-modal.test.tsx'],
+    include: ['tests/unit/motion-primitives.test.tsx', 'tests/unit/commercial-modal.test.tsx', 'tests/unit/metrics-query-concurrency.test.ts'],
     fileParallelism: false
   }
 });

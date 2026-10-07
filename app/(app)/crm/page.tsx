@@ -5,15 +5,15 @@ import { getFollowUpDelayDays } from '@/lib/commercial-settings';
 
 export default async function CrmPage({ searchParams }: { searchParams: Promise<{ lead?: string; notice?: string }> }) {
   const { lead: focusedLeadId, notice } = await searchParams;
-  const leads = await prisma.lead.findMany({
+  const [leads, services, followUpDelayDays] = await Promise.all([prisma.lead.findMany({
     include: {
       activities: { orderBy: { createdAt: 'desc' } },
       followUps: { orderBy: [{ state: 'asc' }, { dueDate: 'asc' }] }
     },
     orderBy: { id: 'desc' }
-  });
-  const services = await prisma.serviceCatalogItem.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
-  const followUpDelayDays = await getFollowUpDelayDays();
+  }),
+  prisma.serviceCatalogItem.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
+  getFollowUpDelayDays()]);
   const serializedLeads: CrmLead[] = leads.map((lead) => ({
     ...lead,
     saleValue: lead.saleValue?.toString() ?? null,

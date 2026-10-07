@@ -14,8 +14,9 @@ const teamOwnerId = '__team__';
 export default async function GoalsPage() {
   const now = new Date();
   const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
-  const settings = await prisma.teamGoalSettings.findUnique({ where: { id: 'team' } });
-  const goals = await prisma.goal.findMany({
+  const [settings, goals] = await Promise.all([
+    prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
+    prisma.goal.findMany({
     where: {
       ownerId: teamOwnerId,
       OR: [
@@ -30,7 +31,8 @@ export default async function GoalsPage() {
       followUpsCompletedTarget: true, conversionRateTarget: true, customGoals: true
     },
     orderBy: { periodStart: 'desc' }
-  });
+    })
+  ]);
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
   const weeklyPeriod = getGoalPeriodWindow('WEEKLY', now, monthlyStartDay);

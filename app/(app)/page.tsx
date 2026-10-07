@@ -16,7 +16,6 @@ import {
 
 import { TeamGoalProgress } from '@/components/team-goal-progress';
 import { DashboardPeriodSelector } from '@/components/dashboard-period-selector';
-import { DashboardAmbientScene } from '@/components/dashboard-ambient-scene';
 import { DailyCloseControl } from '@/components/daily-close-control';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -74,11 +73,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const period: Period = params.period === 'day' || params.period === 'month' ? params.period : 'week';
   const now = new Date();
   const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
-  const user = await getCurrentUser();
-  const settings = await prisma.teamGoalSettings.findUnique({ where: { id: 'team' } });
-  const profiles = await getMemberProfiles();
-  const dailyReport = await getDailyReportForDate(now);
-  const goals = await prisma.goal.findMany({
+  const [user, settings, profiles, dailyReport, goals] = await Promise.all([
+    getCurrentUser(),
+    prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
+    getMemberProfiles(),
+    getDailyReportForDate(now),
+    prisma.goal.findMany({
     where: {
       ownerId: teamOwnerId,
       OR: [
@@ -93,7 +93,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       followUpsCompletedTarget: true, conversionRateTarget: true
     },
     orderBy: { periodStart: 'desc' }
-  });
+    })
+  ]);
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
   const weeklyPeriod = getGoalPeriodWindow('WEEKLY', now, monthlyStartDay);
@@ -107,23 +108,25 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const dataTo = [selectedRange.end, weeklyPeriod.end, monthlyPeriod.end].reduce((latest, date) => date > latest ? date : latest);
   const today = getLocalDayWindow(now);
 
-  const leads = await prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true, _count: { select: { saleEvents: true } } } });
-  const activities = await prisma.activity.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } });
-  const stageHistory = await prisma.stageHistory.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, toStage: true, createdAt: true } });
-  const saleEvents = await prisma.saleEvent.findMany({ where: { occurredAt: { gte: dataFrom, lt: dataTo }, reversedAt: null }, select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true } });
-  const followUps = await prisma.followUp.findMany({
+  const [leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps] = await Promise.all([
+    prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true, _count: { select: { saleEvents: true } } } }),
+    prisma.activity.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }),
+    prisma.stageHistory.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, toStage: true, createdAt: true } }),
+    prisma.saleEvent.findMany({ where: { occurredAt: { gte: dataFrom, lt: dataTo }, reversedAt: null }, select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true } }),
+    prisma.followUp.findMany({
       where: { OR: [
         { state: 'PENDING', dueDate: { lt: today.end } },
         { state: 'COMPLETED', completedAt: { gte: dataFrom, lt: dataTo } }
       ] },
       select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
-    });
-  const upcomingFollowUps = await prisma.followUp.findMany({
+    }),
+    prisma.followUp.findMany({
       where: { state: 'PENDING', dueDate: { gte: today.end } },
       orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
       take: 5,
       select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
-    });
+    })
+  ]);
 
   const byLead = <T extends { leadId: string }>(rows: T[]) => {
     const result = new Map<string, T[]>();
@@ -170,20 +173,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   ];
 
   return <section className="mx-auto max-w-[1480px] px-5 py-8 md:px-8 md:py-10 xl:px-10">
-    <header className="relative isolate flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-      <div className="relative z-10">
+    <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <div>
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">Arvello</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.045em] text-white md:text-[2.1rem]">Visão operacional</h1>
         <p className="mt-2 max-w-[60ch] text-sm text-white/55">Indicadores registrados no CRM para {periodLabel.toLowerCase()}.</p>
       </div>
-      <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <DashboardPeriodSelector period={period} />
         <Link href="/pesquisa" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--atelier-green)] px-4 text-sm font-semibold text-[#101411] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:-translate-y-px active:translate-y-px">
           <MagnifyingGlassIcon size={17} weight="bold" aria-hidden="true" />Pesquisar empresas
         </Link>
-      </div>
-      <div className="pointer-events-none absolute right-[38%] top-[-12px] z-0 hidden size-[88px] opacity-45 lg:block xl:size-[104px]">
-        <DashboardAmbientScene />
       </div>
     </header>
 

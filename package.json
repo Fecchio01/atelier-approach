@@ -25,8 +25,7 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "5.4.394",
     "react": "19.1.1",
-    "react-dom": "19.1.1",
-    "three": "^0.186.1"
+    "react-dom": "19.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -35,7 +34,6 @@
     "@types/node": "22.18.0",
     "@types/react": "19.1.13",
     "@types/react-dom": "19.1.9",
-    "@types/three": "^0.186.0",
     "@typescript-eslint/parser": "^8.0.0",
     "esbuild": "0.28.2",
     "eslint": "^9.39.5",

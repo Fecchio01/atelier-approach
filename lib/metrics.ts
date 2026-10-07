@@ -186,24 +186,26 @@ export async function getTeamGoalActualsByPeriod(
 
   const dataFrom = periods.reduce((earliest, period) => period.start < earliest ? period.start : earliest, periods[0].start);
   const dataTo = periods.reduce((latest, period) => period.end > latest ? period.end : latest, periods[0].end);
-  const leads = await database.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true, _count: { select: { saleEvents: true } } } });
-  const activities = await database.activity.findMany({
+  const [leads, activities, stageHistory, saleEvents, followUps] = await Promise.all([
+    database.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true, _count: { select: { saleEvents: true } } } }),
+    database.activity.findMany({
     where: { createdAt: { gte: dataFrom, lt: dataTo } },
     select: { leadId: true, actorId: true, type: true, createdAt: true, note: true },
     orderBy: { createdAt: 'asc' }
-  });
-  const stageHistory = await database.stageHistory.findMany({
+    }),
+    database.stageHistory.findMany({
     where: { createdAt: { gte: dataFrom, lt: dataTo } },
     select: { leadId: true, actorId: true, toStage: true, createdAt: true }
-  });
-  const saleEvents = await database.saleEvent.findMany({
+    }),
+    database.saleEvent.findMany({
     where: { occurredAt: { gte: dataFrom, lt: dataTo }, reversedAt: null },
     select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true }
-  });
-  const followUps = await database.followUp.findMany({
+    }),
+    database.followUp.findMany({
     where: { state: 'COMPLETED', completedAt: { gte: dataFrom, lt: dataTo } },
     select: { leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true }
-  });
+    })
+  ]);
 
   const byLead = <T extends { leadId: string }>(rows: T[]) => {
     const result = new Map<string, T[]>();
