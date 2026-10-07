@@ -1,8 +1,9 @@
-import { loadEnvConfig } from '@next/env';
+import nextEnv from '@next/env';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
+const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;

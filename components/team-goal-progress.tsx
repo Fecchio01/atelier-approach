@@ -1,4 +1,5 @@
 import type { GoalProgressByMetric } from '@/lib/metrics';
+import { MotionProgressFill } from './motion-primitives';
 
 const metrics = [
   ['approaches', 'Abordagens'],
@@ -40,7 +41,7 @@ export function TeamGoalProgress({ progress, hasApproaches, compact = false }: {
           <dd className={`whitespace-nowrap text-sm font-medium tabular-nums ${compact ? 'text-right sm:text-left' : ''}`}>{formatMetric(key, item.actual, hasApproaches)} <span className="text-white/40">/</span> {item.target === null ? <span className="text-white/45">Sem meta</span> : formatMetric(key, item.target, true)}</dd>
           {item.target !== null ? <div className={`${compact ? 'col-span-2 sm:col-span-1 sm:col-start-3' : 'mt-2'} flex items-center gap-3`}>
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label={`Progresso: ${label}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(ratioPercent ?? 0, 100)}>
-              {ratioPercent !== null ? <div className="h-full origin-left rounded-full bg-[var(--atelier-green)] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)]" style={{ transform: `scaleX(${Math.min(ratioPercent, 100) / 100})` }} /> : null}
+              {ratioPercent !== null ? <MotionProgressFill value={Math.min(ratioPercent, 100)} className="h-full origin-left rounded-full bg-[var(--atelier-green)]" /> : null}
             </div>
             <span className="min-w-10 text-right text-xs tabular-nums text-white/55">{ratioPercent === null ? '—' : `${ratioPercent}%`}</span>
           </div> : compact ? <span className="col-span-2 text-xs text-white/40 sm:col-span-1">Sem meta definida</span> : null}

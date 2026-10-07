@@ -7,6 +7,7 @@ node_modules/
 .next-local/
 .next-metas/
 .next-release/
+.next-motion-build/
 .next-supabase/
 .env
 prisma/*.db

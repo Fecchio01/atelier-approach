@@ -15,6 +15,8 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 
 import { TeamGoalProgress } from '@/components/team-goal-progress';
+import { DashboardPeriodSelector } from '@/components/dashboard-period-selector';
+import { DashboardAmbientScene } from '@/components/dashboard-ambient-scene';
 import { DailyCloseControl } from '@/components/daily-close-control';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -168,19 +170,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   ];
 
   return <section className="mx-auto max-w-[1480px] px-5 py-8 md:px-8 md:py-10 xl:px-10">
-    <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-      <div>
+    <header className="relative isolate flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <div className="relative z-10">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">Arvello</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.045em] text-white md:text-[2.1rem]">Visão operacional</h1>
         <p className="mt-2 max-w-[60ch] text-sm text-white/55">Indicadores registrados no CRM para {periodLabel.toLowerCase()}.</p>
       </div>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <nav aria-label="Período do dashboard" className="flex w-fit rounded-lg border border-white/10 bg-[#111719] p-1">
-          {([['day', 'Hoje'], ['week', 'Semana'], ['month', 'Ciclo mensal']] as const).map(([value, label]) => <Link key={value} href={`/?period=${value}`} aria-current={period === value ? 'page' : undefined} className={`rounded-md px-3 py-2 text-xs font-semibold transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] active:scale-[0.98] sm:px-3.5 ${period === value ? 'bg-[var(--atelier-green)] text-[#101411]' : 'text-white/60 hover:text-white'}`}>{label}</Link>)}
-        </nav>
+      <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <DashboardPeriodSelector period={period} />
         <Link href="/pesquisa" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--atelier-green)] px-4 text-sm font-semibold text-[#101411] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:-translate-y-px active:translate-y-px">
           <MagnifyingGlassIcon size={17} weight="bold" aria-hidden="true" />Pesquisar empresas
         </Link>
+      </div>
+      <div className="pointer-events-none absolute right-[38%] top-[-12px] z-0 hidden size-[88px] opacity-45 lg:block xl:size-[104px]">
+        <DashboardAmbientScene />
       </div>
     </header>
 

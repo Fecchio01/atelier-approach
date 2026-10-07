@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AnimatePresence, motion } from 'motion/react';
 import type { LeadStage } from '@prisma/client';
 import { ArrowsLeftRightIcon } from '@phosphor-icons/react';
 import { mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage } from '@/lib/funnel';
 import { LeadDetailModal } from './lead-detail-modal';
 import { displayCompanyName } from '@/lib/display-name';
 import { visibleLeads } from '@/lib/kanban-visible-leads';
+import { getMotionTransition } from './motion-primitives';
 import type { CommercialServiceOption } from '@/lib/commercial-ui';
 
 export type CrmLead = {
@@ -94,13 +96,15 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
           {stageLeads.map((lead) => {
             const latest = lead.activities[0];
             const channels = [[lead.whatsapp, 'WhatsApp'], [lead.instagram, 'Instagram'], [lead.website, 'Site'], [lead.phone, 'Telefone']].filter(([value]) => Boolean(value));
-            return <button key={lead.id} id={`lead-${lead.id}`} data-lead-id={lead.id} type="button" aria-label={`Abrir detalhes de ${displayCompanyName(lead.name)}`} onClick={() => setSelectedLeadId(lead.id)} className="group grid min-h-[84px] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] active:scale-[0.98] w-full gap-3 rounded-lg border border-white/[0.075] bg-[#151b20] p-3 text-left shadow-[0_10px_24px_rgba(0,0,0,.12)] hover:border-white/20 hover:bg-[#192127] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
+            return <motion.div key={lead.id} layoutId={`crm-lead-${lead.id}`} initial={false} transition={getMotionTransition(false, 'normal')}>
+              <button id={`lead-${lead.id}`} data-lead-id={lead.id} type="button" aria-label={`Abrir detalhes de ${displayCompanyName(lead.name)}`} onClick={() => setSelectedLeadId(lead.id)} className="group grid min-h-[84px] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] active:scale-[0.98] w-full gap-3 rounded-lg border border-white/[0.075] bg-[#151b20] p-3 text-left shadow-[0_10px_24px_rgba(0,0,0,.12)] hover:border-white/20 hover:bg-[#192127] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
               <span className="line-clamp-2 break-words text-[13px] font-semibold leading-snug text-white/90">{displayCompanyName(lead.name)}</span>
               <span className="flex items-center justify-between gap-2 text-[10px] text-white/40">
                 <span className="flex min-w-0 items-center gap-1.5"><span className={`h-2 w-2 shrink-0 rounded-full ${channels.length ? 'bg-[var(--atelier-green)]' : 'bg-white/35'}`} />{latest ? <time dateTime={latest.createdAt}>Há atividade</time> : 'Sem contato'}</span>
                 <span aria-label="Canais disponíveis" className="shrink-0 text-white/45">{channels.length ? channels.length === 1 ? channels[0][1] : `${channels.length} canais` : ''}</span>
               </span>
-            </button>;
+              </button>
+            </motion.div>;
           })}
           {!stageLeads.length ? <p className="rounded-xl border border-dashed border-white/[0.07] px-3 py-8 text-center text-xs text-white/25">Nenhuma empresa</p> : null}
         </div>
@@ -120,7 +124,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
       <div className="grid gap-4 md:grid-cols-2">{renderColumn('NO_RESPONSE')}</div>
     </section>
     <section className="mt-9 border-t border-red-300/[0.12] pt-6">{renderColumn('DISCARDED', 'Lixeira', 'Empresas descartadas ficam guardadas aqui, com o histórico preservado, sem voltar para a pesquisa.')}</section>
-    {selectedLead ? <LeadDetailModal key={selectedLead.id} lead={selectedLead} services={services} followUpDelayDays={followUpDelayDays} onClose={() => setSelectedLeadId(null)} onDeleted={(id) => {
+    <AnimatePresence>{selectedLead ? <LeadDetailModal key={selectedLead.id} lead={selectedLead} services={services} followUpDelayDays={followUpDelayDays} onClose={() => setSelectedLeadId(null)} onDeleted={(id) => {
       setRemovedIds((previous) => [...previous, id]);
       setSelectedLeadId(null);
       router.refresh();
@@ -132,6 +136,6 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
         setSelectedLeadId(null);
       }
       router.refresh();
-    }} /> : null}
+    }} /> : null}</AnimatePresence>
   </>;
 }

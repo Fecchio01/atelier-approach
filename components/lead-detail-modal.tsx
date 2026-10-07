@@ -7,6 +7,7 @@ import type { CrmLead } from './kanban-board';
 import { googleMapsSearchUrl } from '@/lib/google-maps-url';
 
 import { displayCompanyName } from '@/lib/display-name';
+import { MotionPanel } from './motion-primitives';
 import { getSelectedServiceSummary, type CommercialServiceOption } from '@/lib/commercial-ui';
 
 type Stage = FunnelStage;
@@ -243,6 +244,7 @@ export function LeadDetailModal({ lead, services, followUpDelayDays, onClose, on
   };
 
   return <dialog ref={dialogRef} aria-modal="true" aria-labelledby="lead-detail-title" data-testid="lead-modal-backdrop" onCancel={(event) => { event.preventDefault(); if (confirmingReturn || confirmingDiscard) { if (savingId !== lead.id) { setConfirmingReturn(false); setConfirmingDiscard(false); } } else onClose(); }} onClick={(event) => { if (event.target === event.currentTarget && !confirmingReturn && !confirmingDiscard) onClose(); }} className="mobile-safe-area fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-center justify-center bg-transparent text-white backdrop:bg-[#030506]/80 open:flex">
+    <MotionPanel className="relative max-h-full w-full max-w-3xl">
     <div data-testid="lead-modal-surface" className="starting:translate-y-2 starting:opacity-0 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] relative flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--atelier-floating-border)] bg-[#10161b] shadow-[0_28px_100px_rgba(0,0,0,.55)]">
       <div inert={confirmingReturn || confirmingDiscard} className="flex min-h-0 flex-col">
       <header data-atelier-floating className="bg-[var(--atelier-floating-surface)] flex items-start justify-between gap-5 border-b border-white/[0.09] px-6 py-6 sm:px-8">
@@ -277,6 +279,7 @@ export function LeadDetailModal({ lead, services, followUpDelayDays, onClose, on
         </section>
       </div> : null}
     </div>
+    </MotionPanel>
   </dialog>;
 }
 

@@ -3,6 +3,7 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { MotionConfig } from 'motion/react';
 import { CircleNotchIcon, SignOutIcon } from '@phosphor-icons/react';
 import { AppNavigationLink } from './app-navigation-link';
 import { appRoutes as routes, MobileNavigation } from './mobile-navigation';
@@ -42,7 +43,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
 
   const initials = user.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'AA';
 
-  return <>
+  return <MotionConfig reducedMotion="user"><>
     {pendingNavigation && <div role="status" aria-label="Navegação em andamento" aria-live="polite" className="fixed right-4 top-20 z-[60] inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-[var(--atelier-floating-surface)] px-3.5 text-xs font-medium text-white/75 shadow-lg backdrop-blur-xl backdrop-saturate-150 md:right-6 md:top-5">
       <CircleNotchIcon size={15} className="animate-spin text-[var(--atelier-green)] motion-reduce:animate-none" aria-hidden="true" />
       Abrindo {pendingNavigation.label}…
@@ -81,5 +82,5 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
       <ReportPeriodNavigationProvider>{children}</ReportPeriodNavigationProvider>
     </div>
     </main>
-  </>;
+  </></MotionConfig>;
 }
