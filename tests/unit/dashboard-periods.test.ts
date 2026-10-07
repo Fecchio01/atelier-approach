@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { createElement } from 'react';
 
 import { getDashboardDataFetchWindow, getGoalPeriodWindow, selectDashboardWindow, selectGoalPeriod } from '../../lib/goal-periods';
-import { getDashboardTrend } from '../../lib/dashboard-trend';
+import { getDashboardTrend, getDashboardTrendSegmentIndex } from '../../lib/dashboard-trend';
 import { DashboardTrendChart } from '../../components/dashboard-trend-chart';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -45,6 +45,15 @@ describe('dashboard period selection', () => {
 });
 
 describe('dashboard trend data', () => {
+  test('maps cursor progress to the day segment being traced, including the chart edges', () => {
+    expect(getDashboardTrendSegmentIndex(0, 7)).toBe(0);
+    expect(getDashboardTrendSegmentIndex(1 / 6, 7)).toBe(0);
+    expect(getDashboardTrendSegmentIndex(0.2, 7)).toBe(1);
+    expect(getDashboardTrendSegmentIndex(1, 7)).toBe(5);
+    expect(getDashboardTrendSegmentIndex(1.4, 7)).toBe(5);
+    expect(getDashboardTrendSegmentIndex(0.5, 1)).toBeNull();
+  });
+
   test('groups daily approaches and interest transitions into six four-hour windows', () => {
     const range = { start: new Date('2026-10-07T03:00:00.000Z'), end: new Date('2026-10-08T03:00:00.000Z') };
     const trend = getDashboardTrend([{
@@ -110,11 +119,15 @@ describe('dashboard trend data', () => {
 
   test('renders interactive chart lines and points when the period has activity', () => {
     const html = renderToStaticMarkup(createElement(DashboardTrendChart, {
-      data: [{ label: 'seg 05', approaches: 2, interests: 1 }], periodLabel: 'Esta semana'
+      data: [
+        { label: 'seg 05', approaches: 2, interests: 1 },
+        { label: 'ter 06', approaches: 3, interests: 2 }
+      ], periodLabel: 'Esta semana'
     }));
 
-    expect(html).toContain('data-testid="dashboard-approaches-line"');
-    expect(html).toContain('data-testid="dashboard-interests-line"');
-    expect(html).toContain('seg 05: 2 abordagens');
+    expect(html).toContain('data-testid="dashboard-approaches-segment-0"');
+    expect(html).toContain('data-testid="dashboard-interests-segment-0"');
+    expect(html).toContain('seg 05: 2 abordagens e 1 interesses');
+    expect(html).toContain('Passe o cursor pelo gráfico para traçar os resultados dia a dia.');
   });
 });

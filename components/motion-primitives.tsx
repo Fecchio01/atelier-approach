@@ -8,7 +8,8 @@ export const motionTokens = {
     instant: 0.1,
     fast: 0.16,
     normal: 0.22,
-    reduced: 0.18
+    reduced: 0.18,
+    trace: 0.55
   },
   easing: [0.22, 0.61, 0.36, 1] as const,
   distance: {
@@ -82,11 +83,10 @@ export function getDashboardPointMotionProps(reducedMotion: boolean) {
   };
 }
 
-export function getDashboardLineDrawProps(reducedMotion: boolean) {
+export function getDashboardTraceTransition(reducedMotion: boolean) {
   return {
-    initial: reducedMotion ? false : { pathLength: 0 },
-    animate: { pathLength: 1 },
-    transition: { pathLength: reducedMotion ? getMotionTransition(true, 'fast') : { ...getMotionTransition(false, 'normal'), duration: 0.8 } }
+    pathLength: getMotionTransition(reducedMotion, reducedMotion ? 'fast' : 'trace'),
+    strokeWidth: reducedMotion ? getMotionTransition(true, 'fast') : springs.snappy
   };
 }
 

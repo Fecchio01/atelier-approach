@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { getDashboardCardMotionProps, getDashboardLineDrawProps, getDashboardLineMotionProps, getPanelMotionProps, getMotionTransition, MotionPanel, motionTokens, springs } from '../../components/motion-primitives';
+import { getDashboardCardMotionProps, getDashboardLineMotionProps, getDashboardTraceTransition, getPanelMotionProps, getMotionTransition, MotionPanel, motionTokens, springs } from '../../components/motion-primitives';
 
 describe('shared motion primitives', () => {
   it('uses short centralized transition tokens for standard motion', () => {
@@ -47,8 +47,8 @@ describe('shared motion primitives', () => {
     expect(props.transition.strokeWidth).toEqual(springs.snappy);
   });
 
-  it('draws chart lines on mount unless the user prefers reduced motion', () => {
-    expect(getDashboardLineDrawProps(false)).toMatchObject({ initial: { pathLength: 0 }, animate: { pathLength: 1 } });
-    expect(getDashboardLineDrawProps(true)).toMatchObject({ initial: false, animate: { pathLength: 1 } });
+  it('uses the trace duration for cursor-driven path segments', () => {
+    expect(getDashboardTraceTransition(false).pathLength).toEqual(getMotionTransition(false, 'trace'));
+    expect(getDashboardTraceTransition(true).pathLength).toEqual(getMotionTransition(true, 'fast'));
   });
 });

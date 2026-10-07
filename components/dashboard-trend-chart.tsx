@@ -1,9 +1,10 @@
 'use client';
 
 import { motion, useReducedMotion } from 'motion/react';
-import type { DashboardTrendPoint } from '@/lib/dashboard-trend';
+import { useRef, useState, type PointerEvent } from 'react';
+import { getDashboardTrendSegmentIndex, type DashboardTrendPoint } from '@/lib/dashboard-trend';
 import { DashboardMotionSection } from '@/components/dashboard-motion-card';
-import { getDashboardLineDrawProps, getDashboardLineMotionProps, getDashboardPointMotionProps } from '@/components/motion-primitives';
+import { getDashboardLineMotionProps, getDashboardPointMotionProps, getDashboardTraceTransition } from '@/components/motion-primitives';
 
 type DashboardTrendChartProps = {
   data: DashboardTrendPoint[];
@@ -24,9 +25,14 @@ function linePoints(data: DashboardTrendPoint[], key: 'approaches' | 'interests'
   });
 }
 
+function lineSegments(points: ReturnType<typeof linePoints>) {
+  return points.slice(1).map((end, index) => ({ start: points[index], end, index }));
+}
+
 export function DashboardTrendChart({ data, periodLabel }: DashboardTrendChartProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
   const prefersReducedMotion = useReducedMotion() === true;
-  const lineDrawProps = getDashboardLineDrawProps(prefersReducedMotion);
   const lineMotionProps = getDashboardLineMotionProps(prefersReducedMotion);
   const pointMotionProps = getDashboardPointMotionProps(prefersReducedMotion);
   const approaches = data.reduce((total, point) => total + point.approaches, 0);
@@ -36,8 +42,17 @@ export function DashboardTrendChart({ data, periodLabel }: DashboardTrendChartPr
   const maximum = Math.max(4, Math.ceil(peak / 4) * 4);
   const approachPoints = linePoints(data, 'approaches', maximum);
   const interestPoints = linePoints(data, 'interests', maximum);
+  const approachSegments = lineSegments(approachPoints);
+  const interestSegments = lineSegments(interestPoints);
   const ticks = Array.from({ length: 5 }, (_, index) => maximum - (maximum / 4) * index);
-  const pointString = (points: typeof approachPoints) => points.map(({ x, y }) => `${x},${y}`).join(' ');
+  const lineTransition = getDashboardTraceTransition(prefersReducedMotion);
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const bounds = svgRef.current?.getBoundingClientRect();
+    if (!bounds?.width) return;
+    const progress = (event.clientX - bounds.left) / bounds.width;
+    setHoveredSegment(getDashboardTrendSegmentIndex(progress, data.length));
+  };
+  const highlightedPoint = hoveredSegment === null ? null : data[hoveredSegment + 1];
 
   return <DashboardMotionSection className="rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5" testId="dashboard-trend-motion" aria-labelledby="dashboard-trend-heading">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -57,24 +72,33 @@ export function DashboardTrendChart({ data, periodLabel }: DashboardTrendChartPr
       <span className="ml-auto text-white/40">{periodLabel}</span>
     </div>
 
+    <p className="mt-2 min-h-4 text-[11px] text-white/45" aria-live="polite">
+      {hoveredSegment !== null && highlightedPoint
+        ? `${data[hoveredSegment].label} → ${highlightedPoint.label}: ${highlightedPoint.approaches} abordagens · ${highlightedPoint.interests} interesses`
+        : 'Passe o cursor pelo gráfico para traçar os resultados dia a dia.'}
+    </p>
+
     <figure className="mt-3" aria-labelledby="dashboard-trend-heading">
-      <div className="relative h-[190px] pl-9 sm:h-[230px] sm:pl-11">
+      <div className="relative h-[190px] pl-9 sm:h-[230px] sm:pl-11" onPointerMove={handlePointerMove} onPointerLeave={() => setHoveredSegment(null)}>
         <div className="pointer-events-none absolute inset-y-0 left-0 flex flex-col justify-between pb-0.5 pt-0 text-[10px] tabular-nums text-white/35" aria-hidden="true">
           {ticks.map((tick) => <span key={tick}>{Math.round(tick)}</span>)}
         </div>
-        <svg className="h-full w-full overflow-visible" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
+        <svg ref={svgRef} className="h-full w-full cursor-crosshair overflow-visible" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
           {ticks.map((tick, index) => {
             const y = chartTop + ((chartBottom - chartTop) * index / 4);
             return <line key={tick} x1="0" y1={y} x2={chartWidth} y2={y} stroke="rgba(255,255,255,0.09)" strokeDasharray={index === 4 ? undefined : '4 8'} strokeWidth="1" />;
           })}
           {data.map((point, index) => {
             const x = data.length <= 1 ? chartWidth / 2 : 6 + (index / (data.length - 1)) * (chartWidth - 12);
-            return <line key={point.label} x1={x} y1={chartTop} x2={x} y2={chartBottom} stroke="rgba(255,255,255,0.045)" strokeDasharray="3 8" strokeWidth="1" />;
+            const isHighlighted = hoveredSegment !== null && index === hoveredSegment + 1;
+            return <line key={point.label} x1={x} y1={chartTop} x2={x} y2={chartBottom} stroke={isHighlighted ? 'rgba(167,216,26,0.32)' : 'rgba(255,255,255,0.045)'} strokeDasharray="3 8" strokeWidth={isHighlighted ? '1.5' : '1'} />;
           })}
-          {approachPoints.length > 0 ? <motion.polyline {...lineDrawProps} {...lineMotionProps} points={pointString(approachPoints)} fill="none" stroke="var(--atelier-green)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" data-testid="dashboard-approaches-line" /> : null}
-          {interestPoints.length > 0 ? <motion.polyline {...lineDrawProps} {...lineMotionProps} points={pointString(interestPoints)} fill="none" stroke="#f4f5f5" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" data-testid="dashboard-interests-line" /> : null}
-          {approachPoints.map((point) => <motion.circle {...pointMotionProps} key={`approach-${point.label}`} cx={point.x} cy={point.y} r="4.5" fill="var(--atelier-green)" stroke="var(--atelier-surface)" strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{`${point.label}: ${point.value} abordagens`}</title></motion.circle>)}
-          {interestPoints.map((point) => <motion.circle {...pointMotionProps} key={`interest-${point.label}`} cx={point.x} cy={point.y} r="4" fill="#f4f5f5" stroke="var(--atelier-surface)" strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{`${point.label}: ${point.value} interesses`}</title></motion.circle>)}
+          <polyline points={approachPoints.map(({ x, y }) => `${x},${y}`).join(' ')} fill="none" stroke="var(--atelier-green)" strokeOpacity="0.28" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          <polyline points={interestPoints.map(({ x, y }) => `${x},${y}`).join(' ')} fill="none" stroke="#f4f5f5" strokeOpacity="0.24" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          {approachSegments.map(({ start, end, index }) => <motion.path {...lineMotionProps} key={`approach-segment-${index}`} initial={false} animate={{ pathLength: !prefersReducedMotion && hoveredSegment !== null && index <= hoveredSegment ? 1 : 0 }} transition={lineTransition} d={`M ${start.x} ${start.y} L ${end.x} ${end.y}`} fill="none" stroke="var(--atelier-green)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" data-testid={`dashboard-approaches-segment-${index}`} />)}
+          {interestSegments.map(({ start, end, index }) => <motion.path {...lineMotionProps} key={`interest-segment-${index}`} initial={false} animate={{ pathLength: !prefersReducedMotion && hoveredSegment !== null && index <= hoveredSegment ? 1 : 0 }} transition={lineTransition} d={`M ${start.x} ${start.y} L ${end.x} ${end.y}`} fill="none" stroke="#f4f5f5" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" data-testid={`dashboard-interests-segment-${index}`} />)}
+          {approachPoints.map((point, index) => <motion.circle {...pointMotionProps} animate={{ scale: !prefersReducedMotion && hoveredSegment !== null && index === hoveredSegment + 1 ? 1.7 : 1 }} key={`approach-${point.label}`} cx={point.x} cy={point.y} r="4.5" fill="var(--atelier-green)" stroke="var(--atelier-surface)" strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{`${point.label}: ${point.value} abordagens`}</title></motion.circle>)}
+          {interestPoints.map((point, index) => <motion.circle {...pointMotionProps} animate={{ scale: !prefersReducedMotion && hoveredSegment !== null && index === hoveredSegment + 1 ? 1.7 : 1 }} key={`interest-${point.label}`} cx={point.x} cy={point.y} r="4" fill="#f4f5f5" stroke="var(--atelier-surface)" strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{`${point.label}: ${point.value} interesses`}</title></motion.circle>)}
         </svg>
       </div>
       <div className="ml-9 mt-2 grid gap-1 text-center text-[10px] text-white/50 sm:ml-11 sm:text-xs" style={{ gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, minmax(0, 1fr))` }} aria-hidden="true">
