@@ -109,7 +109,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const viewingCurrent = selectedWindow.start.getTime() === activeWindow.start.getTime();
   const pdfHref = `/api/reports?format=pdf&period=${period}&from=${encodeURIComponent(selectedWindow.start.toISOString())}&to=${encodeURIComponent(selectedWindow.end.toISOString())}`;
 
-  return <section className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
+  return <section data-testid="reports-page-canvas" className="atelier-page-canvas mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
     <PageHeading eyebrow="Relatórios comerciais" title="Leituras do CRM, sem previsões." description="Os números usam atividades, etapas e eventos de ganho registrados no CRM." action={<div className="flex flex-wrap items-center gap-3"><ReportPdfDownload href={pdfHref} /><Link href="/" className="text-sm text-[var(--atelier-green)]">← Painel</Link></div>} />
     <div className="mt-8"><ReportPeriodNavigation activePeriod={viewingCurrent ? period : null} date={today} /></div>
     <div className="mt-5"><DailyCloseControl initiallyClosed={Boolean(dailyReport)} reportHref={todayHref} /></div>

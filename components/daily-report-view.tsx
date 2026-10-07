@@ -53,7 +53,7 @@ export function DailyReportView({
 }) {
   const selectedDate = new Date(`${date}T12:00:00.000Z`);
   const summary = report?.snapshot.summary;
-  return <section className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
+  return <section data-testid="reports-page-canvas" className="atelier-page-canvas mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
     <header className="flex flex-col gap-5 border-b border-white/[0.08] pb-8 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-3xl">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--atelier-green)]">Relatórios comerciais</p>

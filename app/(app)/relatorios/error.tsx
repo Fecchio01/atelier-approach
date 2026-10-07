@@ -10,7 +10,7 @@ export default function ReportsError({ reset }: { reset: () => void }) {
     clearPendingNavigation();
   }, [clearPendingNavigation]);
 
-  return <section role="alert" className="mx-auto max-w-3xl px-4 py-12 sm:px-5 md:px-8">
+  return <section data-testid="reports-page-canvas" role="alert" className="atelier-page-canvas mx-auto max-w-3xl px-4 py-12 sm:px-5 md:px-8">
     <div className="rounded-2xl border border-red-300/20 bg-[#111411] p-6 sm:p-8">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-200">Relatórios indisponíveis</p>
       <h1 className="mt-3 text-2xl font-semibold text-white">Não foi possível carregar este relatório.</h1>

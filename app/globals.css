@@ -141,5 +141,8 @@ dialog {
 .atelier-scrollbar-accent::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(167,216,26,.72); background-clip: padding-box; }
 .atelier-scrollbar-accent::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--atelier-green) 74%, #263420); background-clip: padding-box; }
 .atelier-scrollbar-accent::-webkit-scrollbar-thumb:hover { background: var(--atelier-green); background-clip: padding-box; }
+.atelier-scrollbar-hidden-x { scrollbar-width: none; }
+.atelier-scrollbar-hidden-x::-webkit-scrollbar { display: none; }
+.atelier-page-canvas { min-height: 100dvh; background: radial-gradient(circle at 55% -20%, #1c2923 0, transparent 38rem), var(--atelier-black); }
 .mobile-safe-area { padding: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left)); }
 @media (min-width: 640px) { .mobile-safe-area { padding: 2rem; } }

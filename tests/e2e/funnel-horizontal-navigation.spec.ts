@@ -14,6 +14,13 @@ test('keeps a horizontal funnel scrollbar at the top and synchronizes it with th
   const board = page.getByRole('region', { name: 'Funil CRM' });
   await expect(topScrollbar).toBeVisible();
   await expect(board).toBeVisible();
+  const topBounds = await topScrollbar.boundingBox();
+  const boardBounds = await board.boundingBox();
+  expect(topBounds).not.toBeNull();
+  expect(boardBounds).not.toBeNull();
+  expect((boardBounds?.y ?? 0) - ((topBounds?.y ?? 0) + (topBounds?.height ?? 0))).toBeGreaterThanOrEqual(12);
+  expect(await topScrollbar.evaluate((element) => element.closest('[data-testid="crm-main-funnel-scrollport"]'))).toBeNull();
+  expect(await board.evaluate((element) => getComputedStyle(element).scrollbarWidth)).toBe('none');
 
   await topScrollbar.evaluate((element) => {
     const scrollport = element as HTMLDivElement;

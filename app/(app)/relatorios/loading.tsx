@@ -13,7 +13,7 @@ function Skeleton({ className = '' }: { className?: string }) {
 }
 
 export default function ReportsLoading() {
-  return <section aria-busy="true" aria-label="Carregando relatórios" className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
+  return <section data-testid="reports-page-canvas" aria-busy="true" aria-label="Carregando relatórios" className="atelier-page-canvas mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
     <header className="border-b border-white/[0.08] pb-5">
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--atelier-green)]">Relatórios comerciais</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-white md:text-4xl">Relatórios da equipe</h1>

@@ -119,16 +119,18 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
 
   return <>
     <p className="mb-2 flex items-center gap-2 text-xs text-white/40 md:hidden"><ArrowsLeftRightIcon size={15} aria-hidden="true" />Deslize para ver todas as etapas</p>
-    <section data-testid="crm-main-funnel-scrollport" role="region" aria-label="Etapas principais do funil" tabIndex={0} className="atelier-scrollbar h-[min(68vh,42rem)] max-h-[min(68dvh,42rem)] overflow-y-auto overscroll-y-contain rounded-2xl border border-white/[0.1] bg-[#0d1216]/55 p-2.5 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] md:h-auto md:p-3">
-      <div className="sticky top-0 z-[1] -mx-2.5 -mt-2.5 mb-2.5 bg-[#0d1216] px-2.5 pt-2.5 md:-mx-3 md:-mt-3 md:px-3 md:pt-3">
-        <div ref={topScrollRef} data-testid="crm-funnel-top-scrollbar" role="region" aria-label="Arraste para navegar horizontalmente pelas etapas do funil" tabIndex={0} onScroll={(event) => synchronizeHorizontalScroll(event.currentTarget, funnelScrollRef.current)} className="atelier-scrollbar-accent min-w-0 max-w-full overflow-x-auto overflow-y-hidden rounded-full focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+    <div className="rounded-2xl border border-white/[0.1] bg-[#0d1216]/55 p-2.5 md:p-3">
+      <div className="mb-3 flex justify-center px-2">
+        <div ref={topScrollRef} data-testid="crm-funnel-top-scrollbar" role="region" aria-label="Arraste para navegar horizontalmente pelas etapas do funil" tabIndex={0} onScroll={(event) => synchronizeHorizontalScroll(event.currentTarget, funnelScrollRef.current)} className="atelier-scrollbar-accent w-full max-w-[42rem] overflow-x-auto overflow-y-hidden rounded-full focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
           <div aria-hidden="true" className="h-2" style={{ minWidth: '1540px' }} />
         </div>
       </div>
-      <div ref={funnelScrollRef} role="region" aria-label="Funil CRM" tabIndex={0} onScroll={(event) => synchronizeHorizontalScroll(event.currentTarget, topScrollRef.current)} className="atelier-scrollbar min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto overflow-y-hidden pb-1 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
-        <div className="grid grid-cols-7 items-start gap-2.5" style={{ minWidth: '1540px' }}>{mainFunnelStages.map((stage) => renderColumn(stage))}</div>
-      </div>
-    </section>
+      <section data-testid="crm-main-funnel-scrollport" role="region" aria-label="Etapas principais do funil" tabIndex={0} className="atelier-scrollbar h-[min(68vh,42rem)] max-h-[min(68dvh,42rem)] overflow-y-auto overscroll-y-contain rounded-xl focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] md:h-auto">
+        <div ref={funnelScrollRef} role="region" aria-label="Funil CRM" tabIndex={0} onScroll={(event) => synchronizeHorizontalScroll(event.currentTarget, topScrollRef.current)} className="atelier-scrollbar-hidden-x min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto overflow-y-hidden pb-1 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+          <div className="grid grid-cols-7 items-start gap-2.5" style={{ minWidth: '1540px' }}>{mainFunnelStages.map((stage) => renderColumn(stage))}</div>
+        </div>
+      </section>
+    </div>
     <section className="mt-9 border-t border-white/[0.07] pt-6" aria-label="Outras situações">
       <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.15em] text-white/35">Outras situações</h2>
       <div className="grid gap-4 md:grid-cols-2">{renderColumn('NO_RESPONSE')}</div>
