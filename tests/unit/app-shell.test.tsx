@@ -1,4 +1,5 @@
 import React from 'react';
+import sharp from 'sharp';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -16,6 +17,17 @@ import { AppShell } from '../../components/app-shell';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('AppShell brand navigation', () => {
+  test('serves the official wordmark with a transparent canvas', async () => {
+    const image = 'public/brand/arvello_approach_com_nome_transparente.png';
+    const metadata = await sharp(image).metadata();
+    const { data, info } = await sharp(image).raw().toBuffer({ resolveWithObject: true });
+
+    expect(metadata.hasAlpha).toBe(true);
+    expect(info.channels).toBe(4);
+    expect(data[3]).toBe(0);
+    expect(data[(info.width - 1) * info.channels + 3]).toBe(0);
+  });
+
   test('renders the Arvello logo lockup and a distinct icon for every primary destination', () => {
     vi.stubGlobal('React', React);
     const markup = renderToStaticMarkup(
@@ -27,8 +39,8 @@ describe('AppShell brand navigation', () => {
     );
 
     expect(markup).toContain('alt="Arvello"');
-    expect(markup).toContain('src="/brand/arvello_approach_com_nome_fundo_preto.png"');
-    expect(markup).toContain('mix-blend-screen');
+    expect(markup).toContain('src="/brand/arvello_approach_com_nome_transparente.png"');
+    expect(markup).not.toContain('mix-blend-screen');
     expect(markup).not.toContain('bg-black');
     expect(markup).toContain('data-atelier-design="apple"');
     expect(markup.match(/Sua operação comercial/g)).toHaveLength(3);
