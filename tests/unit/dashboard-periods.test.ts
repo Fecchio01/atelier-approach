@@ -138,9 +138,11 @@ describe('dashboard trend data', () => {
 
     expect(html).toContain('data-testid="dashboard-approaches-segment-0"');
     expect(html).toContain('data-testid="dashboard-interests-segment-0"');
+    expect(html).toContain('data-testid="dashboard-interests-point-0"');
+    expect(html).not.toContain('linha contínua');
     expect(html).toContain('seg 05: 2 abordagens e 1 interesses');
     expect(html).toContain('Passe o cursor pelo gráfico para traçar os resultados dia a dia.');
-    expect(html).toContain('Interesses · linha contínua');
+    expect(html).toContain('Interesses</span>');
     expect(html).not.toContain('stroke-dasharray="7 5"');
   });
 });
