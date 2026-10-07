@@ -192,22 +192,24 @@ export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: D
 }
 
 export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyReport> {
-  const leads = await prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } });
-  const activities = await prisma.activity.findMany({
-    where: { createdAt: { gte: range.from, lt: range.to } },
-    select: { leadId: true, actorId: true, type: true, channel: true, note: true, createdAt: true },
-    orderBy: { createdAt: 'desc' }
-  });
-  const followUps = await prisma.followUp.findMany({
-    where: { OR: [
-      { dueDate: { gte: range.from, lt: range.to } },
-      { completedAt: { gte: range.from, lt: range.to } },
-      { cancelledAt: { gte: range.from, lt: range.to } }
-    ] },
-    select: { dueDate: true, state: true, completedAt: true, cancelledAt: true }
-  });
-  const wins = await prisma.saleEvent.findMany({ where: { occurredAt: { gte: range.from, lt: range.to }, reversedAt: null } });
-  const stageHistory = await prisma.stageHistory.findMany({ where: { createdAt: { gte: range.from, lt: range.to } } });
+  const [leads, activities, followUps, wins, stageHistory] = await Promise.all([
+    prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } }),
+    prisma.activity.findMany({
+      where: { createdAt: { gte: range.from, lt: range.to } },
+      select: { leadId: true, actorId: true, type: true, channel: true, note: true, createdAt: true },
+      orderBy: { createdAt: 'desc' }
+    }),
+    prisma.followUp.findMany({
+      where: { OR: [
+        { dueDate: { gte: range.from, lt: range.to } },
+        { completedAt: { gte: range.from, lt: range.to } },
+        { cancelledAt: { gte: range.from, lt: range.to } }
+      ] },
+      select: { dueDate: true, state: true, completedAt: true, cancelledAt: true }
+    }),
+    prisma.saleEvent.findMany({ where: { occurredAt: { gte: range.from, lt: range.to }, reversedAt: null } }),
+    prisma.stageHistory.findMany({ where: { createdAt: { gte: range.from, lt: range.to } } })
+  ]);
   const approaches = activities.filter((activity) => activity.type === 'CONTACT' || !activity.type);
   const interests = stageHistory.filter((event) => isInterestStage(event.toStage)).length;
   const meetings = stageHistory.filter((event) => isMeetingStage(event.toStage)).length;
