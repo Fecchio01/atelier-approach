@@ -186,8 +186,11 @@ export async function getTeamGoalActualsByPeriod(
 
   const dataFrom = periods.reduce((earliest, period) => period.start < earliest ? period.start : earliest, periods[0].start);
   const dataTo = periods.reduce((latest, period) => period.end > latest ? period.end : latest, periods[0].end);
-  const [leads, activities, stageHistory, saleEvents, followUps] = await Promise.all([
-    database.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true, _count: { select: { saleEvents: true } } } }),
+  const [legacyWonLeads, activities, stageHistory, saleEvents, followUps] = await Promise.all([
+    database.lead.findMany({
+      where: { stage: 'WON', wonAt: { gte: dataFrom, lt: dataTo }, saleEvents: { none: {} } },
+      select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true }
+    }),
     database.activity.findMany({
     where: { createdAt: { gte: dataFrom, lt: dataTo } },
     select: { leadId: true, actorId: true, type: true, createdAt: true, note: true },
@@ -216,13 +219,21 @@ export async function getTeamGoalActualsByPeriod(
   const historyByLead = byLead(stageHistory);
   const salesByLead = byLead(saleEvents);
   const followUpsByLead = byLead(followUps);
-  const metricLeads: MetricLead[] = leads.map((lead) => ({
-    ...lead,
-    hasSaleHistory: lead._count?.saleEvents > 0,
-    activities: activitiesByLead.get(lead.id) ?? [],
-    stageHistory: historyByLead.get(lead.id) ?? [],
-    saleEvents: salesByLead.get(lead.id) ?? [],
-    followUps: followUpsByLead.get(lead.id) ?? []
+  const leadById = new Map(legacyWonLeads.map((lead) => [lead.id, lead]));
+  const leadIds = new Set([
+    ...leadById.keys(),
+    ...activities.map((row) => row.leadId),
+    ...stageHistory.map((row) => row.leadId),
+    ...saleEvents.map((row) => row.leadId),
+    ...followUps.map((row) => row.leadId)
+  ]);
+  const metricLeads: MetricLead[] = [...leadIds].map((id) => ({
+    ...(leadById.get(id) ?? { id, stage: 'CONTACTED', saleValue: null, mrr: null, wonAt: null, wonById: null }),
+    hasSaleHistory: false,
+    activities: activitiesByLead.get(id) ?? [],
+    stageHistory: historyByLead.get(id) ?? [],
+    saleEvents: salesByLead.get(id) ?? [],
+    followUps: followUpsByLead.get(id) ?? []
   }));
 
   return periods.map((period) => getDashboardMetrics(metricLeads, { start: period.start, end: period.end, now }).goalActuals);

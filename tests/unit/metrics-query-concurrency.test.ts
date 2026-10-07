@@ -3,6 +3,28 @@ import { describe, expect, it } from 'vitest';
 import { getTeamGoalActualsByPeriod } from '../../lib/metrics';
 
 describe('dashboard metric query concurrency', () => {
+  it('limits the lead scan to legacy won leads in the requested period', async () => {
+    let leadQuery: unknown;
+    const database = {
+      lead: { findMany: async (query: unknown) => { leadQuery = query; return []; } },
+      activity: { findMany: async () => [] },
+      stageHistory: { findMany: async () => [] },
+      saleEvent: { findMany: async () => [] },
+      followUp: { findMany: async () => [] }
+    } as unknown as Parameters<typeof getTeamGoalActualsByPeriod>[2];
+    const period = { kind: 'WEEKLY' as const, start: new Date('2026-10-05T00:00:00.000Z'), end: new Date('2026-10-12T00:00:00.000Z') };
+
+    await getTeamGoalActualsByPeriod([period], new Date('2026-10-07T12:00:00.000Z'), database);
+
+    expect(leadQuery).toMatchObject({
+      where: {
+        stage: 'WON',
+        wonAt: { gte: period.start, lt: period.end },
+        saleEvents: { none: {} }
+      }
+    });
+  });
+
   it('starts all independent metric reads before awaiting any result', async () => {
     const started: string[] = [];
     const resolvers: (() => void)[] = [];
