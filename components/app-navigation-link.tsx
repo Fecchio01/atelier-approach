@@ -5,18 +5,19 @@ import Link from 'next/link';
 
 type LinkProps = Omit<ComponentProps<typeof Link>, 'prefetch' | 'onClick'> & {
   label: string;
+  forcePrefetch?: boolean;
   onNavigationStart?: (href: string, label: string, event: MouseEvent<HTMLAnchorElement>) => boolean;
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
   onTouchStart?: (event: TouchEvent<HTMLAnchorElement>) => void;
 };
 
-export function AppNavigationLink({ href, label, onNavigationStart, onClick, onMouseEnter, onFocus, onTouchStart, ...props }: LinkProps) {
+export function AppNavigationLink({ href, label, forcePrefetch = false, onNavigationStart, onClick, onMouseEnter, onFocus, onTouchStart, ...props }: LinkProps) {
   const [shouldPrefetch, setShouldPrefetch] = useState(false);
 
   return <Link
     {...props}
     href={href}
-    prefetch={shouldPrefetch ? null : false}
+    prefetch={forcePrefetch || shouldPrefetch}
     onMouseEnter={(event) => { onMouseEnter?.(event); setShouldPrefetch(true); }}
     onFocus={(event) => { onFocus?.(event); setShouldPrefetch(true); }}
     onTouchStart={(event) => { onTouchStart?.(event); setShouldPrefetch(true); }}

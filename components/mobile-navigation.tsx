@@ -119,6 +119,7 @@ export function MobileNavigation({
                 key={route.href}
                 href={route.href}
                 label={route.label}
+                forcePrefetch={isOpen}
                 onNavigationStart={onNavigationStart}
                 scroll={route.href === '/pesquisa' ? false : undefined}
                 onClick={closeOnNavigate}
