@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { readGoalPeriodSelection, writeGoalPeriodSelection, type GoalPeriodSelection } from '@/lib/goal-period-selection';
 import type { CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import type { GoalPeriodWindow } from '@/lib/goal-periods';
@@ -39,6 +40,26 @@ export function GoalCenter({
   monthlyActuals: GoalMetricActuals;
 }) {
   const [selectedKind, setSelectedKind] = useState<'WEEKLY' | 'MONTHLY'>('WEEKLY');
+  const selectionChangedByUser = useRef(false);
+
+  useEffect(() => {
+    if (selectionChangedByUser.current) return;
+    try {
+      setSelectedKind(readGoalPeriodSelection(window.localStorage));
+    } catch {
+      // Keep the weekly default if browser storage is unavailable.
+    }
+  }, []);
+
+  function selectPeriod(kind: GoalPeriodSelection) {
+    selectionChangedByUser.current = true;
+    setSelectedKind(kind);
+    try {
+      writeGoalPeriodSelection(window.localStorage, kind);
+    } catch {
+      // The selected period still works for this visit if storage is unavailable.
+    }
+  }
 
   return <div className="mt-7">
     <div className="flex flex-wrap items-center justify-between gap-4">
@@ -54,7 +75,7 @@ export function GoalCenter({
           role="tab"
           aria-selected={selectedKind === kind}
           aria-controls={`goal-panel-${kind.toLowerCase()}`}
-          onClick={() => setSelectedKind(kind)}
+          onClick={() => selectPeriod(kind)}
           className={`min-h-10 min-w-24 rounded-lg px-4 text-sm font-medium transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] active:scale-[0.98] ${selectedKind === kind ? 'bg-[var(--atelier-green)] text-[#101507]' : 'text-white/55 hover:bg-white/[0.05] hover:text-white'}`}
         >{label}</button>)}
       </div>

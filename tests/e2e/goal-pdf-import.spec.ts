@@ -84,6 +84,27 @@ test('automatically applies PDF goals, closes the review, and persists weekly an
     const importedMonthlyGoal = await prisma.goal.findFirst({ where: { ownerId: '__team__', periodKind: 'MONTHLY' } });
     expect(importedMonthlyGoal?.approachesTarget).toBe(25);
     expect(importedMonthlyGoal?.customGoals).toMatchObject([{ name: 'Carros', target: 3, current: 1 }]);
+
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Funil' }).click();
+    await expect(page).toHaveURL(/\/crm$/);
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
+    await expect(page).toHaveURL(/\/metas$/);
+    const monthlyPanelAfterNavigation = page.locator('#goal-panel-monthly');
+    await expect(page.getByRole('tab', { name: 'Mensal' })).toHaveAttribute('aria-selected', 'true');
+    await expect(monthlyPanelAfterNavigation.getByText('Carros', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Sair da conta' }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await page.getByLabel('E-mail').fill(e2eCredentials.email);
+    await page.getByLabel('Senha').fill(e2eCredentials.password);
+    await page.getByRole('button', { name: 'Entrar' }).click();
+    await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
+    await expect(page).toHaveURL(/\/metas$/);
+    const monthlyPanelAfterLogin = page.locator('#goal-panel-monthly');
+    await expect(page.getByRole('tab', { name: 'Mensal' })).toHaveAttribute('aria-selected', 'true');
+    await expect(monthlyPanelAfterLogin.getByText('Carros', { exact: true })).toBeVisible();
+
     await monthlyPanel.getByRole('button', { name: 'Editar meta para abordagens' }).click();
     await monthlyPanel.getByLabel('Meta para abordagens').fill('90');
     await monthlyPanel.getByRole('button', { name: 'Salvar metas' }).click();

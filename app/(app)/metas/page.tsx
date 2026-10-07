@@ -7,6 +7,8 @@ import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { getTeamGoalActualsByPeriod } from '@/lib/metrics';
 import { GoalCenter } from './goal-center';
 
+export const dynamic = 'force-dynamic';
+
 const teamOwnerId = '__team__';
 
 export default async function GoalsPage() {
