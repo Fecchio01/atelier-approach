@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
+import { createElement } from 'react';
 
 import { getDashboardDataFetchWindow, getGoalPeriodWindow, selectDashboardWindow, selectGoalPeriod } from '../../lib/goal-periods';
+import { getDashboardTrend } from '../../lib/dashboard-trend';
+import { DashboardTrendChart } from '../../components/dashboard-trend-chart';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 describe('dashboard period selection', () => {
   test('fetch window covers the active weekly and monthly periods without a serial settings read', () => {
@@ -37,5 +41,68 @@ describe('dashboard period selection', () => {
     expect(selectGoalPeriod(oldGoal.periodStart, oldGoal, activeGoal)).toBe(oldGoal);
     expect(selectGoalPeriod(new Date('2021-01-01T00:00:00.000Z'), null, activeGoal)).toBeNull();
     expect(selectGoalPeriod(null, null, activeGoal)).toBe(activeGoal);
+  });
+});
+
+describe('dashboard trend data', () => {
+  test('groups daily approaches and interest transitions into six four-hour windows', () => {
+    const range = { start: new Date('2026-10-07T03:00:00.000Z'), end: new Date('2026-10-08T03:00:00.000Z') };
+    const trend = getDashboardTrend([{
+      id: 'daily-lead', stage: 'CONTACTED', saleValue: null, mrr: null, followUps: [],
+      activities: [
+        { actorId: 'ana', type: 'CONTACT', createdAt: new Date('2026-10-07T04:30:00.000Z') },
+        { actorId: 'ana', type: 'FOLLOW_UP_SCHEDULED', createdAt: new Date('2026-10-07T04:45:00.000Z') }
+      ],
+      stageHistory: [{ actorId: 'ana', toStage: 'INTEREST', createdAt: new Date('2026-10-07T08:15:00.000Z') }]
+    }], range, 'day');
+
+    expect(trend).toHaveLength(6);
+    expect(trend.map(({ label }) => label)).toEqual(['00h', '04h', '08h', '12h', '16h', '20h']);
+    expect(trend[0]).toMatchObject({ approaches: 1, interests: 0 });
+    expect(trend[1]).toMatchObject({ approaches: 0, interests: 1 });
+    expect(trend.slice(2).every(({ approaches, interests }) => approaches === 0 && interests === 0)).toBe(true);
+  });
+
+  test('uses legacy stage-change notes when structured history is absent', () => {
+    const trend = getDashboardTrend([{
+      id: 'legacy-lead', stage: 'CONTACTED', saleValue: null, mrr: null, followUps: [],
+      activities: [
+        { actorId: 'ana', createdAt: new Date('2026-10-05T13:00:00.000Z'), note: 'Etapa alterada para INTEREST.' },
+        { actorId: 'ana', createdAt: new Date('2026-10-05T14:00:00.000Z'), note: 'Etapa alterada para MEETING.' }
+      ]
+    }], {
+      start: new Date('2026-10-05T03:00:00.000Z'), end: new Date('2026-10-12T03:00:00.000Z')
+    }, 'week');
+
+    expect(trend).toHaveLength(7);
+    expect(trend[0]).toMatchObject({ approaches: 2, interests: 1 });
+  });
+
+  test('summarizes a monthly cycle into readable seven-day groups', () => {
+    const trend = getDashboardTrend([{
+      id: 'monthly-lead', stage: 'CONTACTED', saleValue: null, mrr: null, followUps: [],
+      activities: [
+        { actorId: 'ana', type: 'CONTACT', createdAt: new Date('2026-10-02T15:00:00.000Z') },
+        { actorId: 'ana', type: 'CONTACT', createdAt: new Date('2026-10-10T15:00:00.000Z') },
+        { actorId: 'ana', type: 'CONTACT', createdAt: new Date('2026-10-31T15:00:00.000Z') }
+      ]
+    }], {
+      start: new Date('2026-10-01T03:00:00.000Z'), end: new Date('2026-11-01T03:00:00.000Z')
+    }, 'month');
+
+    expect(trend.map(({ label }) => label)).toEqual(['01–07', '08–14', '15–21', '22–28', '29–31']);
+    expect(trend.map(({ approaches }) => approaches)).toEqual([1, 1, 0, 0, 1]);
+  });
+
+  test('renders an accessible legend, period context, and clear empty state', () => {
+    const html = renderToStaticMarkup(createElement(DashboardTrendChart, {
+      data: [{ label: 'seg 05', approaches: 0, interests: 0 }], periodLabel: 'Esta semana'
+    }));
+
+    expect(html).toContain('Ritmo de prospecção');
+    expect(html).toContain('Abordagens');
+    expect(html).toContain('Interesses');
+    expect(html).toContain('Nenhuma movimentação registrada neste período.');
+    expect(html).toContain('seg 05: 0 abordagens e 0 interesses');
   });
 });

@@ -17,10 +17,12 @@ import {
 import { TeamGoalProgress } from '@/components/team-goal-progress';
 import { DashboardPeriodSelector } from '@/components/dashboard-period-selector';
 import { DailyCloseControl } from '@/components/daily-close-control';
+import { DashboardTrendChart } from '@/components/dashboard-trend-chart';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getDailyReportForDate } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
+import { getDashboardTrend } from '@/lib/dashboard-trend';
 import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
 import { getDashboardDataFetchWindow, getGoalPeriodWindow, getLocalDayWindow, selectDashboardWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels } from '@/lib/funnel';
@@ -153,6 +155,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const monthlyMetrics = getDashboardMetrics(metricLeads, { start: monthlyPeriod.start, end: monthlyPeriod.end, now });
   const weeklyProgress = getTeamGoalProgress(weeklyMetrics.goalActuals, getTeamGoalTargets(weeklyGoal));
   const monthlyProgress = getTeamGoalProgress(monthlyMetrics.goalActuals, getTeamGoalTargets(monthlyGoal));
+  const dashboardTrend = getDashboardTrend(metricLeads, selectedRange, period);
   const mine = user ? selectedMetrics.personalResults[user.id] ?? { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 } : { approaches: 0, interests: 0, meetings: 0, sales: 0, won: 0 };
   const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
   if (user) names.set(user.id, user.name || user.id);
@@ -166,12 +169,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const periodLabel = period === 'day' ? 'Hoje' : period === 'week' ? 'Esta semana' : 'Este ciclo mensal';
   const dailyDate = localDateParam(now);
   const dashboardMetrics = [
-    { label: 'Receita vendida', value: money(selectedMetrics.sales), detail: `${selectedMetrics.won} negócio${selectedMetrics.won === 1 ? '' : 's'} ganho${selectedMetrics.won === 1 ? '' : 's'}`, Icon: CurrencyDollarIcon },
-    { label: 'MRR', value: money(selectedMetrics.mrr), detail: 'Receita mensal recorrente', Icon: ChartBarIcon },
-    { label: 'Abordagens', value: String(selectedMetrics.approaches), detail: 'Atividades no período', Icon: PaperPlaneTiltIcon },
-    { label: 'Interesses', value: String(selectedMetrics.interests), detail: 'Avanços para interesse', Icon: UsersThreeIcon },
-    { label: 'Reuniões', value: String(selectedMetrics.meetings), detail: 'Avanços para reunião', Icon: CalendarCheckIcon },
-    { label: 'Follow-ups concluídos', value: String(selectedMetrics.goalActuals.followUpsCompleted), detail: 'Contados pela data de conclusão', Icon: CheckCircleIcon }
+    { label: 'MRR', value: money(selectedMetrics.mrr), detail: 'Receita recorrente', Icon: ChartBarIcon },
+    { label: 'Abordagens', value: String(selectedMetrics.approaches), detail: 'Contatos iniciados', Icon: PaperPlaneTiltIcon },
+    { label: 'Interesses', value: String(selectedMetrics.interests), detail: 'Avanços para conversa', Icon: UsersThreeIcon },
+    { label: 'Reuniões', value: String(selectedMetrics.meetings), detail: 'Reuniões registradas', Icon: CalendarCheckIcon }
   ];
 
   return <section className="mx-auto max-w-[1480px] px-5 py-8 md:px-8 md:py-10 xl:px-10">
@@ -193,17 +194,26 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       <DailyCloseControl initiallyClosed={Boolean(dailyReport)} reportHref={`/relatorios?period=day&date=${dailyDate}`} />
     </div>
 
-    <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {dashboardMetrics.map(({ label, value, detail, Icon }) => <article className="flex min-h-[112px] items-start gap-3.5 rounded-xl border border-white/[0.08] bg-[#111719] p-4 transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:-translate-y-px hover:border-white/[0.14] md:p-5" key={label}>
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.035] text-[var(--atelier-green)]">
-          <Icon size={20} weight="regular" aria-hidden="true" />
-        </span>
+    <div className="mt-7 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <article className="col-span-2 flex min-h-[118px] items-center gap-4 rounded-xl border border-[var(--atelier-green)]/20 bg-[#111719] p-4 md:col-span-1 md:min-h-[132px] md:flex-col md:items-start md:justify-between md:p-5">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.09] text-[var(--atelier-green)]"><CurrencyDollarIcon size={21} weight="regular" aria-hidden="true" /></span>
         <div className="min-w-0">
-          <p className="text-xs font-medium text-white/55">{label}</p>
-          <p className="mt-1.5 truncate text-2xl font-semibold tabular-nums tracking-tight text-white">{value}</p>
-          <p className="mt-1 truncate text-xs text-white/40">{detail}</p>
+          <p className="text-xs font-medium text-white/55">Receita vendida</p>
+          <p className="mt-1 truncate text-2xl font-semibold tabular-nums tracking-tight text-white md:text-[1.65rem]">{money(selectedMetrics.sales)}</p>
+          <p className="mt-1 truncate text-xs text-[var(--atelier-green)]">{selectedMetrics.won} negócio{selectedMetrics.won === 1 ? '' : 's'} ganho{selectedMetrics.won === 1 ? '' : 's'}</p>
+        </div>
+      </article>
+      {dashboardMetrics.map(({ label, value, detail, Icon }) => <article className="flex min-h-[118px] min-w-0 flex-col justify-between rounded-xl border border-white/[0.08] bg-[#111719] p-4 transition-colors duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:border-white/[0.14] md:min-h-[132px] md:p-5" key={label}>
+        <div className="flex items-center gap-2.5 text-[var(--atelier-green)]"><Icon size={18} weight="regular" aria-hidden="true" /><p className="truncate text-xs font-medium text-white/65">{label}</p></div>
+        <div className="min-w-0">
+          <p className="truncate text-xl font-semibold tabular-nums tracking-tight text-white md:text-2xl">{value}</p>
+          <p className="mt-1 truncate text-[11px] leading-snug text-white/40">{detail}</p>
         </div>
       </article>)}
+    </div>
+
+    <div className="mt-4">
+      <DashboardTrendChart data={dashboardTrend} periodLabel={periodLabel} />
     </div>
 
     <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
@@ -231,9 +241,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
 
     <div className="mt-6 grid items-stretch gap-4 xl:grid-cols-2">
       <section className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
-        <div className="flex items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><CalendarCheckIcon size={19} weight="regular" aria-hidden="true" /></span>
-          <div><h2 className="text-base font-semibold tracking-tight">Follow-ups</h2><p className="mt-1 text-xs text-white/50">Retornos vencidos, de hoje e os cinco próximos.</p></div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><CalendarCheckIcon size={19} weight="regular" aria-hidden="true" /></span>
+            <div><h2 className="text-base font-semibold tracking-tight">Follow-ups</h2><p className="mt-1 text-xs text-white/50">Retornos vencidos, de hoje e os cinco próximos.</p></div>
+          </div>
+          <p className="rounded-lg border border-white/[0.07] px-3 py-2 text-xs text-white/50">Concluídos no período <strong className="ml-1 tabular-nums text-white">{selectedMetrics.goalActuals.followUpsCompleted}</strong></p>
         </div>
         <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-3 sm:divide-x sm:divide-white/[0.08]">
           <section className="flex min-w-0 flex-col sm:pr-4" aria-labelledby="overdue-followups-heading">
