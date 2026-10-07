@@ -2,16 +2,11 @@ import { KanbanBoard, type CrmLead } from '@/components/kanban-board';
 import { prisma } from '@/lib/db';
 import { PageHeading } from '@/components/ui';
 import { getFollowUpDelayDays } from '@/lib/commercial-settings';
+import { getCrmBoardLeads } from '@/lib/crm-board';
 
 export default async function CrmPage({ searchParams }: { searchParams: Promise<{ lead?: string; notice?: string }> }) {
   const { lead: focusedLeadId, notice } = await searchParams;
-  const [leads, services, followUpDelayDays] = await Promise.all([prisma.lead.findMany({
-    include: {
-      activities: { orderBy: { createdAt: 'desc' } },
-      followUps: { orderBy: [{ state: 'asc' }, { dueDate: 'asc' }] }
-    },
-    orderBy: { id: 'desc' }
-  }),
+  const [leads, services, followUpDelayDays] = await Promise.all([getCrmBoardLeads(),
   prisma.serviceCatalogItem.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
   getFollowUpDelayDays()]);
   const serializedLeads: CrmLead[] = leads.map((lead) => ({
@@ -19,7 +14,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     saleValue: lead.saleValue?.toString() ?? null,
     mrr: lead.mrr?.toString() ?? null,
     activities: lead.activities.map((activity) => ({ ...activity, createdAt: activity.createdAt.toISOString() })),
-    followUps: lead.followUps.map((followUp) => ({ ...followUp, dueDate: followUp.dueDate.toISOString() }))
+    followUps: [],
+    detailsLoaded: false
   }));
 
   return (

@@ -30,7 +30,7 @@ function dateTimeLabel(value: string) {
   return new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-export function LeadDetailModal({ lead, services, followUpDelayDays, onClose, onUpdated, onDeleted }: { lead: CrmLead; services: CommercialServiceOption[]; followUpDelayDays: number; onClose: () => void; onUpdated: (stage?: Stage) => void; onDeleted: (id: string) => void }) {
+export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays, onClose, onUpdated, onDeleted }: { lead: CrmLead; services: CommercialServiceOption[]; followUpDelayDays: number; onClose: () => void; onUpdated: (stage?: Stage) => void; onDeleted: (id: string) => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const returnButtonRef = useRef<HTMLButtonElement>(null);
@@ -40,6 +40,9 @@ export function LeadDetailModal({ lead, services, followUpDelayDays, onClose, on
   const confirmationFocusTarget = useRef<'RETURN' | 'DISCARD'>('RETURN');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lead, setLead] = useState(initialLead);
+  const [loadingDetails, setLoadingDetails] = useState(initialLead.detailsLoaded === false);
+  const [reloadAttempt, setReloadAttempt] = useState(0);
   const [financialsSaved, setFinancialsSaved] = useState(false);
   const [confirmingReturn, setConfirmingReturn] = useState(false);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
@@ -59,6 +62,27 @@ export function LeadDetailModal({ lead, services, followUpDelayDays, onClose, on
     closeRef.current?.focus();
     return () => { dialog?.close(); document.body.style.overflow = overflow; previousFocus?.focus(); };
   }, []);
+
+  useEffect(() => {
+    if (initialLead.detailsLoaded !== false) return;
+    const controller = new AbortController();
+    let active = true;
+    setLoadingDetails(true);
+    setError(null);
+    fetch(`/api/leads/${encodeURIComponent(initialLead.id)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const payload = await response.json() as { error?: string; lead?: CrmLead };
+        if (!response.ok || !payload.lead) throw new Error(payload.error ?? 'Não foi possível carregar os detalhes da empresa.');
+        if (active) setLead(payload.lead);
+      })
+      .catch((requestError: unknown) => {
+        if (active && !(requestError instanceof DOMException && requestError.name === 'AbortError')) {
+          setError(requestError instanceof Error ? requestError.message : 'Não foi possível carregar os detalhes da empresa.');
+        }
+      })
+      .finally(() => { if (active) setLoadingDetails(false); });
+    return () => { active = false; controller.abort(); };
+  }, [initialLead.detailsLoaded, initialLead.id, reloadAttempt]);
 
   useEffect(() => {
     setStageDraft(normalizeFunnelStage(lead.stage));
@@ -252,7 +276,11 @@ export function LeadDetailModal({ lead, services, followUpDelayDays, onClose, on
         <button ref={closeRef} type="button" aria-label="Fechar detalhes" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/[0.14] text-lg text-white/60 hover:bg-white/[0.06] hover:text-white"><span aria-hidden="true">×</span></button>
       </header>
       {error && !confirmingReturn && !confirmingDiscard ? <p role="alert" className="border-b border-red-300/15 bg-red-300/5 px-6 py-3 text-sm text-red-200">{error}</p> : null}
-      <div className="atelier-scrollbar min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-8">{renderLead(lead)}</div>
+      <div className="atelier-scrollbar min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-8">
+        {loadingDetails ? <p role="status" className="grid min-h-48 place-items-center text-sm text-white/55">Carregando detalhes da empresa…</p>
+          : initialLead.detailsLoaded === false && error ? <div className="grid min-h-48 content-center justify-items-center gap-3"><p role="alert" className="text-sm text-red-200">{error}</p><button type="button" onClick={() => setReloadAttempt((attempt) => attempt + 1)} className="min-h-10 rounded-lg border border-white/20 px-4 text-sm">Tentar novamente</button></div>
+            : renderLead(lead)}
+      </div>
       </div>
       {confirmingReturn ? <div className="absolute inset-0 z-10 grid place-items-center bg-[#070b0e]/85 p-4">
         <section role="alertdialog" aria-modal="true" aria-labelledby="return-confirm-title" aria-describedby="return-confirm-description" className="starting:translate-y-2 starting:opacity-0 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] w-full max-w-md rounded-2xl border border-[var(--atelier-floating-border)] bg-[#151c20] p-6 shadow-[0_24px_70px_rgba(0,0,0,.42)] sm:p-7">

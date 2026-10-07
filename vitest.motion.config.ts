@@ -8,7 +8,7 @@ export default defineConfig({
     alias: { '@': path.dirname(fileURLToPath(import.meta.url)) }
   },
   test: {
-    include: ['tests/unit/motion-primitives.test.tsx', 'tests/unit/commercial-modal.test.tsx', 'tests/unit/metrics-query-concurrency.test.ts', 'tests/unit/reports-query-concurrency.test.ts'],
+    include: ['tests/unit/motion-primitives.test.tsx', 'tests/unit/commercial-modal.test.tsx', 'tests/unit/metrics-query-concurrency.test.ts', 'tests/unit/reports-query-concurrency.test.ts', 'tests/unit/crm-board-query.test.ts'],
     fileParallelism: false
   }
 });

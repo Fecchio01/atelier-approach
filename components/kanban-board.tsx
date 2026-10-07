@@ -29,6 +29,7 @@ export type CrmLead = {
   mrr: string | null;
   activities: { id: string; type: string; actorId: string; note: string; channel: string | null; createdAt: string }[];
   followUps: { id: string; dueDate: string; state: string }[];
+  detailsLoaded?: boolean;
 };
 
 

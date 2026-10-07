@@ -37,6 +37,32 @@ function isFollowUpAction(value: unknown): value is FollowUpAction {
   return value === 'COMPLETE' || value === 'CANCEL' || value === 'RESCHEDULE';
 }
 
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
+
+  const { id } = await params;
+  const lead = await prisma.lead.findUnique({
+    where: { id },
+    include: {
+      activities: { orderBy: { createdAt: 'desc' } },
+      followUps: { orderBy: [{ state: 'asc' }, { dueDate: 'asc' }] }
+    }
+  });
+  if (!lead) return Response.json({ error: 'Lead não encontrado.' }, { status: 404 });
+
+  return Response.json({
+    lead: {
+      ...lead,
+      saleValue: lead.saleValue?.toString() ?? null,
+      mrr: lead.mrr?.toString() ?? null,
+      activities: lead.activities.map((activity) => ({ ...activity, createdAt: activity.createdAt.toISOString() })),
+      followUps: lead.followUps.map((followUp) => ({ ...followUp, dueDate: followUp.dueDate.toISOString() })),
+      detailsLoaded: true
+    }
+  });
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
