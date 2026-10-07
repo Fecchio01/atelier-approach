@@ -13,6 +13,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
+      <head>
+        <link
+          rel="preload"
+          as="image"
+          href="/brand/arvello_approach_com_nome_transparente.png"
+          fetchPriority="high"
+        />
+      </head>
       <body>
         {children}
       </body>
