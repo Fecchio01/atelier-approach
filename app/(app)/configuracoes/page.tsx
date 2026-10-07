@@ -39,10 +39,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const user = await getCurrentUser();
   if (!user) redirect('/login');
   const params = await searchParams;
-  const [services, followUpDelayDays] = await Promise.all([
-    prisma.serviceCatalogItem.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
-    getFollowUpDelayDays()
-  ]);
+  const services = await prisma.serviceCatalogItem.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }] });
+  const followUpDelayDays = await getFollowUpDelayDays();
   const initials = (user.name || 'Arvello').trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
 
   return <section className="mx-auto max-w-6xl px-5 pb-20 pt-9 md:px-8 md:pt-12">

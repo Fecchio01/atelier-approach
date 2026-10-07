@@ -24,7 +24,10 @@ const queryCache = new Map<string, CachedValue<OvertureAreaResult>>();
 let cachedCatalog: CachedValue<string> | null = null;
 let duckDbPromise: Promise<DuckDBInstance> | null = null;
 
-const AUTO_SERVICE_PATTERN = /automotive|auto[ _-](repair|body|parts|electrical|detailing|glass|service|tire)|car[ _](wash|repair|detail|service|parts|body)|vehicle[ _](repair|inspection)|\btire\b|\btyre\b|oil[ _]change|mechanic|oficina[ _](mecanica|automotiva)|mecanica[ _]automotiva|estetica[ _]automotiva|detalhamento[ _]automotivo|lavagem[ _]automotiva|lava[ _-]?jato|lava[ _-]?rapido|polimento[ _]automotivo|funilaria|martelinho|higienizacao[ _]automotiva|auto[ _-]?center|borracharia|pneus|insulfilm|troca[ _]de[ _]oleo/i;
+const TARGET_AUTO_SERVICE_CATEGORY_PATTERN = /(^| )(automotive_repair|auto_repair|car_repair|vehicle_repair|auto_body_shop|auto_body_repair|mechanic|car_mechanic|car_wash|auto_wash|auto_detailing|car_detailing|vehicle_detailing)( |$)/;
+const TARGET_AUTO_SERVICE_NAME_PATTERN = /\b(estetica automotiva|detalhamento automotivo|polimento automotivo|vitrificacao automotiva|higienizacao automotiva|lavagem automotiva|lavagem de carros|lava jato|lava rapido|oficina mecanica|oficina automotiva|mecanica automotiva|auto mecanica|automecanica|funilaria|martelinho de ouro|insulfilm|car wash|auto wash|car detailing|auto detailing|automotive detailing|auto repair|car repair|automotive repair|body shop|mechanic)\b/;
+const AUTO_PRODUCT_CATEGORY_PATTERN = /(^| )(auto_parts|car_parts|vehicle_parts|tire_shop|tyre_shop|tire_dealer|auto_dealer|car_dealer|automotive_dealer|vehicle_dealer|car_accessories|auto_accessories|automotive_store|auto_parts_store)( |$)/;
+const AUTO_PRODUCT_NAME_PATTERN = /\b(auto pecas|autopecas|car parts|auto parts|pecas automotivas|produtos automotivos|automotive products|loja de pecas|loja de acessorios|auto accessories|automotive accessories|concessionaria|dealership|revenda de veiculos|veiculos usados|pneus|tire shop|tyre shop)\b/;
 const UNRELATED_AUTO_PLACE_PATTERN = /retirement home|casa de repouso|residencial senior|corretora de seguros|insurance|detran|protecao veicular|clube de beneficios/i;
 const CONTACT_URL = /https?:\/\/[^\s,;]+/gi;
 
@@ -126,11 +129,11 @@ export function normalizeOverturePlaces(rows: OvertureRow[]): ExternalBusiness[]
     if (!id || seenIds.has(id)) continue;
 
     const category = stringValue(row.category) || stringValue(row.category_path);
+    const categoryHierarchy = stringValue(row.category_hierarchy);
     const name = stringValue(row.name) ?? stringValue(row.brand_name);
-    const searchableText = `${category ?? ''} ${name ?? ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     if (!name || !isUsefulPlaceName(name)) continue;
-    if (UNRELATED_AUTO_PLACE_PATTERN.test(searchableText)) continue;
-    if (!AUTO_SERVICE_PATTERN.test(searchableText)) continue;
+    if (UNRELATED_AUTO_PLACE_PATTERN.test(normalizeText(`${category ?? ''} ${categoryHierarchy ?? ''} ${name}`))) continue;
+    if (!isTargetAutomotiveService(category, categoryHierarchy, name)) continue;
     if (stringValue(row.operating_status)?.toLowerCase() === 'permanently_closed') continue;
 
     seenIds.add(id);
@@ -218,12 +221,18 @@ export function buildOvertureQuery(bounds: SearchBounds, release: string, files:
   }
 
   const placesPaths = `[${files.map((file) => `'${file.replaceAll("'", "''")}'`).join(', ')}]`;
-  const automotivePattern = AUTO_SERVICE_PATTERN.source.replaceAll("'", "''");
+  const serviceCategoryPattern = TARGET_AUTO_SERVICE_CATEGORY_PATTERN.source.replaceAll("'", "''");
+  const serviceNamePattern = TARGET_AUTO_SERVICE_NAME_PATTERN.source.replaceAll("'", "''");
+  const productCategoryPattern = AUTO_PRODUCT_CATEGORY_PATTERN.source.replaceAll("'", "''");
+  const productNamePattern = AUTO_PRODUCT_NAME_PATTERN.source.replaceAll("'", "''");
+  const categoryText = "translate(lower(concat_ws(' ', coalesce(taxonomy.primary, ''), array_to_string(taxonomy.hierarchy, ' '), coalesce(basic_category, ''))), 'áàâãéêíóôõúç', 'aaaaeeiooouc')";
+  const nameText = "translate(lower(concat_ws(' ', coalesce(names.primary, ''), coalesce(brand.names.primary, ''))), 'áàâãéêíóôõúç', 'aaaaeeiooouc')";
   return `
     SELECT
       id,
       coalesce(names.primary, brand.names.primary) AS name,
       coalesce(taxonomy.primary, basic_category) AS category,
+      array_to_string(taxonomy.hierarchy, ' ') AS category_hierarchy,
       addresses[1].freeform AS address,
       addresses[1].locality AS locality,
       addresses[1].region AS region,
@@ -238,7 +247,12 @@ export function buildOvertureQuery(bounds: SearchBounds, release: string, files:
     WHERE bbox.xmin BETWEEN ${bounds.west} AND ${bounds.east}
       AND bbox.ymin BETWEEN ${bounds.south} AND ${bounds.north}
       AND operating_status IS DISTINCT FROM 'permanently_closed'
-      AND regexp_matches(translate(lower(concat_ws(' ', coalesce(taxonomy.primary, ''), coalesce(basic_category, ''), coalesce(names.primary, ''), coalesce(brand.names.primary, ''))), 'áàâãéêíóôõúç', 'aaaaeeiooouc'), '${automotivePattern}')
+      AND (
+        regexp_matches(${categoryText}, '${serviceCategoryPattern}')
+        OR regexp_matches(${nameText}, '${serviceNamePattern}')
+      )
+      AND NOT regexp_matches(${categoryText}, '${productCategoryPattern}')
+      AND (NOT regexp_matches(${nameText}, '${productNamePattern}') OR regexp_matches(${nameText}, '${serviceNamePattern}'))
     LIMIT ${MAX_OVERTURE_RESULTS}
   `;
 }
@@ -265,6 +279,17 @@ function isUsefulPlaceName(name: string) {
   return Boolean(name.trim())
     && !['nome comercial nao informado', 'yes', 'no'].includes(normalizeText(name))
     && !isGenericBusinessName(name);
+}
+
+function isTargetAutomotiveService(category: string | null, categoryHierarchy: string | null, name: string) {
+  const normalizedCategory = normalizeText(`${category ?? ''} ${categoryHierarchy ?? ''}`);
+  const normalizedName = normalizeText(name).replace(/[-_]+/g, ' ');
+  const explicitServiceName = TARGET_AUTO_SERVICE_NAME_PATTERN.test(normalizedName);
+
+  if (AUTO_PRODUCT_CATEGORY_PATTERN.test(normalizedCategory)) return false;
+  if (AUTO_PRODUCT_NAME_PATTERN.test(normalizedName) && !explicitServiceName) return false;
+
+  return TARGET_AUTO_SERVICE_CATEGORY_PATTERN.test(normalizedCategory) || explicitServiceName;
 }
 
 function distanceMeters(latitudeA: number, longitudeA: number, latitudeB: number, longitudeB: number) {

@@ -182,6 +182,31 @@ describe('GET /api/search', () => {
     expect(mocks.startSearch).not.toHaveBeenCalled();
   });
 
+  test('persists progressive search state and only allows its owner to continue it', async () => {
+    const ownerId = `search-owner-${crypto.randomUUID()}`;
+    mocks.getCurrentUser.mockResolvedValue({ id: ownerId });
+    mocks.planOvertureSearchAreas.mockReturnValue([FIRST_AREA, SECOND_AREA]);
+    mocks.searchOvertureArea.mockResolvedValueOnce({
+      businesses: Array.from({ length: 65 }, (_, index) => business(`persist-${index}`, `Oficina ${index}`)),
+      hitLimit: false
+    });
+
+    const firstResponse = await GET(request('niche=est%C3%A9tica%20automotiva&national=true'));
+    const first = await firstResponse.json() as { searchId: string; businesses: ExternalBusiness[] };
+    const persisted = await prisma.$queryRaw<Array<{ ownerId: string }>>`
+      SELECT "ownerId" FROM "ResearchSearchSession" WHERE "id" = ${first.searchId}
+    `;
+
+    expect(persisted).toEqual([{ ownerId }]);
+    expect(first.businesses).toHaveLength(60);
+
+    mocks.getCurrentUser.mockResolvedValue({ id: 'different-owner' });
+    const otherUserResponse = await GET(request(`searchId=${first.searchId}`));
+
+    expect(otherUserResponse.status).toBe(410);
+    expect(mocks.searchOvertureArea).toHaveBeenCalledTimes(1);
+  });
+
   test('suppresses duplicate Overture listings for the same named location across areas', async () => {
     const repeatedListing = business('orange-original', 'Orange Car Wash', { latitude: -22.9, longitude: -43.2 });
     mocks.planOvertureSearchAreas.mockReturnValue([FIRST_AREA, SECOND_AREA]);

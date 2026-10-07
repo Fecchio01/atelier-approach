@@ -53,11 +53,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     const reference = parseLocalDate(requestedDate, now);
     const date = localDateParam(reference);
     const isToday = date === today;
-    const [report, recent, todayReport] = await Promise.all([
-      getDailyReportForDate(reference),
-      listRecentDailyReports(),
-      isToday ? Promise.resolve(null) : getDailyReportForDate(now)
-    ]);
+    const report = await getDailyReportForDate(reference);
+    const recent = await listRecentDailyReports();
+    const todayReport = isToday ? null : await getDailyReportForDate(now);
     return <DailyReportView date={date} report={report} recent={recent} todayReport={isToday ? Boolean(report) : Boolean(todayReport)} todayHref={todayHref} />;
   }
 
@@ -70,15 +68,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     salesTarget: true, revenueTarget: true, mrrTarget: true,
     followUpsCompletedTarget: true, conversionRateTarget: true
   } as const;
-  const [settings, activeGoal, requestedGoal] = await Promise.all([
-    prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
-    prisma.goal.findFirst({
-      where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lte: now }, periodEnd: { gt: now } },
-      select: goalSelect,
-      orderBy: { periodStart: 'desc' }
-    }),
-    start ? prisma.goal.findFirst({ where: { ownerId: teamOwnerId, periodKind: kind, periodStart: start }, select: goalSelect }) : Promise.resolve(null)
-  ]);
+  const settings = await prisma.teamGoalSettings.findUnique({ where: { id: 'team' } });
+  const activeGoal = await prisma.goal.findFirst({
+    where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lte: now }, periodEnd: { gt: now } },
+    select: goalSelect,
+    orderBy: { periodStart: 'desc' }
+  });
+  const requestedGoal = start
+    ? await prisma.goal.findFirst({ where: { ownerId: teamOwnerId, periodKind: kind, periodStart: start }, select: goalSelect })
+    : null;
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
   const activeWindow: GoalPeriodWindow = activeGoal
@@ -86,21 +84,19 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     : getGoalPeriodWindow(kind, now, monthlyStartDay);
   const selectedGoal = selectGoalPeriod(start, requestedGoal, activeGoal);
   const selectedWindow: GoalPeriodWindow = selectedGoal ? { kind, start: selectedGoal.periodStart, end: selectedGoal.periodEnd } : activeWindow;
-  const [report, previousGoal, nextGoal, profiles, dailyReport] = await Promise.all([
-    buildReport({ from: selectedWindow.start, to: selectedWindow.end }),
-    prisma.goal.findFirst({
-      where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lt: selectedWindow.start } },
-      select: goalSelect,
-      orderBy: { periodStart: 'desc' }
-    }),
-    prisma.goal.findFirst({
-      where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { gt: selectedWindow.start, lte: activeWindow.start } },
-      select: goalSelect,
-      orderBy: { periodStart: 'asc' }
-    }),
-    getMemberProfiles(),
-    getDailyReportForDate(now)
-  ]);
+  const report = await buildReport({ from: selectedWindow.start, to: selectedWindow.end });
+  const previousGoal = await prisma.goal.findFirst({
+    where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { lt: selectedWindow.start } },
+    select: goalSelect,
+    orderBy: { periodStart: 'desc' }
+  });
+  const nextGoal = await prisma.goal.findFirst({
+    where: { ownerId: teamOwnerId, periodKind: kind, periodStart: { gt: selectedWindow.start, lte: activeWindow.start } },
+    select: goalSelect,
+    orderBy: { periodStart: 'asc' }
+  });
+  const profiles = await getMemberProfiles();
+  const dailyReport = await getDailyReportForDate(now);
   const recommendations = buildRecommendations(report);
   const nameFor = (memberId: string) => profiles.find((profile) => profile.id === memberId)?.name ?? memberId;
   const progress = getTeamGoalProgress(report.goalActuals, getTeamGoalTargets(selectedGoal));

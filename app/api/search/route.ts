@@ -1,5 +1,6 @@
 import { getCurrentUser } from '../../../lib/auth';
 import { prisma } from '../../../lib/db';
+import type { Prisma } from '@prisma/client';
 import { approachabilityRank, scoreBusiness } from '../../../lib/lead-score';
 import { enrichOvertureBusinesses } from '../../../lib/prospect-enrichment';
 import {
@@ -28,7 +29,6 @@ const searchAttemptsByUser = new Map<string, number[]>();
 // OpenStreetMap is used only to resolve state/city bounds. Prospect records
 // always come from Overture; this route never falls back to OSM business data.
 const searchBoundsService = createOsmSearchService();
-const filtersBySearchId = new Map<string, SavedSearch>();
 
 type SavedSearch = {
   filters: ResearchFilters;
@@ -59,12 +59,22 @@ export async function GET(request: Request) {
   const searchId = searchParams.get('searchId')?.trim();
 
   if (searchId) {
-    const savedSearch = getSavedSearch(searchId);
+    const persistedSearch = await prisma.researchSearchSession.findFirst({
+      where: { id: searchId, ownerId: user.id, expiresAt: { gt: new Date() } }
+    });
+    if (!persistedSearch) return expiredSearchResponse();
+    const savedSearch = deserializeSearchState(persistedSearch.state);
     if (!savedSearch) return expiredSearchResponse();
 
     try {
       const businesses = await consumeOverturePage(savedSearch);
-      savedSearch.expiresAt = Date.now() + SEARCH_FILTER_TTL_MS;
+      const expiresAt = new Date(Date.now() + SEARCH_FILTER_TTL_MS);
+      savedSearch.expiresAt = expiresAt.getTime();
+      const persisted = await prisma.researchSearchSession.updateMany({
+        where: { id: searchId, ownerId: user.id, version: persistedSearch.version, expiresAt: { gt: new Date() } },
+        data: { state: serializeSearchState(savedSearch), expiresAt, version: { increment: 1 } }
+      });
+      if (!persisted.count) return concurrentSearchResponse();
       return Response.json({
         businesses: sortForResearchPage(businesses),
         searchId,
@@ -113,8 +123,19 @@ export async function GET(request: Request) {
   try {
     const businesses = await consumeOverturePage(overtureSearch);
     const overtureSearchId = crypto.randomUUID();
-    removeExpiredSavedSearches();
-    filtersBySearchId.set(overtureSearchId, overtureSearch);
+    if (hasMoreOvertureAreas(overtureSearch)) {
+      const expiresAt = new Date(Date.now() + SEARCH_FILTER_TTL_MS);
+      overtureSearch.expiresAt = expiresAt.getTime();
+      await prisma.researchSearchSession.deleteMany({ where: { expiresAt: { lte: new Date() } } });
+      await prisma.researchSearchSession.create({
+        data: {
+          id: overtureSearchId,
+          ownerId: user.id,
+          state: serializeSearchState(overtureSearch),
+          expiresAt
+        }
+      });
+    }
     return Response.json({
       businesses: sortForResearchPage(businesses),
       searchId: overtureSearchId,
@@ -202,26 +223,49 @@ function sortForResearchPage(businesses: ExternalBusiness[]) {
   });
 }
 
-function removeExpiredSavedSearches() {
-  const now = Date.now();
-  for (const [searchId, savedSearch] of filtersBySearchId) {
-    if (savedSearch.expiresAt <= now) filtersBySearchId.delete(searchId);
-  }
+function serializeSearchState(savedSearch: SavedSearch): Prisma.InputJsonObject {
+  return {
+    filters: savedSearch.filters,
+    expiresAt: savedSearch.expiresAt,
+    overtureAreas: savedSearch.overtureAreas,
+    overtureQueue: savedSearch.overtureQueue,
+    seenBusinessIds: Array.from(savedSearch.seenBusinessIds),
+    seenBusinesses: savedSearch.seenBusinesses
+  };
 }
 
-function getSavedSearch(searchId: string) {
-  const savedSearch = filtersBySearchId.get(searchId);
-  if (!savedSearch || savedSearch.expiresAt <= Date.now()) {
-    filtersBySearchId.delete(searchId);
-    return null;
-  }
-  return savedSearch;
+function deserializeSearchState(value: Prisma.JsonValue): SavedSearch | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const state = value as Record<string, unknown>;
+  const filters = state.filters as Partial<ResearchFilters> | undefined;
+  const expiresAt = state.expiresAt;
+  if (!filters || typeof filters.phoneOnly !== 'boolean' || typeof filters.digitalPresence !== 'boolean'
+    || typeof filters.includeWorked !== 'boolean' || (filters.minScore !== null && typeof filters.minScore !== 'number')
+    || (filters.maxScore !== null && typeof filters.maxScore !== 'number') || typeof expiresAt !== 'number'
+    || !Array.isArray(state.overtureAreas) || !Array.isArray(state.overtureQueue)
+    || !Array.isArray(state.seenBusinessIds) || !Array.isArray(state.seenBusinesses)) return null;
+
+  return {
+    filters: filters as ResearchFilters,
+    expiresAt,
+    overtureAreas: state.overtureAreas as OvertureSearchArea[],
+    overtureQueue: state.overtureQueue as ExternalBusiness[],
+    seenBusinessIds: new Set(state.seenBusinessIds.filter((id): id is string => typeof id === 'string')),
+    seenBusinesses: state.seenBusinesses as ExternalBusiness[]
+  };
 }
 
 function expiredSearchResponse() {
   return Response.json(
     { error: 'Sua busca expirou. Inicie uma nova pesquisa para continuar.' },
     { status: 410 }
+  );
+}
+
+function concurrentSearchResponse() {
+  return Response.json(
+    { error: 'Outra página desta pesquisa acabou de ser carregada. Tente carregar mais empresas novamente.' },
+    { status: 409 }
   );
 }
 

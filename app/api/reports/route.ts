@@ -91,13 +91,11 @@ async function isValidPeriodRange(period: 'week' | 'month', from: Date, to: Date
     return sameRange(from, to, expected.start, expected.end);
   }
 
-  const [settings, savedGoal] = await Promise.all([
-    prisma.teamGoalSettings.findUnique({ where: { id: 'team' }, select: { monthlyStartDay: true } }),
-    prisma.goal.findFirst({
-      where: { ownerId: teamOwnerId, periodKind: 'MONTHLY', periodStart: from },
-      select: { periodStart: true, periodEnd: true }
-    })
-  ]);
+  const settings = await prisma.teamGoalSettings.findUnique({ where: { id: 'team' }, select: { monthlyStartDay: true } });
+  const savedGoal = await prisma.goal.findFirst({
+    where: { ownerId: teamOwnerId, periodKind: 'MONTHLY', periodStart: from },
+    select: { periodStart: true, periodEnd: true }
+  });
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
   try {
     const configured = getGoalPeriodWindow('MONTHLY', from, monthlyStartDay);
@@ -151,10 +149,8 @@ function createDailyPdfSections(snapshot: DailyReportSnapshot): ReportPdfSection
 
 async function createPeriodPdfSections(period: 'week' | 'month', report: WeeklyMonthlyReport, from: Date) {
   const kind = period === 'week' ? 'WEEKLY' : 'MONTHLY';
-  const [goal, profiles] = await Promise.all([
-    prisma.goal.findFirst({ where: { ownerId: teamOwnerId, periodKind: kind, periodStart: from }, select: goalSelect }),
-    getMemberProfiles()
-  ]);
+  const goal = await prisma.goal.findFirst({ where: { ownerId: teamOwnerId, periodKind: kind, periodStart: from }, select: goalSelect });
+  const profiles = await getMemberProfiles();
   const targets = getTeamGoalTargets(goal);
   const progress = getTeamGoalProgress(report.goalActuals, targets);
   const profilesById = new Map(profiles.map((profile) => [profile.id, profile.name]));

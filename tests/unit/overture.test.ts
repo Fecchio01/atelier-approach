@@ -125,9 +125,13 @@ describe('Overture automotive places', () => {
     expect(businesses[0].address).toBe('Rua das Flores, 10, Rio de Janeiro, RJ, Brasil');
   });
 
-  test('keeps automotive service types beyond car washes, while excluding unrelated and closed places', () => {
+  test('keeps only automotive aesthetics, repair workshops and car washes', () => {
     const businesses = normalizeOverturePlaces([
       { id: 'repair', name: 'Oficina do Vale', category: 'automotive_repair', latitude: -22.5, longitude: -44.07 },
+      { id: 'wash', name: 'Lava Jato do Centro', category: 'car_wash', latitude: -22.5, longitude: -44.07 },
+      { id: 'detailing', name: 'Brilho Auto Detail', category: 'auto_detailing', latitude: -22.5, longitude: -44.07 },
+      { id: 'parts', name: 'Auto Peças Central', category: 'auto_parts', latitude: -22.5, longitude: -44.07 },
+      { id: 'generic-auto', name: 'Produtos Automotivos do Rio', category: 'automotive', latitude: -22.5, longitude: -44.07 },
       { id: 'tire', name: 'Pneus Central', category: 'tire_shop', latitude: -22.5, longitude: -44.07 },
       { id: 'cafe', name: 'Café Central', category: 'cafe', latitude: -22.5, longitude: -44.07 },
       { id: 'wine', name: 'Oficina do Vinho', category: 'winery', latitude: -22.5, longitude: -44.07 },
@@ -141,7 +145,9 @@ describe('Overture automotive places', () => {
       { id: 'closed', name: 'Oficina Encerrada', category: 'auto_repair', operating_status: 'permanently_closed', latitude: -22.5, longitude: -44.07 }
     ]);
 
-    expect(businesses.map((business) => business.osmId)).toEqual(['overture/repair', 'overture/tire']);
+    expect(businesses.map((business) => business.osmId)).toEqual([
+      'overture/repair', 'overture/wash', 'overture/detailing'
+    ]);
   });
 
   test('does not return a place without a verifiable trade name', () => {
