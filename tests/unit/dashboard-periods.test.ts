@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { createElement } from 'react';
 
 import { getDashboardDataFetchWindow, getGoalPeriodWindow, selectDashboardWindow, selectGoalPeriod } from '../../lib/goal-periods';
-import { getDashboardTrend, getDashboardTrendSegmentIndex } from '../../lib/dashboard-trend';
+import { getDashboardTrend, getDashboardTrendPointIndex, getDashboardTrendPointX } from '../../lib/dashboard-trend';
 import { DashboardTrendChart } from '../../components/dashboard-trend-chart';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -45,13 +45,22 @@ describe('dashboard period selection', () => {
 });
 
 describe('dashboard trend data', () => {
-  test('maps cursor progress to the day segment being traced, including the chart edges', () => {
-    expect(getDashboardTrendSegmentIndex(0, 7)).toBe(0);
-    expect(getDashboardTrendSegmentIndex(1 / 6, 7)).toBe(0);
-    expect(getDashboardTrendSegmentIndex(0.2, 7)).toBe(1);
-    expect(getDashboardTrendSegmentIndex(1, 7)).toBe(5);
-    expect(getDashboardTrendSegmentIndex(1.4, 7)).toBe(5);
-    expect(getDashboardTrendSegmentIndex(0.5, 1)).toBeNull();
+  test('maps cursor positions to the matching day column, including Monday and the chart edges', () => {
+    expect(getDashboardTrendPointIndex(0, 7)).toBe(0);
+    expect(getDashboardTrendPointIndex(0.07, 7)).toBe(0);
+    expect(getDashboardTrendPointIndex(0.21, 7)).toBe(1);
+    expect(getDashboardTrendPointIndex(0.99, 7)).toBe(6);
+    expect(getDashboardTrendPointIndex(1, 7)).toBe(6);
+    expect(getDashboardTrendPointIndex(1.4, 7)).toBe(6);
+    expect(getDashboardTrendPointIndex(0.5, 0)).toBeNull();
+    expect(getDashboardTrendPointIndex(Number.NaN, 7)).toBeNull();
+  });
+
+  test('places points at the centers of their matching day-label columns', () => {
+    expect(getDashboardTrendPointX(0, 7, 1000)).toBeCloseTo(1000 / 14);
+    expect(getDashboardTrendPointX(3, 7, 1000)).toBeCloseTo(500);
+    expect(getDashboardTrendPointX(6, 7, 1000)).toBeCloseTo(1000 * 13 / 14);
+    expect(getDashboardTrendPointX(0, 1, 1000)).toBe(500);
   });
 
   test('groups daily approaches and interest transitions into six four-hour windows', () => {
@@ -129,5 +138,7 @@ describe('dashboard trend data', () => {
     expect(html).toContain('data-testid="dashboard-interests-segment-0"');
     expect(html).toContain('seg 05: 2 abordagens e 1 interesses');
     expect(html).toContain('Passe o cursor pelo gráfico para traçar os resultados dia a dia.');
+    expect(html).toContain('Interesses · linha tracejada');
+    expect(html).toContain('stroke-dasharray="7 5"');
   });
 });

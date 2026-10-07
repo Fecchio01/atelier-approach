@@ -5,10 +5,15 @@ import { getLocalDayWindow } from './goal-periods';
 export type DashboardTrendPeriod = 'day' | 'week' | 'month';
 export type DashboardTrendPoint = { label: string; approaches: number; interests: number };
 
-export function getDashboardTrendSegmentIndex(progress: number, pointCount: number): number | null {
-  if (pointCount < 2 || !Number.isFinite(progress)) return null;
+export function getDashboardTrendPointIndex(progress: number, pointCount: number): number | null {
+  if (pointCount < 1 || !Number.isFinite(progress)) return null;
   const boundedProgress = Math.min(1, Math.max(0, progress));
-  return Math.min(pointCount - 2, Math.max(0, Math.ceil(boundedProgress * (pointCount - 1)) - 1));
+  return Math.min(pointCount - 1, Math.floor(boundedProgress * pointCount));
+}
+
+export function getDashboardTrendPointX(index: number, pointCount: number, width: number): number {
+  if (pointCount < 1) return width / 2;
+  return (index + 0.5) * width / pointCount;
 }
 
 type Bucket = DashboardTrendPoint & { start: Date; end: Date };
