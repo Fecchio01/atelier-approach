@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { createElement } from 'react';
 
 import { getDashboardDataFetchWindow, getGoalPeriodWindow, selectDashboardWindow, selectGoalPeriod } from '../../lib/goal-periods';
-import { getDashboardTrend, getDashboardTrendPointIndex, getDashboardTrendPointX } from '../../lib/dashboard-trend';
+import { createDashboardTrendPreview, getDashboardTrend, getDashboardTrendPointIndex, getDashboardTrendPointX } from '../../lib/dashboard-trend';
 import { DashboardTrendChart } from '../../components/dashboard-trend-chart';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -45,6 +45,20 @@ describe('dashboard period selection', () => {
 });
 
 describe('dashboard trend data', () => {
+  test('creates clearly different chart-only approaches without changing the CRM data', () => {
+    const realData = [
+      { label: 'seg 05', approaches: 10, interests: 10 },
+      { label: 'ter 06', approaches: 10, interests: 10 },
+      { label: 'qua 07', approaches: 10, interests: 10 }
+    ];
+
+    const preview = createDashboardTrendPreview(realData);
+
+    expect(preview.map(({ approaches }) => approaches)).toEqual([6, 14, 6]);
+    expect(preview.map(({ interests }) => interests)).toEqual([10, 10, 10]);
+    expect(realData.map(({ approaches }) => approaches)).toEqual([10, 10, 10]);
+  });
+
   test('maps cursor positions to the matching day column, including Monday and the chart edges', () => {
     expect(getDashboardTrendPointIndex(0, 7)).toBe(0);
     expect(getDashboardTrendPointIndex(0.07, 7)).toBe(0);
@@ -118,6 +132,7 @@ describe('dashboard trend data', () => {
     }));
 
     expect(html).toContain('Ritmo de prospecção');
+    expect(html).toContain('Ver exemplo com linhas separadas');
     expect(html).toContain('Abordagens');
     expect(html).toContain('Interesses');
     expect(html).toContain('Nenhuma movimentação registrada neste período.');

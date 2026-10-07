@@ -5,6 +5,13 @@ import { getLocalDayWindow } from './goal-periods';
 export type DashboardTrendPeriod = 'day' | 'week' | 'month';
 export type DashboardTrendPoint = { label: string; approaches: number; interests: number };
 
+export function createDashboardTrendPreview(data: readonly DashboardTrendPoint[]): DashboardTrendPoint[] {
+  return data.map((point, index) => ({
+    ...point,
+    approaches: Math.max(0, point.interests + (index % 2 === 0 ? -4 : 4))
+  }));
+}
+
 export function getDashboardTrendPointIndex(progress: number, pointCount: number): number | null {
   if (pointCount < 1 || !Number.isFinite(progress)) return null;
   const boundedProgress = Math.min(1, Math.max(0, progress));
