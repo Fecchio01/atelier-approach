@@ -22,7 +22,7 @@ import { prisma } from '@/lib/db';
 import { getDailyReportForDate } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
-import { getGoalPeriodWindow, getLocalDayWindow, selectDashboardWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
+import { getDashboardDataFetchWindow, getGoalPeriodWindow, getLocalDayWindow, selectDashboardWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels } from '@/lib/funnel';
 
 type Period = 'day' | 'week' | 'month';
@@ -73,7 +73,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const period: Period = params.period === 'day' || params.period === 'month' ? params.period : 'week';
   const now = new Date();
   const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
-  const [user, settings, profiles, dailyReport, goals] = await Promise.all([
+  const today = getLocalDayWindow(now);
+  const fetchWindow = getDashboardDataFetchWindow(now);
+  const [user, settings, profiles, dailyReport, goals, leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps] = await Promise.all([
     getCurrentUser(),
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
     getMemberProfiles(),
@@ -93,6 +95,23 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       followUpsCompletedTarget: true, conversionRateTarget: true
     },
     orderBy: { periodStart: 'desc' }
+    }),
+    prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true, _count: { select: { saleEvents: true } } } }),
+    prisma.activity.findMany({ where: { createdAt: { gte: fetchWindow.from, lt: fetchWindow.to } }, select: { leadId: true, actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }),
+    prisma.stageHistory.findMany({ where: { createdAt: { gte: fetchWindow.from, lt: fetchWindow.to } }, select: { leadId: true, actorId: true, toStage: true, createdAt: true } }),
+    prisma.saleEvent.findMany({ where: { occurredAt: { gte: fetchWindow.from, lt: fetchWindow.to }, reversedAt: null }, select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true } }),
+    prisma.followUp.findMany({
+      where: { OR: [
+        { state: 'PENDING', dueDate: { lt: today.end } },
+        { state: 'COMPLETED', completedAt: { gte: fetchWindow.from, lt: fetchWindow.to } }
+      ] },
+      select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
+    }),
+    prisma.followUp.findMany({
+      where: { state: 'PENDING', dueDate: { gte: today.end } },
+      orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+      take: 5,
+      select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
     })
   ]);
 
@@ -106,37 +125,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const selectedRange = { ...selectDashboardWindow(period, now, weeklyPeriod, monthlyPeriod), now };
   const dataFrom = [selectedRange.start, weeklyPeriod.start, monthlyPeriod.start].reduce((earliest, date) => date < earliest ? date : earliest);
   const dataTo = [selectedRange.end, weeklyPeriod.end, monthlyPeriod.end].reduce((latest, date) => date > latest ? date : latest);
-  const today = getLocalDayWindow(now);
-
-  const [leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps] = await Promise.all([
-    prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true, _count: { select: { saleEvents: true } } } }),
-    prisma.activity.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, type: true, createdAt: true, note: true }, orderBy: { createdAt: 'asc' } }),
-    prisma.stageHistory.findMany({ where: { createdAt: { gte: dataFrom, lt: dataTo } }, select: { leadId: true, actorId: true, toStage: true, createdAt: true } }),
-    prisma.saleEvent.findMany({ where: { occurredAt: { gte: dataFrom, lt: dataTo }, reversedAt: null }, select: { leadId: true, actorId: true, saleValue: true, mrr: true, occurredAt: true } }),
-    prisma.followUp.findMany({
-      where: { OR: [
-        { state: 'PENDING', dueDate: { lt: today.end } },
-        { state: 'COMPLETED', completedAt: { gte: dataFrom, lt: dataTo } }
-      ] },
-      select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
-    }),
-    prisma.followUp.findMany({
-      where: { state: 'PENDING', dueDate: { gte: today.end } },
-      orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
-      take: 5,
-      select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
-    })
-  ]);
+  const activitiesInPeriods = activities.filter(({ createdAt }) => createdAt >= dataFrom && createdAt < dataTo);
+  const stageHistoryInPeriods = stageHistory.filter(({ createdAt }) => createdAt >= dataFrom && createdAt < dataTo);
+  const saleEventsInPeriods = saleEvents.filter(({ occurredAt }) => occurredAt >= dataFrom && occurredAt < dataTo);
+  const completedFollowUpsInPeriods = followUps.filter((followUp) => followUp.state !== 'COMPLETED' || Boolean(followUp.completedAt && followUp.completedAt >= dataFrom && followUp.completedAt < dataTo));
 
   const byLead = <T extends { leadId: string }>(rows: T[]) => {
     const result = new Map<string, T[]>();
     for (const row of rows) result.set(row.leadId, [...(result.get(row.leadId) ?? []), row]);
     return result;
   };
-  const activitiesByLead = byLead(activities);
-  const historyByLead = byLead(stageHistory);
-  const salesByLead = byLead(saleEvents);
-  const followUpsByLead = byLead([...followUps, ...upcomingFollowUps]);
+  const activitiesByLead = byLead(activitiesInPeriods);
+  const historyByLead = byLead(stageHistoryInPeriods);
+  const salesByLead = byLead(saleEventsInPeriods);
+  const followUpsByLead = byLead([...completedFollowUpsInPeriods, ...upcomingFollowUps]);
   const metricLeads: MetricLead[] = leads.map((lead) => ({
     ...lead,
     hasSaleHistory: lead._count?.saleEvents > 0,

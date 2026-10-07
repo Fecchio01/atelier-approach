@@ -1,8 +1,20 @@
 import { describe, expect, test } from 'vitest';
 
-import { getGoalPeriodWindow, selectDashboardWindow, selectGoalPeriod } from '../../lib/goal-periods';
+import { getDashboardDataFetchWindow, getGoalPeriodWindow, selectDashboardWindow, selectGoalPeriod } from '../../lib/goal-periods';
 
 describe('dashboard period selection', () => {
+  test('fetch window covers the active weekly and monthly periods without a serial settings read', () => {
+    const now = new Date('2026-10-07T15:00:00.000Z');
+    const fetchWindow = getDashboardDataFetchWindow(now);
+
+    for (const monthlyStartDay of [1, 14, 31]) {
+      const weekly = getGoalPeriodWindow('WEEKLY', now, monthlyStartDay);
+      const monthly = getGoalPeriodWindow('MONTHLY', now, monthlyStartDay);
+      expect(fetchWindow.from.getTime()).toBeLessThanOrEqual(Math.min(weekly.start.getTime(), monthly.start.getTime()));
+      expect(fetchWindow.to.getTime()).toBeGreaterThanOrEqual(Math.max(weekly.end.getTime(), monthly.end.getTime()));
+    }
+  });
+
   test('uses the saved monthly transition bounds instead of recalculating the configured anchor', () => {
     const now = new Date('2026-09-20T15:00:00.000Z');
     const weekly = getGoalPeriodWindow('WEEKLY', now, 14);

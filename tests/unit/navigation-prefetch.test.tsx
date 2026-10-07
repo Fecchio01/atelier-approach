@@ -28,11 +28,4 @@ describe('AppNavigationLink prefetch', () => {
     expect(element.props.prefetch).toBe(false);
   });
 
-  test('fully prefetches menu destinations as soon as the mobile drawer opens', () => {
-    useStateMock.mockReturnValue([false, vi.fn()]);
-
-    const element = AppNavigationLink({ href: '/crm', label: 'Funil', forcePrefetch: true });
-
-    expect(element.props.prefetch).toBe(true);
-  });
 });

@@ -160,6 +160,12 @@ export function selectDashboardWindow(
   return { start: selectedWindow.start, end: selectedWindow.end };
 }
 
+export function getDashboardDataFetchWindow(reference: Date): { from: Date; to: Date } {
+  if (Number.isNaN(reference.getTime())) throw new RangeError('A data de referência é inválida.');
+  const padding = 32 * 24 * 60 * 60 * 1000;
+  return { from: new Date(reference.getTime() - padding), to: new Date(reference.getTime() + padding) };
+}
+
 export function selectGoalPeriod<T extends { periodStart: Date }>(
   requestedStart: Date | null,
   requestedGoal: T | null,
