@@ -18,6 +18,7 @@ import { TeamGoalProgress } from '@/components/team-goal-progress';
 import { DashboardPeriodSelector } from '@/components/dashboard-period-selector';
 import { DailyCloseControl } from '@/components/daily-close-control';
 import { DashboardTrendChart } from '@/components/dashboard-trend-chart';
+import { DashboardMotionArticle, DashboardMotionSection } from '@/components/dashboard-motion-card';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getDailyReportForDate } from '@/lib/daily-reports';
@@ -195,21 +196,21 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     </div>
 
     <div className="mt-7 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-      <article className="col-span-2 flex min-h-[118px] items-center gap-4 rounded-xl border border-[var(--atelier-green)]/20 bg-[#111719] p-4 md:col-span-1 md:min-h-[132px] md:flex-col md:items-start md:justify-between md:p-5">
+      <DashboardMotionArticle className="col-span-2 flex min-h-[118px] items-center gap-4 rounded-xl border border-[var(--atelier-green)]/20 bg-[var(--atelier-surface)] p-4 md:col-span-1 md:min-h-[132px] md:flex-col md:items-start md:justify-between md:p-5">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.09] text-[var(--atelier-green)]"><CurrencyDollarIcon size={21} weight="regular" aria-hidden="true" /></span>
         <div className="min-w-0">
           <p className="text-xs font-medium text-white/55">Receita vendida</p>
           <p className="mt-1 truncate text-2xl font-semibold tabular-nums tracking-tight text-white md:text-[1.65rem]">{money(selectedMetrics.sales)}</p>
           <p className="mt-1 truncate text-xs text-[var(--atelier-green)]">{selectedMetrics.won} negócio{selectedMetrics.won === 1 ? '' : 's'} ganho{selectedMetrics.won === 1 ? '' : 's'}</p>
         </div>
-      </article>
-      {dashboardMetrics.map(({ label, value, detail, Icon }) => <article className="flex min-h-[118px] min-w-0 flex-col justify-between rounded-xl border border-white/[0.08] bg-[#111719] p-4 transition-colors duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:border-white/[0.14] md:min-h-[132px] md:p-5" key={label}>
+      </DashboardMotionArticle>
+      {dashboardMetrics.map(({ label, value, detail, Icon }) => <DashboardMotionArticle className="flex min-h-[118px] min-w-0 flex-col justify-between rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 transition-colors duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:border-white/[0.14] md:min-h-[132px] md:p-5" key={label}>
         <div className="flex items-center gap-2.5 text-[var(--atelier-green)]"><Icon size={18} weight="regular" aria-hidden="true" /><p className="truncate text-xs font-medium text-white/65">{label}</p></div>
         <div className="min-w-0">
           <p className="truncate text-xl font-semibold tabular-nums tracking-tight text-white md:text-2xl">{value}</p>
           <p className="mt-1 truncate text-[11px] leading-snug text-white/40">{detail}</p>
         </div>
-      </article>)}
+      </DashboardMotionArticle>)}
     </div>
 
     <div className="mt-4">
@@ -217,7 +218,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     </div>
 
     <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
-      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+      <DashboardMotionSection className="rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><TargetIcon size={19} weight="regular" aria-hidden="true" /></span>
@@ -226,8 +227,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
           <Link href="/metas" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <ArrowSquareOutIcon size={14} aria-hidden="true" /></Link>
         </div>
         <div className="mt-4"><TeamGoalProgress progress={weeklyProgress} hasApproaches={weeklyMetrics.approaches > 0} compact /></div>
-      </section>
-      <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+      </DashboardMotionSection>
+      <DashboardMotionSection className="rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><TargetIcon size={19} weight="regular" aria-hidden="true" /></span>
@@ -236,11 +237,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
           <Link href="/metas" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <ArrowSquareOutIcon size={14} aria-hidden="true" /></Link>
         </div>
         <div className="mt-4"><TeamGoalProgress progress={monthlyProgress} hasApproaches={monthlyMetrics.approaches > 0} compact /></div>
-      </section>
+      </DashboardMotionSection>
     </div>
 
     <div className="mt-6 grid items-stretch gap-4 xl:grid-cols-2">
-      <section className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+      <DashboardMotionSection className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><CalendarCheckIcon size={19} weight="regular" aria-hidden="true" /></span>
@@ -262,9 +263,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
             <FollowUps followUps={selectedMetrics.upcoming} empty="Nenhum retorno futuro pendente." nameFor={nameFor} upcoming />
           </section>
         </div>
-      </section>
+      </DashboardMotionSection>
 
-      <section className="min-w-0 rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+      <DashboardMotionSection className="min-w-0 rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><FunnelIcon size={19} weight="regular" aria-hidden="true" /></span>
           <div><h2 className="text-base font-semibold tracking-tight">Funil atual</h2><p className="mt-1 text-xs text-white/50">Empresas em cada etapa do funil.</p></div>
@@ -278,11 +279,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
             <strong className="text-right font-semibold tabular-nums text-white">{item.leads}</strong>
           </li>)}
         </ul>
-      </section>
+      </DashboardMotionSection>
     </div>
 
     <div className="mt-6 grid items-stretch gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
-      <section className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+      <DashboardMotionSection className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><UsersThreeIcon size={19} weight="regular" aria-hidden="true" /></span>
           <div><h2 className="text-base font-semibold tracking-tight">Desempenho da equipe</h2><p className="mt-1 text-xs text-white/50">Resultados registrados · {periodLabel.toLowerCase()}</p></div>
@@ -298,9 +299,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
             </tbody>
           </table>
         </div>
-      </section>
+      </DashboardMotionSection>
 
-      <section className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5">
+      <DashboardMotionSection className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><UserIcon size={19} weight="regular" aria-hidden="true" /></span>
           <div><h2 className="text-base font-semibold tracking-tight">Meu desempenho</h2><p className="mt-1 text-xs text-white/50">{user?.name ?? 'Membro'} · {periodLabel.toLowerCase()}</p></div>
@@ -312,7 +313,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
           <Result label="Vendas" value={mine.won} />
           <Result label="Receita vendida" value={money(mine.sales)} />
         </div>
-      </section>
+      </DashboardMotionSection>
     </div>
 
     <footer className="mt-8 flex flex-col gap-1 border-t border-white/[0.07] pt-4 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">

@@ -1,4 +1,9 @@
+'use client';
+
+import { motion, useReducedMotion } from 'motion/react';
 import type { DashboardTrendPoint } from '@/lib/dashboard-trend';
+import { DashboardMotionSection } from '@/components/dashboard-motion-card';
+import { getDashboardLineDrawProps, getDashboardLineMotionProps, getDashboardPointMotionProps } from '@/components/motion-primitives';
 
 type DashboardTrendChartProps = {
   data: DashboardTrendPoint[];
@@ -20,6 +25,10 @@ function linePoints(data: DashboardTrendPoint[], key: 'approaches' | 'interests'
 }
 
 export function DashboardTrendChart({ data, periodLabel }: DashboardTrendChartProps) {
+  const prefersReducedMotion = useReducedMotion() === true;
+  const lineDrawProps = getDashboardLineDrawProps(prefersReducedMotion);
+  const lineMotionProps = getDashboardLineMotionProps(prefersReducedMotion);
+  const pointMotionProps = getDashboardPointMotionProps(prefersReducedMotion);
   const approaches = data.reduce((total, point) => total + point.approaches, 0);
   const interests = data.reduce((total, point) => total + point.interests, 0);
   const peak = Math.max(approaches ? Math.max(...data.map((point) => point.approaches)) : 0,
@@ -30,7 +39,7 @@ export function DashboardTrendChart({ data, periodLabel }: DashboardTrendChartPr
   const ticks = Array.from({ length: 5 }, (_, index) => maximum - (maximum / 4) * index);
   const pointString = (points: typeof approachPoints) => points.map(({ x, y }) => `${x},${y}`).join(' ');
 
-  return <section className="rounded-xl border border-white/[0.08] bg-[#111719] p-4 md:p-5" aria-labelledby="dashboard-trend-heading">
+  return <DashboardMotionSection className="rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5" testId="dashboard-trend-motion" aria-labelledby="dashboard-trend-heading">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h2 id="dashboard-trend-heading" className="text-base font-semibold tracking-tight text-white">Ritmo de prospecção</h2>
@@ -62,10 +71,10 @@ export function DashboardTrendChart({ data, periodLabel }: DashboardTrendChartPr
             const x = data.length <= 1 ? chartWidth / 2 : 6 + (index / (data.length - 1)) * (chartWidth - 12);
             return <line key={point.label} x1={x} y1={chartTop} x2={x} y2={chartBottom} stroke="rgba(255,255,255,0.045)" strokeDasharray="3 8" strokeWidth="1" />;
           })}
-          {approachPoints.length > 0 ? <polyline points={pointString(approachPoints)} fill="none" stroke="var(--atelier-green)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" /> : null}
-          {interestPoints.length > 0 ? <polyline points={pointString(interestPoints)} fill="none" stroke="#f4f5f5" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" /> : null}
-          {approachPoints.map((point) => <circle key={`approach-${point.label}`} cx={point.x} cy={point.y} r="4.5" fill="var(--atelier-green)" stroke="#111719" strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{`${point.label}: ${point.value} abordagens`}</title></circle>)}
-          {interestPoints.map((point) => <circle key={`interest-${point.label}`} cx={point.x} cy={point.y} r="4" fill="#f4f5f5" stroke="#111719" strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{`${point.label}: ${point.value} interesses`}</title></circle>)}
+          {approachPoints.length > 0 ? <motion.polyline {...lineDrawProps} {...lineMotionProps} points={pointString(approachPoints)} fill="none" stroke="var(--atelier-green)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" data-testid="dashboard-approaches-line" /> : null}
+          {interestPoints.length > 0 ? <motion.polyline {...lineDrawProps} {...lineMotionProps} points={pointString(interestPoints)} fill="none" stroke="#f4f5f5" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" data-testid="dashboard-interests-line" /> : null}
+          {approachPoints.map((point) => <motion.circle {...pointMotionProps} key={`approach-${point.label}`} cx={point.x} cy={point.y} r="4.5" fill="var(--atelier-green)" stroke="var(--atelier-surface)" strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{`${point.label}: ${point.value} abordagens`}</title></motion.circle>)}
+          {interestPoints.map((point) => <motion.circle {...pointMotionProps} key={`interest-${point.label}`} cx={point.x} cy={point.y} r="4" fill="#f4f5f5" stroke="var(--atelier-surface)" strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{`${point.label}: ${point.value} interesses`}</title></motion.circle>)}
         </svg>
       </div>
       <div className="ml-9 mt-2 grid gap-1 text-center text-[10px] text-white/50 sm:ml-11 sm:text-xs" style={{ gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, minmax(0, 1fr))` }} aria-hidden="true">
@@ -76,5 +85,5 @@ export function DashboardTrendChart({ data, periodLabel }: DashboardTrendChartPr
       </ul>
       {approaches + interests === 0 ? <figcaption className="mt-3 text-center text-xs text-white/40">Nenhuma movimentação registrada neste período.</figcaption> : null}
     </figure>
-  </section>;
+  </DashboardMotionSection>;
 }

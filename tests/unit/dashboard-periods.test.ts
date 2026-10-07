@@ -104,5 +104,17 @@ describe('dashboard trend data', () => {
     expect(html).toContain('Interesses');
     expect(html).toContain('Nenhuma movimentação registrada neste período.');
     expect(html).toContain('seg 05: 0 abordagens e 0 interesses');
+    expect(html).toContain('data-dashboard-motion-card="section"');
+    expect(html).toContain('bg-[var(--atelier-surface)]');
+  });
+
+  test('renders interactive chart lines and points when the period has activity', () => {
+    const html = renderToStaticMarkup(createElement(DashboardTrendChart, {
+      data: [{ label: 'seg 05', approaches: 2, interests: 1 }], periodLabel: 'Esta semana'
+    }));
+
+    expect(html).toContain('data-testid="dashboard-approaches-line"');
+    expect(html).toContain('data-testid="dashboard-interests-line"');
+    expect(html).toContain('seg 05: 2 abordagens');
   });
 });

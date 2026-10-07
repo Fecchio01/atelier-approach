@@ -12,11 +12,20 @@ export const motionTokens = {
   },
   easing: [0.22, 0.61, 0.36, 1] as const,
   distance: {
-    panel: 8
+    panel: 8,
+    cardLift: 5
   },
   scale: {
-    panel: 0.985
+    panel: 0.985,
+    cardHover: 1.012,
+    cardPress: 0.992,
+    chartPointHover: 1.7
   }
+} as const;
+
+export const springs = {
+  gentle: { type: 'spring', stiffness: 260, damping: 26 },
+  snappy: { type: 'spring', stiffness: 340, damping: 30 }
 } as const;
 
 export type MotionSpeed = keyof typeof motionTokens.duration;
@@ -41,6 +50,43 @@ export function getPanelMotionProps(reducedMotion: boolean) {
     initial: { opacity: 0, y: motionTokens.distance.panel, scale: motionTokens.scale.panel },
     animate: { opacity: 1, y: 0, scale: 1 },
     exit: { opacity: 0, y: motionTokens.distance.panel, scale: motionTokens.scale.panel }
+  };
+}
+
+export function getDashboardCardMotionProps(reducedMotion: boolean) {
+  return {
+    whileHover: reducedMotion ? undefined : {
+      y: -motionTokens.distance.cardLift,
+      scale: motionTokens.scale.cardHover,
+      borderColor: 'rgba(167, 216, 26, 0.28)',
+      boxShadow: '0 14px 30px rgba(0, 0, 0, 0.2)'
+    },
+    whileTap: reducedMotion ? undefined : { scale: motionTokens.scale.cardPress },
+    transition: reducedMotion ? getMotionTransition(true, 'fast') : springs.gentle
+  };
+}
+
+export function getDashboardLineMotionProps(reducedMotion: boolean) {
+  return {
+    whileHover: reducedMotion ? undefined : { strokeWidth: 4.5 },
+    whileFocus: reducedMotion ? undefined : { strokeWidth: 4.5 },
+    transition: { strokeWidth: reducedMotion ? getMotionTransition(true, 'fast') : springs.snappy }
+  };
+}
+
+export function getDashboardPointMotionProps(reducedMotion: boolean) {
+  return {
+    whileHover: reducedMotion ? undefined : { scale: motionTokens.scale.chartPointHover },
+    whileFocus: reducedMotion ? undefined : { scale: motionTokens.scale.chartPointHover },
+    transition: reducedMotion ? getMotionTransition(true, 'fast') : springs.snappy
+  };
+}
+
+export function getDashboardLineDrawProps(reducedMotion: boolean) {
+  return {
+    initial: reducedMotion ? false : { pathLength: 0 },
+    animate: { pathLength: 1 },
+    transition: { pathLength: reducedMotion ? getMotionTransition(true, 'fast') : { ...getMotionTransition(false, 'normal'), duration: 0.8 } }
   };
 }
 
