@@ -11,6 +11,7 @@ import { removeImportedPdfGoals, saveCustomGoalsForCycle, saveMonthlyGoal, saveW
 import { initialGoalActionState, type GoalActionState } from './goal-form-state';
 import { CustomGoalMetricRow } from './custom-goal-metrics';
 import { GoalImporter } from './goal-importer';
+import { DashboardMotionSection } from '@/components/dashboard-motion-card';
 
 type GoalRecord = {
   approachesTarget: number | null;
@@ -332,7 +333,7 @@ export function GoalForm({
       </div>
 
     <div className="grid gap-4 xl:grid-cols-3">
-      {metricGroups.map(({ key, title, description, Icon, fields }) => <section key={key} aria-labelledby={`${key}-heading`} className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#11171b] p-4 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] sm:p-5">
+      {metricGroups.map(({ key, title, description, Icon, fields }) => <DashboardMotionSection key={key} aria-labelledby={`${key}-heading`} className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#11171b] p-4 sm:p-5">
         <div className="flex items-start gap-3 border-b border-white/[0.07] pb-4">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><Icon size={20} weight="regular" /></span>
           <div><h3 id={`${key}-heading`} className="font-semibold text-white/90">{title}</h3><p className="mt-1 text-xs leading-5 text-white/45">{description}</p></div>
@@ -419,11 +420,11 @@ export function GoalForm({
             onRemove={() => void removeCustomGoal(customGoal.id)}
           />)}
         </div>
-      </section>)}
+      </DashboardMotionSection>)}
       {customGoalGroupKeys.filter((key): key is Exclude<CustomGoalGroup, 'prospecting' | 'progress' | 'revenue'> => !primaryGroupKeys.has(key) && customGoalsByGroup[key].length > 0).map((groupKey) => {
         const { label, description } = customGoalGroups[groupKey];
         const GroupIcon = metricGroupIcons[groupKey];
-        return <section key={groupKey} aria-labelledby={`${groupKey}-heading`} className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#11171b] p-4 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] sm:p-5">
+        return <DashboardMotionSection key={groupKey} aria-labelledby={`${groupKey}-heading`} className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#11171b] p-4 sm:p-5">
           <div className="flex items-start gap-3 border-b border-white/[0.07] pb-4">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><GroupIcon size={20} weight="regular" /></span>
             <div><h3 id={`${groupKey}-heading`} className="font-semibold text-white/90">{label}</h3><p className="mt-1 text-xs leading-5 text-white/45">{description}</p></div>
@@ -442,7 +443,7 @@ export function GoalForm({
               onRemove={() => void removeCustomGoal(customGoal.id)}
             />)}
           </div>
-        </section>;
+        </DashboardMotionSection>;
       })}
     </div>
     </section>

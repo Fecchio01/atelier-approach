@@ -135,5 +135,11 @@ dialog {
 
 .atelier-scrollbar::-webkit-scrollbar { height: 9px; width: 9px; }
 .atelier-scrollbar::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,255,255,.14); }
+.atelier-scrollbar-accent { scrollbar-color: color-mix(in srgb, var(--atelier-green) 74%, #263420) rgba(255,255,255,.035); scrollbar-width: thin; }
+.atelier-scrollbar-accent::-webkit-scrollbar { height: 9px; width: 9px; }
+.atelier-scrollbar-accent::-webkit-scrollbar-track { border-radius: 999px; background: rgba(255,255,255,.035); }
+.atelier-scrollbar-accent::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(167,216,26,.72); background-clip: padding-box; }
+.atelier-scrollbar-accent::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--atelier-green) 74%, #263420); background-clip: padding-box; }
+.atelier-scrollbar-accent::-webkit-scrollbar-thumb:hover { background: var(--atelier-green); background-clip: padding-box; }
 .mobile-safe-area { padding: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left)); }
 @media (min-width: 640px) { .mobile-safe-area { padding: 2rem; } }

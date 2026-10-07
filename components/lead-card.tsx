@@ -1,5 +1,8 @@
+'use client';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, useReducedMotion } from 'motion/react';
 import { StorefrontIcon } from '@phosphor-icons/react';
 
 import type { Channel } from '@prisma/client';
@@ -8,6 +11,7 @@ import type { BusinessScore } from '@/lib/lead-score';
 import { displayCompanyName } from '@/lib/display-name';
 import { googleMapsSearchUrl } from '@/lib/google-maps-url';
 import { possibleWhatsAppHref } from '@/lib/contact-links';
+import { getDashboardCardMotionProps } from './motion-primitives';
 
 type LeadCardProps = {
   business: ExternalBusiness;
@@ -17,6 +21,7 @@ type LeadCardProps = {
 
 export function LeadCard({ business, result, onApproached }: LeadCardProps) {
   const router = useRouter();
+  const prefersReducedMotion = useReducedMotion() === true;
   const [isApproaching, setIsApproaching] = useState(false);
   const [channel, setChannel] = useState<Channel>('WHATSAPP');
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +60,7 @@ export function LeadCard({ business, result, onApproached }: LeadCardProps) {
   }
 
   return (
-    <article className="group flex flex-col gap-5 rounded-2xl border border-white/[0.09] bg-[#111411] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:-translate-y-px hover:border-white/20">
+    <motion.article {...getDashboardCardMotionProps(prefersReducedMotion)} className="group flex flex-col gap-5 rounded-2xl border border-white/[0.09] bg-[#111411] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)]">
       {business.imageUrl ? (
         // External Open Graph images are not part of a configured, trusted image host list.
         // eslint-disable-next-line @next/next/no-img-element
@@ -143,7 +148,7 @@ export function LeadCard({ business, result, onApproached }: LeadCardProps) {
           Marcar como abordada
         </button>
       )}
-    </article>
+    </motion.article>
   );
 }
 

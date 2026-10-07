@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { LeadStage } from '@prisma/client';
 import { ArrowsLeftRightIcon } from '@phosphor-icons/react';
 import { mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage } from '@/lib/funnel';
 import { LeadDetailModal } from './lead-detail-modal';
 import { displayCompanyName } from '@/lib/display-name';
 import { visibleLeads } from '@/lib/kanban-visible-leads';
-import { getMotionTransition } from './motion-primitives';
+import { getDashboardCardMotionProps, getMotionTransition } from './motion-primitives';
 import type { CommercialServiceOption } from '@/lib/commercial-ui';
+import { synchronizeHorizontalScroll } from '@/lib/horizontal-scroll-sync';
 
 export type CrmLead = {
   id: string;
@@ -38,6 +39,9 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(focusedLeadId ?? null);
   const [stageOverrides, setStageOverrides] = useState<Record<string, LeadStage>>({});
   const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const funnelScrollRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = useReducedMotion() === true;
   const pageWasSuspended = useRef(false);
   useEffect(() => { setSelectedLeadId(focusedLeadId ?? null); }, [focusedLeadId]);
   useEffect(() => {
@@ -98,13 +102,13 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
             const latest = lead.activities[0];
             const channels = [[lead.whatsapp, 'WhatsApp'], [lead.instagram, 'Instagram'], [lead.website, 'Site'], [lead.phone, 'Telefone']].filter(([value]) => Boolean(value));
             return <motion.div key={lead.id} layoutId={`crm-lead-${lead.id}`} initial={false} transition={getMotionTransition(false, 'normal')}>
-              <button id={`lead-${lead.id}`} data-lead-id={lead.id} type="button" aria-label={`Abrir detalhes de ${displayCompanyName(lead.name)}`} onClick={() => setSelectedLeadId(lead.id)} className="group grid min-h-[84px] transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] active:scale-[0.98] w-full gap-3 rounded-lg border border-white/[0.075] bg-[#151b20] p-3 text-left shadow-[0_10px_24px_rgba(0,0,0,.12)] hover:border-white/20 hover:bg-[#192127] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
+              <motion.button {...getDashboardCardMotionProps(prefersReducedMotion)} id={`lead-${lead.id}`} data-lead-id={lead.id} type="button" aria-label={`Abrir detalhes de ${displayCompanyName(lead.name)}`} onClick={() => setSelectedLeadId(lead.id)} className="group grid min-h-[84px] w-full gap-3 rounded-lg border border-white/[0.075] bg-[#151b20] p-3 text-left shadow-[0_10px_24px_rgba(0,0,0,.12)] hover:border-white/20 hover:bg-[#192127] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
               <span className="line-clamp-2 break-words text-[13px] font-semibold leading-snug text-white/90">{displayCompanyName(lead.name)}</span>
               <span className="flex items-center justify-between gap-2 text-[10px] text-white/40">
                 <span className="flex min-w-0 items-center gap-1.5"><span className={`h-2 w-2 shrink-0 rounded-full ${channels.length ? 'bg-[var(--atelier-green)]' : 'bg-white/35'}`} />{latest ? <time dateTime={latest.createdAt}>Há atividade</time> : 'Sem contato'}</span>
                 <span aria-label="Canais disponíveis" className="shrink-0 text-white/45">{channels.length ? channels.length === 1 ? channels[0][1] : `${channels.length} canais` : ''}</span>
               </span>
-              </button>
+              </motion.button>
             </motion.div>;
           })}
           {!stageLeads.length ? <p className="rounded-xl border border-dashed border-white/[0.07] px-3 py-8 text-center text-xs text-white/25">Nenhuma empresa</p> : null}
@@ -116,7 +120,12 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
   return <>
     <p className="mb-2 flex items-center gap-2 text-xs text-white/40 md:hidden"><ArrowsLeftRightIcon size={15} aria-hidden="true" />Deslize para ver todas as etapas</p>
     <section data-testid="crm-main-funnel-scrollport" role="region" aria-label="Etapas principais do funil" tabIndex={0} className="atelier-scrollbar h-[min(68vh,42rem)] max-h-[min(68dvh,42rem)] overflow-y-auto overscroll-y-contain rounded-2xl border border-white/[0.1] bg-[#0d1216]/55 p-2.5 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] md:h-auto md:p-3">
-      <div role="region" aria-label="Funil CRM" tabIndex={0} className="atelier-scrollbar min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto overflow-y-hidden pb-1 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+      <div className="sticky top-0 z-[1] -mx-2.5 -mt-2.5 mb-2.5 bg-[#0d1216] px-2.5 pt-2.5 md:-mx-3 md:-mt-3 md:px-3 md:pt-3">
+        <div ref={topScrollRef} data-testid="crm-funnel-top-scrollbar" role="region" aria-label="Arraste para navegar horizontalmente pelas etapas do funil" tabIndex={0} onScroll={(event) => synchronizeHorizontalScroll(event.currentTarget, funnelScrollRef.current)} className="atelier-scrollbar-accent min-w-0 max-w-full overflow-x-auto overflow-y-hidden rounded-full focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+          <div aria-hidden="true" className="h-2" style={{ minWidth: '1540px' }} />
+        </div>
+      </div>
+      <div ref={funnelScrollRef} role="region" aria-label="Funil CRM" tabIndex={0} onScroll={(event) => synchronizeHorizontalScroll(event.currentTarget, topScrollRef.current)} className="atelier-scrollbar min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto overflow-y-hidden pb-1 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
         <div className="grid grid-cols-7 items-start gap-2.5" style={{ minWidth: '1540px' }}>{mainFunnelStages.map((stage) => renderColumn(stage))}</div>
       </div>
     </section>

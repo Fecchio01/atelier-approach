@@ -288,7 +288,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><UsersThreeIcon size={19} weight="regular" aria-hidden="true" /></span>
           <div><h2 className="text-base font-semibold tracking-tight">Desempenho da equipe</h2><p className="mt-1 text-xs text-white/50">Resultados registrados · {periodLabel.toLowerCase()}</p></div>
         </div>
-        <div className="mt-4 min-w-0 flex-1 overflow-x-auto">
+        <div className="atelier-scrollbar-accent mt-4 min-w-0 flex-1 overflow-x-auto">
           <table className="w-full min-w-[650px] border-collapse text-left text-xs">
             <thead><tr className="border-b border-white/10 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40"><th className="pb-3 pr-4">Membro</th><th className="px-2 pb-3 text-right">Abordagens</th><th className="px-2 pb-3 text-right">Interesses</th><th className="px-2 pb-3 text-right">Reuniões</th><th className="px-2 pb-3 text-right">Vendas</th><th className="pb-3 pl-2 text-right">Vendido</th></tr></thead>
             <tbody>
