@@ -172,7 +172,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const dashboardMetrics = [
     { label: 'MRR', value: money(selectedMetrics.mrr), detail: 'Receita recorrente', Icon: ChartBarIcon },
     { label: 'Abordagens', value: String(selectedMetrics.approaches), detail: 'Contatos iniciados', Icon: PaperPlaneTiltIcon },
-    { label: 'Interesses', value: String(selectedMetrics.interests), detail: 'Avanços para conversa', Icon: UsersThreeIcon },
+    { label: 'Interesses', value: String(selectedMetrics.interests), detail: 'Leads qualificados', Icon: UsersThreeIcon },
     { label: 'Reuniões', value: String(selectedMetrics.meetings), detail: 'Reuniões registradas', Icon: CalendarCheckIcon }
   ];
 

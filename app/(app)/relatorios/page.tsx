@@ -129,7 +129,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
     <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <Metric label="Abordagens" value={String(report.conversion.approaches)} detail="Atividades no período" />
-      <Metric label="Interesses" value={String(report.goalActuals.interests)} detail="Mudanças de etapa registradas" />
+      <Metric label="Interesses" value={String(report.goalActuals.interests)} detail="Leads que chegaram a Qualificado" />
       <Metric label="Reuniões" value={String(report.goalActuals.meetings)} detail="Avanços para reunião" />
       <Metric label="Ganhos" value={String(report.conversion.wins)} detail="Eventos WON no período" />
       <Metric label="Conversão" value={report.conversion.approaches ? percent(report.conversion.rate) : '—'} detail="Ganhos ÷ abordagens" />

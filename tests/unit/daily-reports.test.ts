@@ -112,7 +112,7 @@ describe('daily report snapshots', () => {
       { leadId: lead.id, actorId: 'daily-report-member', type: 'CONTACT', channel: 'EMAIL', note: 'Depois do fechamento.', createdAt: new Date('2026-09-29T13:00:00.001Z') }
     ] });
     await prisma.stageHistory.create({
-      data: { leadId: lead.id, actorId: 'daily-report-member', toStage: 'INTEREST', createdAt: new Date('2026-09-29T12:00:00.000Z') }
+      data: { leadId: lead.id, actorId: 'daily-report-member', toStage: 'QUALIFIED', createdAt: new Date('2026-09-29T12:00:00.000Z') }
     });
     await prisma.saleEvent.create({
       data: { leadId: lead.id, actorId: 'daily-report-member', saleValue: 1350, mrr: 120, occurredAt: new Date('2026-09-29T12:30:00.000Z') }

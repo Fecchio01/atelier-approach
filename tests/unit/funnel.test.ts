@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { auxiliaryFunnelStages, isApproachStage, isMeetingStage, mainFunnelStages, normalizeFunnelStage, stageLabels } from '../../lib/funnel';
+import { auxiliaryFunnelStages, isApproachStage, isInterestStage, isMeetingStage, mainFunnelStages, normalizeFunnelStage, stageLabels } from '../../lib/funnel';
 
 describe('funnel', () => {
   test('orders the seven operational funnel stages', () => {
@@ -13,6 +13,13 @@ describe('funnel', () => {
     expect(isApproachStage('CONTACTED')).toBe(true);
     expect(isApproachStage('NEW')).toBe(true);
     expect(stageLabels.INTEREST).toBe('Em conversa');
+  });
+
+  test('counts interest only when a lead becomes qualified, not while it is in conversation', () => {
+    expect(isInterestStage('QUALIFIED')).toBe(true);
+    expect(isInterestStage('IN_CONVERSATION')).toBe(false);
+    expect(isInterestStage('INTEREST')).toBe(false);
+    expect(isInterestStage('PROPOSAL')).toBe(false);
   });
 
   test('normalizes legacy and unknown stages into operational columns', () => {

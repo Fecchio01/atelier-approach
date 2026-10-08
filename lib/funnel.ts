@@ -36,7 +36,7 @@ export function isApproachStage(stage: PersistedFunnelStage | string) {
 }
 
 export function isInterestStage(stage: PersistedFunnelStage | string) {
-  return normalizeFunnelStage(stage) === 'IN_CONVERSATION';
+  return normalizeFunnelStage(stage) === 'QUALIFIED';
 }
 
 export function isMeetingStage(stage: PersistedFunnelStage | string) {

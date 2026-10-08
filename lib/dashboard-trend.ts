@@ -94,7 +94,7 @@ export function getDashboardTrend(leads: MetricLead[], range: DashboardRange, pe
 
     const history = lead.stageHistory?.length ? lead.stageHistory : (lead.activities ?? []).flatMap((activity) => {
       if (activity.type && activity.type !== 'STAGE_CHANGE') return [];
-      const match = activity.note?.match(/^Etapa alterada para (INTEREST|IN_CONVERSATION|MEETING|FOLLOW_UP)\.$/);
+      const match = activity.note?.match(/^Etapa alterada para (INTEREST|IN_CONVERSATION|QUALIFIED|MEETING|FOLLOW_UP)\.$/);
       return match ? [{ actorId: activity.actorId, toStage: match[1] as MetricStageEvent['toStage'], createdAt: activity.createdAt }] : [];
     });
 

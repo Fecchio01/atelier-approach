@@ -163,7 +163,7 @@ describe('getDashboardMetrics', () => {
     expect(metrics.goalActuals.followUpsCompleted).toBe(1);
   });
 
-  test('counts the renamed conversation stage as an interest without counting later stages again', () => {
+  test('counts qualification as an interest, not conversation or later stages', () => {
     const metrics = getDashboardMetrics(
       [{
         id: 'conversation-lead', stage: 'PROPOSAL', saleValue: null, mrr: null, activities: [], followUps: [],
@@ -334,7 +334,7 @@ describe('getDashboardMetrics', () => {
         id: 'qualified-lead', stage: 'WON', saleValue: 500, mrr: 50,
         wonAt: new Date('2026-09-10T10:00:00.000Z'), wonById: 'ana',
         activities: [
-          { actorId: 'ana', createdAt: new Date('2026-09-08T10:00:00.000Z'), note: 'Etapa alterada para INTEREST.' },
+          { actorId: 'ana', createdAt: new Date('2026-09-08T10:00:00.000Z'), note: 'Etapa alterada para QUALIFIED.' },
           { actorId: 'ana', createdAt: new Date('2026-09-09T10:00:00.000Z'), note: 'Etapa alterada para FOLLOW_UP.' }
         ],
         followUps: []
@@ -350,7 +350,8 @@ describe('getDashboardMetrics', () => {
     const metrics = getDashboardMetrics([{
       id: 'meeting-history', stage: 'FOLLOW_UP', saleValue: null, mrr: null, activities: [], followUps: [],
       stageHistory: [
-        { actorId: 'ana', toStage: 'INTEREST', createdAt: new Date('2026-09-08T10:00:00.000Z') },
+        { actorId: 'ana', toStage: 'IN_CONVERSATION', createdAt: new Date('2026-09-08T10:00:00.000Z') },
+        { actorId: 'ana', toStage: 'QUALIFIED', createdAt: new Date('2026-09-08T10:30:00.000Z') },
         { actorId: 'ana', toStage: 'MEETING', createdAt: new Date('2026-09-09T10:00:00.000Z') },
         { actorId: 'bia', toStage: 'FOLLOW_UP', createdAt: new Date('2026-09-10T10:00:00.000Z') }
       ]
