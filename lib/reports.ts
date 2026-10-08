@@ -4,7 +4,7 @@ import { prisma } from './db';
 import { auxiliaryFunnelStages, isInterestStage, isMeetingStage, mainFunnelStages, normalizeFunnelStage } from './funnel';
 import { getGoalPeriodWindow } from './goal-periods';
 import type { GoalMetricActuals } from './metrics';
-import { addImportedMetricTotals, getImportedMetricTotalsForExactRange } from './metric-imports';
+import { addImportedMetricTotals, getImportedMetricTotalsForExactRange, type ImportedMetricTotals } from './metric-imports';
 import { formatReportNote } from './report-notes';
 
 export type ReportRange = { from: Date; to: Date; now?: Date };
@@ -36,6 +36,12 @@ export type DailyReportAction = {
 };
 
 export type DailyReportSnapshot = {
+  imports?: {
+    batchIds: string[];
+    batchCount: number;
+    totals: Partial<GoalMetricActuals>;
+    customTotals: Record<string, number>;
+  };
   summary: {
     approaches: number;
     interests: number;
@@ -78,7 +84,7 @@ export function getRecentReportRange(period: RecentReportPeriod, reference = new
 export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: Date; to: Date; closedAt: Date }): Promise<DailyReportSnapshot> {
   const eventRange = { gte: from, lt: to, lte: closedAt };
   return prisma.$transaction(async (tx) => {
-    const [leads, activities, followUps, saleEvents, stageHistory] = await Promise.all([
+    const [leads, activities, followUps, saleEvents, stageHistory, imported] = await Promise.all([
       tx.lead.findMany({
         where: { stage: 'WON', wonAt: eventRange },
         select: { id: true, saleValue: true, mrr: true, wonAt: true, wonById: true }
@@ -102,7 +108,8 @@ export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: D
       tx.stageHistory.findMany({
         where: { createdAt: eventRange },
         select: { actorId: true, toStage: true }
-      })
+      }),
+      getImportedMetricTotalsForExactRange(from, to, tx, closedAt)
     ]);
 
     const legacyCandidates = leads.filter((lead) => lead.wonAt);
@@ -162,16 +169,35 @@ export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: D
     const revenue = effectiveWins.reduce((total, sale) => total + Number(sale.saleValue ?? 0), 0);
     const mrr = effectiveWins.reduce((total, sale) => total + Number(sale.mrr ?? 0), 0);
 
+    const crmActuals: GoalMetricActuals = {
+      approaches: approaches.length,
+      interests,
+      meetings,
+      sales: effectiveWins.length,
+      revenue,
+      mrr,
+      followUpsCompleted: completedFollowUps,
+      conversionRate: approaches.length ? Number((effectiveWins.length / approaches.length * 100).toFixed(2)) : 0
+    };
+    const goalActuals = addImportedMetricTotals(crmActuals, imported);
+    const imports: ImportedMetricTotals = imported;
+
     return {
+      ...(imports.batchCount > 0 ? { imports: {
+        batchIds: imports.batchIds,
+        batchCount: imports.batchCount,
+        totals: imports.totals,
+        customTotals: imports.customTotals
+      } } : {}),
       summary: {
-        approaches: approaches.length,
-        interests,
-        meetings,
-        sales: effectiveWins.length,
-        revenue,
-        mrr,
-        followUpsCompleted: completedFollowUps,
-        conversionRate: approaches.length ? Number((effectiveWins.length / approaches.length * 100).toFixed(2)) : 0,
+        approaches: goalActuals.approaches,
+        interests: goalActuals.interests,
+        meetings: goalActuals.meetings,
+        sales: goalActuals.sales,
+        revenue: goalActuals.revenue,
+        mrr: goalActuals.mrr,
+        followUpsCompleted: goalActuals.followUpsCompleted,
+        conversionRate: goalActuals.conversionRate,
         channels,
         members: [...memberResults.entries()].map(([memberId, result]) => ({
           memberId,

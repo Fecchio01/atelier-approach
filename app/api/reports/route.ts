@@ -120,6 +120,15 @@ function downloadPdf(bytes: Uint8Array, filename: string) {
 function createDailyPdfSections(snapshot: DailyReportSnapshot): ReportPdfSection[] {
   const summary = snapshot.summary;
   return [
+    ...(snapshot.imports ? [{
+      title: 'Resultados importados',
+      lines: [
+        `${snapshot.imports.batchCount} lote(s) considerados até o fechamento; valores sem atribuição a membros ou canais.`,
+        ...snapshot.imports.batchIds.map((id) => `Lote: ${id}`),
+        ...Object.entries(snapshot.imports.totals).map(([key, value]) => `${metricLabels[key as GoalMetricKey]}: ${key === 'revenue' || key === 'mrr' ? moneyFormatter.format(value) : numberFormatter.format(value)}`),
+        ...Object.entries(snapshot.imports.customTotals).map(([id, value]) => `Indicador personalizado ${id}: ${numberFormatter.format(value)}`)
+      ]
+    }] : []),
     { title: 'Resumo do dia', lines: [
       `Abordagens: ${summary.approaches}`,
       `Interesses: ${summary.interests}`,

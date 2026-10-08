@@ -44,6 +44,7 @@ describe('daily report snapshots', () => {
     await prisma.followUp.deleteMany();
     await prisma.saleEvent.deleteMany();
     await prisma.stageHistory.deleteMany();
+    await prisma.metricImportBatch.deleteMany();
     await prisma.lead.deleteMany();
 
     const dailyReportDb = prisma as unknown as { dailyReport?: { deleteMany: () => Promise<unknown> } };
@@ -137,6 +138,42 @@ describe('daily report snapshots', () => {
     expect(snapshot.actions).toHaveLength(3);
     expect(snapshot.actions[0]).toMatchObject({ leadName: 'Oficina Horizonte', occurredAt: '2026-09-29T03:00:00.000Z' });
     expect(snapshot.actions.at(-1)).toMatchObject({ occurredAt: '2026-09-29T13:00:00.000Z' });
+  });
+
+  test('freezes only pre-close exact-day imported results and never distributes a weekly lot', async () => {
+    const from = new Date('2026-09-29T03:00:00.000Z');
+    const to = new Date('2026-09-30T03:00:00.000Z');
+    const closeAt = new Date('2026-09-29T13:00:00.000Z');
+    const makeBatch = (fileName: string, periodStart: Date, periodEnd: Date, createdAt: Date, value: number) => prisma.metricImportBatch.create({
+      data: {
+        ownerId: '__team__', actorId: 'daily-report-member', fileName,
+        contentHash: crypto.randomUUID().replace(/-/g, '').repeat(2), periodStart, periodEnd, createdAt,
+        rows: { create: [{ metricKey: 'approaches', customGoalId: null, label: 'Abordagens', unit: null, value }] }
+      }
+    });
+    const included = await makeBatch('dia-antes.pdf', from, to, new Date('2026-09-29T12:00:00.000Z'), 5);
+    await makeBatch('dia-depois.pdf', from, to, new Date('2026-09-29T13:00:00.001Z'), 7);
+    await makeBatch('semana.pdf', new Date('2026-09-28T03:00:00.000Z'), new Date('2026-10-05T03:00:00.000Z'), new Date('2026-09-29T12:30:00.000Z'), 999);
+
+    const { report } = await closeCurrentDailyReport('daily-report-member', closeAt);
+
+    expect(report.snapshot.summary.approaches).toBe(5);
+    expect(report.snapshot.imports).toMatchObject({ batchIds: [included.id], totals: { approaches: 5 } });
+    await makeBatch('dia-depois-fechamento.pdf', from, to, new Date('2026-09-29T13:05:00.000Z'), 11);
+    const reloaded = await getDailyReportForDate(closeAt);
+    expect(reloaded?.snapshot).toEqual(report.snapshot);
+    vi.stubGlobal('React', React);
+    const html = renderToStaticMarkup(React.createElement(DailyReportView, {
+      date: '2026-09-29', report: reloaded, recent: [], todayReport: true, todayHref: '/relatorios?period=day&date=2026-09-29'
+    }));
+    expect(html).toContain('inclui 1 lote de resultados importados');
+    const createPdf = vi.spyOn(reportPdfModule, 'createReportPdf').mockResolvedValue(new Uint8Array([1]));
+    vi.spyOn(dailyReportsModule, 'getDailyReportForDate').mockResolvedValue(reloaded);
+    const response = await reportRouteModule.GET(new Request('http://localhost/api/reports?format=pdf&period=day&date=2026-09-29'));
+    expect(response.status).toBe(200);
+    expect(createPdf.mock.calls.at(-1)?.[0].sections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Resultados importados', lines: expect.arrayContaining([expect.stringContaining(included.id)]) })
+    ]));
   });
 
   test('reads all daily data from one repeatable-read database snapshot', async () => {

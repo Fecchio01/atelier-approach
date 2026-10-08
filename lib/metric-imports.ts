@@ -249,13 +249,14 @@ export async function deleteMetricImport(id: string, database: typeof prisma = p
 export async function getImportedMetricTotalsForExactRange(
   start: Date,
   end: Date,
-  database: Prisma.TransactionClient | typeof prisma = prisma
+  database: Prisma.TransactionClient | typeof prisma = prisma,
+  createdBefore?: Date
 ): Promise<ImportedMetricTotals> {
-  if (!validDate(start) || !validDate(end) || start >= end) {
+  if (!validDate(start) || !validDate(end) || start >= end || (createdBefore && !validDate(createdBefore))) {
     throw new RangeError('Informe um período válido para consultar os resultados importados.');
   }
   const batches = await database.metricImportBatch.findMany({
-    where: { ownerId: TEAM_OWNER_ID, periodStart: start, periodEnd: end },
+    where: { ownerId: TEAM_OWNER_ID, periodStart: start, periodEnd: end, ...(createdBefore ? { createdAt: { lte: createdBefore } } : {}) },
     include: { rows: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
   });

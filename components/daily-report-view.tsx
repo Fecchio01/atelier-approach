@@ -75,6 +75,7 @@ export function DailyReportView({
 
     {report ? <>
       <p className="mt-6 text-sm text-white/60">Fechado em <strong className="text-white">{timeFormatter.format(report.closedAt)}</strong></p>
+      {report.snapshot.imports && <p className="mt-2 text-xs text-[var(--atelier-green)]">Este retrato inclui {report.snapshot.imports.batchCount} lote{report.snapshot.imports.batchCount === 1 ? '' : 's'} de resultados importados que já existiam no momento do fechamento. Os totais não são atribuídos a membros ou canais.</p>}
       <section aria-labelledby="daily-summary-title" className="mt-5">
         <h2 id="daily-summary-title" className="mb-3 text-lg font-semibold">Resumo do dia</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
