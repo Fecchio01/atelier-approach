@@ -4,6 +4,7 @@ import { prisma } from './db';
 import { auxiliaryFunnelStages, isInterestStage, isMeetingStage, mainFunnelStages, normalizeFunnelStage } from './funnel';
 import { getGoalPeriodWindow } from './goal-periods';
 import type { GoalMetricActuals } from './metrics';
+import { formatReportNote } from './report-notes';
 
 export type ReportRange = { from: Date; to: Date; now?: Date };
 export type RecentReportPeriod = 'week' | 'month';
@@ -285,7 +286,7 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
       cancelled: followUps.filter((followUp) => followUp.state === 'CANCELLED' && followUp.cancelledAt && inRange(followUp.cancelledAt, range)).length,
       overdue: followUps.filter((followUp) => followUp.state === 'PENDING' && followUp.dueDate < now && inRange(followUp.dueDate, range)).length
     },
-    notes: { total: activities.length, recent: activities.map((activity) => activity.note) }
+    notes: { total: activities.length, recent: activities.map((activity) => formatReportNote(activity.note)) }
   };
 }
 

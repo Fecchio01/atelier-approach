@@ -5,6 +5,7 @@ import { DailyCloseControl } from './daily-close-control';
 import { ReportPdfDownload } from './report-pdf-download';
 import { ReportPeriodNavigation } from './report-period-navigation';
 import type { DailyReportArchiveItem, DailyReportRecord } from '@/lib/daily-reports';
+import { ReportsMotionSurface } from './reports-motion-surface';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'long' });
@@ -53,7 +54,7 @@ export function DailyReportView({
 }) {
   const selectedDate = new Date(`${date}T12:00:00.000Z`);
   const summary = report?.snapshot.summary;
-  return <section data-testid="reports-page-canvas" className="atelier-page-canvas mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
+  return <ReportsMotionSurface testId="reports-page-canvas" className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
     <header className="flex flex-col gap-5 border-b border-white/[0.08] pb-8 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-3xl">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--atelier-green)]">Relatórios comerciais</p>
@@ -135,5 +136,5 @@ export function DailyReportView({
         }) : <li className="py-2 text-sm text-white/50">Nenhum dia fechado ainda.</li>}
       </ul>
     </section>
-  </section>;
+  </ReportsMotionSurface>;
 }

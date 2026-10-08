@@ -9,9 +9,9 @@ test('uses the shared branded canvas on both cycle and daily reports', async ({ 
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page).toHaveURL('http://127.0.0.1:3001/');
 
-  for (const href of ['/relatorios?period=month', '/relatorios?period=day']) {
+  for (const href of ['/', '/relatorios?period=month', '/relatorios?period=day']) {
     await page.goto(href);
-    const canvas = page.getByTestId('reports-page-canvas');
+    const canvas = page.getByTestId('app-content-canvas');
     await expect(canvas).toBeVisible();
     await expect.poll(() => canvas.evaluate((element) => getComputedStyle(element).backgroundImage)).toContain('radial-gradient');
   }

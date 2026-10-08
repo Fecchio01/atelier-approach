@@ -43,6 +43,8 @@ describe('AppShell brand navigation', () => {
     expect(markup).not.toContain('mix-blend-screen');
     expect(markup).not.toContain('bg-black');
     expect(markup).toContain('data-atelier-design="apple"');
+    expect(markup).toContain('data-testid="app-content-canvas"');
+    expect(markup).toContain('atelier-app-canvas');
     expect(markup.match(/Sua operação comercial/g)).toHaveLength(3);
     expect(markup).toContain('xl:w-[150px]');
     expect(markup).toContain('w-full');

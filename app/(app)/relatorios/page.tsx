@@ -6,6 +6,7 @@ import { DailyReportView } from '@/components/daily-report-view';
 import { ReportPdfDownload } from '@/components/report-pdf-download';
 import { ReportPeriodNavigation } from '@/components/report-period-navigation';
 import { PageHeading } from '@/components/ui';
+import { ReportsMotionSurface } from '@/components/reports-motion-surface';
 import { getDailyReportForDate, listRecentDailyReports } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { normalizeFunnelStage, stageLabels } from '@/lib/funnel';
@@ -109,7 +110,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const viewingCurrent = selectedWindow.start.getTime() === activeWindow.start.getTime();
   const pdfHref = `/api/reports?format=pdf&period=${period}&from=${encodeURIComponent(selectedWindow.start.toISOString())}&to=${encodeURIComponent(selectedWindow.end.toISOString())}`;
 
-  return <section data-testid="reports-page-canvas" className="atelier-page-canvas mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
+  return <ReportsMotionSurface testId="reports-page-canvas" className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
     <PageHeading eyebrow="Relatórios comerciais" title="Leituras do CRM, sem previsões." description="Os números usam atividades, etapas e eventos de ganho registrados no CRM." action={<div className="flex flex-wrap items-center gap-3"><ReportPdfDownload href={pdfHref} /><Link href="/" className="text-sm text-[var(--atelier-green)]">← Painel</Link></div>} />
     <div className="mt-8"><ReportPeriodNavigation activePeriod={viewingCurrent ? period : null} date={today} /></div>
     <div className="mt-5"><DailyCloseControl initiallyClosed={Boolean(dailyReport)} reportHref={todayHref} /></div>
@@ -149,7 +150,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <section className="rounded-2xl border border-white/15 bg-[var(--atelier-surface)] p-4 sm:p-6"><h2 className="text-xl font-semibold">Resumo de anotações</h2><p className="mt-1 text-sm text-white/60">{report.notes.total} anotação{report.notes.total === 1 ? '' : 'ões'} registrada{report.notes.total === 1 ? '' : 's'} no período.</p><ul className="mt-5 grid gap-3">{report.notes.recent.length ? report.notes.recent.slice(0, 8).map((note, index) => <li className="rounded-lg border border-white/10 px-3 py-2 text-sm" key={`${note}-${index}`}>{note}</li>) : <li className="text-sm text-white/55">Nenhuma anotação registrada.</li>}</ul></section>
       <section className="rounded-2xl border border-white/15 bg-[var(--atelier-surface)] p-4 sm:p-6"><h2 className="text-xl font-semibold">Pontos de atenção</h2><p className="mt-1 text-sm text-white/60">Regras transparentes baseadas somente nas contagens exibidas; não são previsões.</p><ul className="mt-5 grid gap-3">{recommendations.length ? recommendations.map((recommendation) => <li className="rounded-lg border border-white/10 px-3 py-3 text-sm" key={recommendation.metric}><strong>{recommendation.message}</strong><span className="mt-1 block text-white/60">Base: {recommendation.basis}</span></li>) : <li className="text-sm text-white/55">Nenhum ponto de atenção disparado pelas regras atuais.</li>}</ul></section>
     </div>
-  </section>;
+  </ReportsMotionSurface>;
 }
 
 function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {

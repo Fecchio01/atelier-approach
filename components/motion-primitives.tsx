@@ -54,6 +54,22 @@ export function getPanelMotionProps(reducedMotion: boolean) {
   };
 }
 
+export function getReportsEntryMotionProps(reducedMotion: boolean) {
+  if (reducedMotion) {
+    return {
+      initial: { opacity: 0 },
+      animate: { opacity: 1 },
+      exit: { opacity: 0 }
+    };
+  }
+
+  return {
+    initial: { opacity: 0, y: motionTokens.distance.panel },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -motionTokens.distance.panel }
+  };
+}
+
 export function getDashboardCardMotionProps(reducedMotion: boolean) {
   return {
     whileHover: reducedMotion ? undefined : {

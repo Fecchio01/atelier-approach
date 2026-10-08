@@ -2,7 +2,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { getDashboardCardMotionProps, getDashboardLineMotionProps, getDashboardTraceTransition, getPanelMotionProps, getMotionTransition, MotionPanel, motionTokens, springs } from '../../components/motion-primitives';
+import { getDashboardCardMotionProps, getDashboardLineMotionProps, getDashboardTraceTransition, getPanelMotionProps, getReportsEntryMotionProps, getMotionTransition, MotionPanel, motionTokens, springs } from '../../components/motion-primitives';
+import { ReportsMotionSurface } from '../../components/reports-motion-surface';
 
 describe('shared motion primitives', () => {
   it('uses short centralized transition tokens for standard motion', () => {
@@ -20,6 +21,26 @@ describe('shared motion primitives', () => {
   it('renders panel content with server-safe initial state', () => {
     const html = renderToStaticMarkup(<MotionPanel>Conteúdo do painel</MotionPanel>);
     expect(html).toContain('Conteúdo do painel');
+    expect(html).toContain('opacity:0');
+  });
+
+  it('gives reports a short entrance motion and removes transforms for reduced motion', () => {
+    expect(getReportsEntryMotionProps(false)).toEqual({
+      initial: { opacity: 0, y: motionTokens.distance.panel },
+      animate: { opacity: 1, y: 0 },
+      exit: { opacity: 0, y: -motionTokens.distance.panel }
+    });
+    expect(getReportsEntryMotionProps(true)).toEqual({
+      initial: { opacity: 0 },
+      animate: { opacity: 1 },
+      exit: { opacity: 0 }
+    });
+  });
+
+  it('renders report content in an animated, server-renderable surface', () => {
+    const html = renderToStaticMarkup(<ReportsMotionSurface testId="reports-motion">Relatório</ReportsMotionSurface>);
+    expect(html).toContain('data-testid="reports-motion"');
+    expect(html).toContain('Relatório');
     expect(html).toContain('opacity:0');
   });
 
