@@ -10,7 +10,8 @@ describe('dashboard metric query concurrency', () => {
       activity: { findMany: async () => [] },
       stageHistory: { findMany: async () => [] },
       saleEvent: { findMany: async () => [] },
-      followUp: { findMany: async () => [] }
+      followUp: { findMany: async () => [] },
+      metricImportBatch: { findMany: async () => [] }
     } as unknown as Parameters<typeof getTeamGoalActualsByPeriod>[2];
     const period = { kind: 'WEEKLY' as const, start: new Date('2026-10-05T00:00:00.000Z'), end: new Date('2026-10-12T00:00:00.000Z') };
 
@@ -37,7 +38,8 @@ describe('dashboard metric query concurrency', () => {
       activity: { findMany: () => delayedRead('activities') },
       stageHistory: { findMany: () => delayedRead('stageHistory') },
       saleEvent: { findMany: () => delayedRead('saleEvents') },
-      followUp: { findMany: () => delayedRead('followUps') }
+      followUp: { findMany: () => delayedRead('followUps') },
+      metricImportBatch: { findMany: () => delayedRead('imports') }
     } as unknown as Parameters<typeof getTeamGoalActualsByPeriod>[2];
     const now = new Date('2026-10-07T12:00:00.000Z');
     const period = { kind: 'WEEKLY' as const, start: new Date('2026-10-05T00:00:00.000Z'), end: new Date('2026-10-12T00:00:00.000Z') };
@@ -45,7 +47,7 @@ describe('dashboard metric query concurrency', () => {
     const result = getTeamGoalActualsByPeriod([period], now, database);
     await Promise.resolve();
 
-    expect(started).toEqual(['leads', 'activities', 'stageHistory', 'saleEvents', 'followUps']);
+    expect(started).toEqual(['leads', 'activities', 'stageHistory', 'saleEvents', 'followUps', 'imports']);
     resolvers.forEach((resolve) => resolve());
     await expect(result).resolves.toHaveLength(1);
   });

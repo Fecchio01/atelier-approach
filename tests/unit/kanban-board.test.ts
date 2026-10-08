@@ -15,7 +15,7 @@ test('offers a confirmed return-to-research action that deletes the CRM record',
 test('keeps the mobile funnel inside a bounded vertical scrollport', () => {
   const source = readFileSync(resolve(process.cwd(), 'components/kanban-board.tsx'), 'utf8');
   const verticalScrollport = source.match(/<section data-testid="crm-main-funnel-scrollport"[^>]*className="([^"]+)"/);
-  const horizontalScrollport = source.match(/<div role="region" aria-label="Funil CRM"[^>]*className="([^"]+)"/);
+  const horizontalScrollport = source.match(/<div ref=\{funnelScrollRef\} role="region" aria-label="Funil CRM"[\s\S]*?className="([^"]+)"/);
 
   expect(verticalScrollport?.[1]).toContain('h-[min(68vh,42rem)]');
   expect(verticalScrollport?.[1]).toContain('md:h-auto');

@@ -187,7 +187,7 @@ export async function getTeamGoalActualsByPeriod(
 
   const dataFrom = periods.reduce((earliest, period) => period.start < earliest ? period.start : earliest, periods[0].start);
   const dataTo = periods.reduce((latest, period) => period.end > latest ? period.end : latest, periods[0].end);
-  const [legacyWonLeads, activities, stageHistory, saleEvents, followUps] = await Promise.all([
+  const [legacyWonLeads, activities, stageHistory, saleEvents, followUps, importedByPeriod] = await Promise.all([
     database.lead.findMany({
       where: { stage: 'WON', wonAt: { gte: dataFrom, lt: dataTo }, saleEvents: { none: {} } },
       select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true }
@@ -208,7 +208,8 @@ export async function getTeamGoalActualsByPeriod(
     database.followUp.findMany({
     where: { state: 'COMPLETED', completedAt: { gte: dataFrom, lt: dataTo } },
     select: { leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true }
-    })
+    }),
+    Promise.all(periods.map((period) => getImportedMetricTotalsForExactRange(period.start, period.end, database)))
   ]);
 
   const byLead = <T extends { leadId: string }>(rows: T[]) => {
@@ -237,11 +238,8 @@ export async function getTeamGoalActualsByPeriod(
     followUps: followUpsByLead.get(id) ?? []
   }));
 
-  const [crmActuals, importedTotals] = await Promise.all([
-    Promise.resolve(periods.map((period) => getDashboardMetrics(metricLeads, { start: period.start, end: period.end, now }).goalActuals)),
-    Promise.all(periods.map((period) => getImportedMetricTotalsForExactRange(period.start, period.end, database)))
-  ]);
-  return crmActuals.map((actuals, index) => addImportedMetricTotals(actuals, importedTotals[index]));
+  const crmActuals = periods.map((period) => getDashboardMetrics(metricLeads, { start: period.start, end: period.end, now }).goalActuals);
+  return crmActuals.map((actuals, index) => addImportedMetricTotals(actuals, importedByPeriod[index]));
 }
 
 export async function upsertTeamGoal(

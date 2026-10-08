@@ -6,7 +6,8 @@ const { database } = vi.hoisted(() => ({
     activity: { findMany: vi.fn() },
     followUp: { findMany: vi.fn() },
     saleEvent: { findMany: vi.fn() },
-    stageHistory: { findMany: vi.fn() }
+    stageHistory: { findMany: vi.fn() },
+    metricImportBatch: { findMany: vi.fn() }
   }
 }));
 
@@ -28,11 +29,12 @@ describe('report query concurrency', () => {
     database.followUp.findMany.mockImplementation(() => delayedRead('followUps'));
     database.saleEvent.findMany.mockImplementation(() => delayedRead('saleEvents'));
     database.stageHistory.findMany.mockImplementation(() => delayedRead('stageHistory'));
+    database.metricImportBatch.findMany.mockImplementation(() => delayedRead('imports'));
 
     const report = buildReport({ from: new Date('2026-10-05T00:00:00Z'), to: new Date('2026-10-12T00:00:00Z') });
     await Promise.resolve();
 
-    expect(started).toEqual(['leads', 'activities', 'followUps', 'saleEvents', 'stageHistory']);
+    expect(started).toEqual(['leads', 'activities', 'followUps', 'saleEvents', 'stageHistory', 'imports']);
     resolvers.forEach((resolve) => resolve());
     await expect(report).resolves.toMatchObject({ conversion: { approaches: 0, wins: 0 } });
   });
