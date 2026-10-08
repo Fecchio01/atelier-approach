@@ -5,7 +5,7 @@ import { DailyCloseControl } from './daily-close-control';
 import { ReportPdfDownload } from './report-pdf-download';
 import { ReportPeriodNavigation } from './report-period-navigation';
 import type { DailyReportArchiveItem, DailyReportRecord } from '@/lib/daily-reports';
-import { ReportsMotionSurface } from './reports-motion-surface';
+import { ReportsMotionCard, ReportsMotionSurface } from './reports-motion-surface';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'long' });
@@ -33,10 +33,10 @@ function localDateParam(value: Date) {
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
-  return <article className="min-w-0 rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4">
+  return <ReportsMotionCard as="article" className="min-w-0 rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4">
     <p className="text-xs text-white/55">{label}</p>
     <strong className="mt-2 block truncate text-2xl font-semibold tabular-nums text-white">{value}</strong>
-  </article>;
+  </ReportsMotionCard>;
 }
 
 export function DailyReportView({
@@ -90,25 +90,25 @@ export function DailyReportView({
       </section>
 
       <div className="mt-7 grid gap-5 lg:grid-cols-2">
-        <section className="min-w-0 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
+        <ReportsMotionCard as="section" className="min-w-0 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
           <h2 className="text-lg font-semibold">Atividades por canal</h2>
           <ul className="mt-3 divide-y divide-white/[0.08]">
             {summary!.channels.length ? summary!.channels.map((channel) => <li key={channel.channel} className="flex items-center justify-between gap-3 py-3 text-sm">
               <span>{channelLabels[channel.channel]}</span><span className="text-white/60">{channel.approaches} abordagem{channel.approaches === 1 ? '' : 's'} · {channel.wins} ganho{channel.wins === 1 ? '' : 's'}</span>
             </li>) : <li className="py-3 text-sm text-white/50">Nenhuma abordagem por canal registrada.</li>}
           </ul>
-        </section>
-        <section className="min-w-0 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
+        </ReportsMotionCard>
+        <ReportsMotionCard as="section" className="min-w-0 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
           <h2 className="text-lg font-semibold">Desempenho da equipe</h2>
           <ul className="mt-3 divide-y divide-white/[0.08]">
             {summary!.members.length ? summary!.members.map((member) => <li key={member.memberId} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <span className="min-w-0 truncate">{member.memberName ?? member.memberId}</span><span className="text-white/60 sm:shrink-0 sm:text-right">{member.approaches} abord. · {member.interests} interesses · {money(member.revenue)}</span>
             </li>) : <li className="py-3 text-sm text-white/50">Nenhuma atividade registrada por membro.</li>}
           </ul>
-        </section>
+        </ReportsMotionCard>
       </div>
 
-      <section aria-labelledby="daily-actions-title" className="mt-7 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
+      <ReportsMotionCard as="section" aria-labelledby="daily-actions-title" className="mt-7 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
         <h2 id="daily-actions-title" className="text-lg font-semibold">Ações do dia</h2>
         <ol className="mt-3 divide-y divide-white/[0.08]">
           {report.snapshot.actions.length ? report.snapshot.actions.map((action) => <li key={action.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:gap-5">
@@ -120,12 +120,12 @@ export function DailyReportView({
             </div>
           </li>) : <li className="py-4 text-sm text-white/50">Nenhuma atividade registrada antes do fechamento.</li>}
         </ol>
-      </section>
-    </> : <section role="status" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-5 text-sm text-white/60">
+      </ReportsMotionCard>
+    </> : <ReportsMotionCard as="section" role="status" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-5 text-sm text-white/60">
       Este dia ainda não foi fechado. Nenhum relatório diário salvo para esta data.
-    </section>}
+    </ReportsMotionCard>}
 
-    <section aria-labelledby="recent-daily-reports-title" className="mt-7 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
+    <ReportsMotionCard as="section" aria-labelledby="recent-daily-reports-title" className="mt-7 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
       <h2 id="recent-daily-reports-title" className="text-lg font-semibold">Fechamentos recentes</h2>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {recent.length ? recent.map((item) => {
@@ -135,6 +135,6 @@ export function DailyReportView({
           </Link></li>;
         }) : <li className="py-2 text-sm text-white/50">Nenhum dia fechado ainda.</li>}
       </ul>
-    </section>
+    </ReportsMotionCard>
   </ReportsMotionSurface>;
 }

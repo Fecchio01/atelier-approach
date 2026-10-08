@@ -70,6 +70,22 @@ export function getReportsEntryMotionProps(reducedMotion: boolean) {
   };
 }
 
+export function getReportsCardMotionProps(reducedMotion: boolean) {
+  return {
+    initial: reducedMotion ? { opacity: 0 } : { opacity: 0, y: motionTokens.distance.panel },
+    whileInView: reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 },
+    exit: reducedMotion ? { opacity: 0 } : { opacity: 0, y: -motionTokens.distance.panel },
+    viewport: { once: true, amount: 0.16 },
+    whileHover: reducedMotion ? undefined : {
+      y: -motionTokens.distance.cardLift,
+      scale: motionTokens.scale.cardHover,
+      borderColor: 'rgba(167, 216, 26, 0.28)',
+      boxShadow: '0 14px 30px rgba(0, 0, 0, 0.2)'
+    },
+    whileTap: reducedMotion ? undefined : { scale: motionTokens.scale.cardPress }
+  };
+}
+
 export function getDashboardCardMotionProps(reducedMotion: boolean) {
   return {
     whileHover: reducedMotion ? undefined : {

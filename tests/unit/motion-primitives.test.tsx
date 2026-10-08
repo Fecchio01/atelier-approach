@@ -2,8 +2,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { getDashboardCardMotionProps, getDashboardLineMotionProps, getDashboardTraceTransition, getPanelMotionProps, getReportsEntryMotionProps, getMotionTransition, MotionPanel, motionTokens, springs } from '../../components/motion-primitives';
-import { ReportsMotionSurface } from '../../components/reports-motion-surface';
+import { getDashboardCardMotionProps, getDashboardLineMotionProps, getDashboardTraceTransition, getPanelMotionProps, getReportsCardMotionProps, getReportsEntryMotionProps, getMotionTransition, MotionPanel, motionTokens, springs } from '../../components/motion-primitives';
+import { ReportsMotionCard, ReportsMotionSurface } from '../../components/reports-motion-surface';
 
 describe('shared motion primitives', () => {
   it('uses short centralized transition tokens for standard motion', () => {
@@ -37,10 +37,38 @@ describe('shared motion primitives', () => {
     });
   });
 
+  it('animates report cards as they enter the viewport and respects reduced motion', () => {
+    expect(getReportsCardMotionProps(false)).toEqual({
+      initial: { opacity: 0, y: motionTokens.distance.panel },
+      whileInView: { opacity: 1, y: 0 },
+      exit: { opacity: 0, y: -motionTokens.distance.panel },
+      viewport: { once: true, amount: 0.16 },
+      whileHover: { y: -motionTokens.distance.cardLift, scale: motionTokens.scale.cardHover, borderColor: 'rgba(167, 216, 26, 0.28)', boxShadow: '0 14px 30px rgba(0, 0, 0, 0.2)' },
+      whileTap: { scale: motionTokens.scale.cardPress }
+    });
+    expect(getReportsCardMotionProps(true)).toEqual({
+      initial: { opacity: 0 },
+      whileInView: { opacity: 1 },
+      exit: { opacity: 0 },
+      viewport: { once: true, amount: 0.16 },
+      whileHover: undefined,
+      whileTap: undefined
+    });
+  });
+
   it('renders report content in an animated, server-renderable surface', () => {
     const html = renderToStaticMarkup(<ReportsMotionSurface testId="reports-motion">Relatório</ReportsMotionSurface>);
     expect(html).toContain('data-testid="reports-motion"');
     expect(html).toContain('Relatório');
+    expect(html).toContain('opacity:0');
+  });
+
+  it('renders report cards with their own viewport animation and card styling', () => {
+    const html = renderToStaticMarkup(<ReportsMotionCard as="article" className="rounded-xl">Métrica</ReportsMotionCard>);
+
+    expect(html).toContain('<article');
+    expect(html).toContain('Métrica');
+    expect(html).toContain('rounded-xl');
     expect(html).toContain('opacity:0');
   });
 
