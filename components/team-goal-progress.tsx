@@ -44,7 +44,9 @@ export function TeamGoalProgress({ progress, hasApproaches, compact = false }: {
               {ratioPercent !== null ? <MotionProgressFill value={Math.min(ratioPercent, 100)} className="h-full origin-left rounded-full bg-[var(--atelier-green)]" /> : null}
             </div>
             <span className="min-w-10 text-right text-xs tabular-nums text-white/55">{ratioPercent === null ? '—' : `${ratioPercent}%`}</span>
-          </div> : compact ? <span className="col-span-2 text-xs text-white/40 sm:col-span-1">Sem meta definida</span> : null}
+          </div> : compact
+            ? <span className="col-span-2 text-xs text-white/40 sm:col-span-1">Sem meta definida</span>
+            : <div aria-hidden="true" className="mt-2 h-1.5 w-full rounded-full bg-white/10" />}
         </div>;
       })}
     </dl>
