@@ -40,6 +40,7 @@ export function CustomGoalMetricRow({
   goal,
   index,
   actuals,
+  importedCurrent = 0,
   isEditing,
   disabled = false,
   onToggle,
@@ -50,6 +51,7 @@ export function CustomGoalMetricRow({
   goal: CustomGoalMetric;
   index: number;
   actuals: GoalMetricActuals;
+  importedCurrent?: number;
   isEditing: boolean;
   disabled?: boolean;
   onToggle: () => void;
@@ -61,7 +63,7 @@ export function CustomGoalMetricRow({
   const Icon = iconComponents[icon];
   const group = getCustomGoalGroup(goal);
   const source = goal.source ?? 'manual';
-  const current = getCustomGoalCurrent(goal, actuals);
+  const current = getCustomGoalCurrent(goal, actuals) + importedCurrent;
   const targetValid = Number.isFinite(goal.target) && goal.target >= 0;
   const currentValid = Number.isFinite(current) && current >= 0;
   const percent = targetValid && currentValid
@@ -106,7 +108,7 @@ export function CustomGoalMetricRow({
           <span className="shrink-0 text-xs font-normal text-white/35">/</span>
           <span className="truncate text-white/65">{formatValue(goal.target, goal.unit)}</span>
         </p>
-        <span className="mt-1 block truncate text-[10px] text-white/45">{source === 'manual' ? 'Progresso manual' : `CRM · ${customGoalSourceLabels[source]}`}</span>
+        <span className="mt-1 block truncate text-[10px] text-white/45">{importedCurrent > 0 ? 'CRM / progresso · inclui resultado do PDF' : source === 'manual' ? 'Progresso manual' : `CRM · ${customGoalSourceLabels[source]}`}</span>
       </div>
 
       <div className="flex min-w-0 items-center gap-0.5 rounded-lg border border-white/[0.08] bg-[#1b2328] py-1.5 pl-2.5 pr-1 focus-within:border-[var(--atelier-green)]/50">

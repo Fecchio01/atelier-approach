@@ -165,6 +165,10 @@ async function createPeriodPdfSections(period: 'week' | 'month', report: WeeklyM
   });
   const recommendations = buildRecommendations(report);
   return [
+    ...(report.imports.batchCount > 0 ? [{
+      title: 'Resultados importados',
+      lines: [`${report.imports.batchCount} lote(s) agregado(s) à equipe para o período; sem atribuição a membros ou canais.`, ...report.imports.batchIds.map((id) => `Lote: ${id}`)]
+    }] : []),
     { title: 'Meta da equipe', lines: goalRows },
     { title: 'Resumo do período', lines: [
       `Abordagens: ${report.conversion.approaches}`,

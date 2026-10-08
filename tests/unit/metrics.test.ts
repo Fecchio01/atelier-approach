@@ -107,7 +107,8 @@ describe('dashboard follow-up query and presentation', () => {
     expect(html).toContain('Próximos');
     expect(html).toContain('Oficina Futura');
     expect(html).toContain('Ana · Retorno em 13/09/2026');
-    expect(html).toMatch(/Follow-ups concluídos<\/p><p[^>]*>8<\/p>/);
+    expect(html).toContain('Concluídos no período');
+    expect(html).toMatch(/Concluídos no período <strong[^>]*>8<\/strong>/);
     expect(html).not.toContain('Reuniões / retornos');
   });
 });

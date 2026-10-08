@@ -107,6 +107,7 @@ export function GoalForm({
   period,
   goal,
   actuals,
+  customActuals,
   monthlyStartDay,
   now
 }: {
@@ -114,6 +115,7 @@ export function GoalForm({
   period: GoalPeriodWindow;
   goal: GoalRecord;
   actuals: GoalMetricActuals;
+  customActuals: Record<string, number>;
   monthlyStartDay: number;
   now: Date;
 }) {
@@ -414,6 +416,7 @@ export function GoalForm({
             goal={customGoal}
             index={index}
             actuals={actuals}
+            importedCurrent={customActuals[customGoal.id]}
             isEditing={editingCustomGoalId === customGoal.id}
             disabled={pending || importPending || importerBusy || customGoalSavePending}
             onToggle={() => setEditingCustomGoalId((current) => current === customGoal.id ? null : customGoal.id)}
@@ -437,6 +440,7 @@ export function GoalForm({
               goal={customGoal}
               index={index}
               actuals={actuals}
+              importedCurrent={customActuals[customGoal.id]}
               isEditing={editingCustomGoalId === customGoal.id}
               disabled={pending || importPending || importerBusy || customGoalSavePending}
               onToggle={() => setEditingCustomGoalId((current) => current === customGoal.id ? null : customGoal.id)}

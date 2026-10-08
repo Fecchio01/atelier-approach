@@ -5,6 +5,7 @@ import { parseCustomGoalMetrics } from '@/lib/custom-goals';
 import { prisma } from '@/lib/db';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { getTeamGoalActualsByPeriod } from '@/lib/metrics';
+import { getImportedMetricTotalsForExactRange } from '@/lib/metric-imports';
 import { GoalCenter } from './goal-center';
 
 export const dynamic = 'force-dynamic';
@@ -46,7 +47,13 @@ export default async function GoalsPage() {
     const parsed = parseCustomGoalMetrics(goal.customGoals);
     return { ...goal, customGoals: parsed.ok ? parsed.goals : [] };
   };
-  const [weeklyActuals, monthlyActuals] = await getTeamGoalActualsByPeriod([weeklyPeriod, monthlyPeriod], now);
+  const [[weeklyActuals, monthlyActuals], [weeklyImported, monthlyImported]] = await Promise.all([
+    getTeamGoalActualsByPeriod([weeklyPeriod, monthlyPeriod], now),
+    Promise.all([
+      getImportedMetricTotalsForExactRange(weeklyPeriod.start, weeklyPeriod.end),
+      getImportedMetricTotalsForExactRange(monthlyPeriod.start, monthlyPeriod.end)
+    ])
+  ]);
 
   return <section className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10 lg:py-12">
     <PageHeading
@@ -64,6 +71,8 @@ export default async function GoalsPage() {
       now={now}
       weeklyActuals={weeklyActuals}
       monthlyActuals={monthlyActuals}
+      weeklyCustomActuals={weeklyImported.customTotals}
+      monthlyCustomActuals={monthlyImported.customTotals}
     />
   </section>;
 }

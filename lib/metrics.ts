@@ -3,6 +3,7 @@ import { prisma } from './db';
 import { isInterestStage, isMeetingStage } from './funnel';
 import { getLocalDayWindow, isSameLocalDay, type GoalPeriodWindow } from './goal-periods';
 import type { CustomGoalMetric } from './custom-goals';
+import { addImportedMetricTotals, getImportedMetricTotalsForExactRange } from './metric-imports';
 
 export type MetricActivity = { actorId: string; type?: ActivityType; createdAt: Date; note?: string };
 export type MetricStageEvent = { actorId: string; toStage: LeadStage; createdAt: Date };
@@ -236,7 +237,11 @@ export async function getTeamGoalActualsByPeriod(
     followUps: followUpsByLead.get(id) ?? []
   }));
 
-  return periods.map((period) => getDashboardMetrics(metricLeads, { start: period.start, end: period.end, now }).goalActuals);
+  const [crmActuals, importedTotals] = await Promise.all([
+    Promise.resolve(periods.map((period) => getDashboardMetrics(metricLeads, { start: period.start, end: period.end, now }).goalActuals)),
+    Promise.all(periods.map((period) => getImportedMetricTotalsForExactRange(period.start, period.end, database)))
+  ]);
+  return crmActuals.map((actuals, index) => addImportedMetricTotals(actuals, importedTotals[index]));
 }
 
 export async function upsertTeamGoal(

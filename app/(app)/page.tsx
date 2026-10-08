@@ -25,6 +25,7 @@ import { getDailyReportForDate } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { getDashboardTrend } from '@/lib/dashboard-trend';
 import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
+import { addImportedMetricTotals, getImportedMetricTotalsForExactRange } from '@/lib/metric-imports';
 import { getDashboardDataFetchWindow, getGoalPeriodWindow, getLocalDayWindow, selectDashboardWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels } from '@/lib/funnel';
 
@@ -126,6 +127,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     ? { kind: 'MONTHLY', start: monthlyGoal.periodStart, end: monthlyGoal.periodEnd }
     : getGoalPeriodWindow('MONTHLY', now, monthlyStartDay);
   const selectedRange = { ...selectDashboardWindow(period, now, weeklyPeriod, monthlyPeriod), now };
+  const [selectedImports, weeklyImports, monthlyImports] = await Promise.all([
+    getImportedMetricTotalsForExactRange(selectedRange.start, selectedRange.end),
+    getImportedMetricTotalsForExactRange(weeklyPeriod.start, weeklyPeriod.end),
+    getImportedMetricTotalsForExactRange(monthlyPeriod.start, monthlyPeriod.end)
+  ]);
   const dataFrom = [selectedRange.start, weeklyPeriod.start, monthlyPeriod.start].reduce((earliest, date) => date < earliest ? date : earliest);
   const dataTo = [selectedRange.end, weeklyPeriod.end, monthlyPeriod.end].reduce((latest, date) => date > latest ? date : latest);
   const activitiesInPeriods = activities.filter(({ createdAt }) => createdAt >= dataFrom && createdAt < dataTo);
@@ -151,9 +157,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     followUps: (followUpsByLead.get(lead.id) ?? []).map(({ id, dueDate, completedAt, ownerId, state, lead: followUpLead }) => ({ id, dueDate, completedAt, ownerId, state, lead: followUpLead }))
   }));
 
-  const selectedMetrics = getDashboardMetrics(metricLeads, selectedRange);
-  const weeklyMetrics = getDashboardMetrics(metricLeads, { start: weeklyPeriod.start, end: weeklyPeriod.end, now });
-  const monthlyMetrics = getDashboardMetrics(metricLeads, { start: monthlyPeriod.start, end: monthlyPeriod.end, now });
+  const withImportedTotals = (metrics: ReturnType<typeof getDashboardMetrics>, imported: Awaited<ReturnType<typeof getImportedMetricTotalsForExactRange>>) => {
+    const goalActuals = addImportedMetricTotals(metrics.goalActuals, imported);
+    return { ...metrics, approaches: goalActuals.approaches, interests: goalActuals.interests, meetings: goalActuals.meetings, won: goalActuals.sales, sales: goalActuals.revenue, mrr: goalActuals.mrr, goalActuals };
+  };
+  const selectedMetrics = withImportedTotals(getDashboardMetrics(metricLeads, selectedRange), selectedImports);
+  const weeklyMetrics = withImportedTotals(getDashboardMetrics(metricLeads, { start: weeklyPeriod.start, end: weeklyPeriod.end, now }), weeklyImports);
+  const monthlyMetrics = withImportedTotals(getDashboardMetrics(metricLeads, { start: monthlyPeriod.start, end: monthlyPeriod.end, now }), monthlyImports);
   const weeklyProgress = getTeamGoalProgress(weeklyMetrics.goalActuals, getTeamGoalTargets(weeklyGoal));
   const monthlyProgress = getTeamGoalProgress(monthlyMetrics.goalActuals, getTeamGoalTargets(monthlyGoal));
   const dashboardTrend = getDashboardTrend(metricLeads, selectedRange, period);
@@ -181,7 +191,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">Arvello</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.045em] text-white md:text-[2.1rem]">Visão operacional</h1>
-        <p className="mt-2 max-w-[60ch] text-sm text-white/55">Indicadores registrados no CRM para {periodLabel.toLowerCase()}.</p>
+        <p className="mt-2 max-w-[60ch] text-sm text-white/55">Indicadores do CRM para {periodLabel.toLowerCase()}{selectedImports.batchCount > 0 ? ` · inclui ${selectedImports.batchCount} lote${selectedImports.batchCount === 1 ? '' : 's'} importado${selectedImports.batchCount === 1 ? '' : 's'} (sem atribuição individual)` : ''}.</p>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <DashboardPeriodSelector period={period} />
@@ -227,6 +237,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
           <Link href="/metas" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <ArrowSquareOutIcon size={14} aria-hidden="true" /></Link>
         </div>
         <div className="mt-4"><TeamGoalProgress progress={weeklyProgress} hasApproaches={weeklyMetrics.approaches > 0} compact /></div>
+        {weeklyImports.batchCount > 0 && <p className="mt-3 text-[10px] text-white/45">Inclui {weeklyImports.batchCount} lote{weeklyImports.batchCount === 1 ? '' : 's'} de resultados importados · equipe</p>}
       </DashboardMotionSection>
       <DashboardMotionSection className="rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
@@ -237,6 +248,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
           <Link href="/metas" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--atelier-green)] hover:text-white">Editar metas <ArrowSquareOutIcon size={14} aria-hidden="true" /></Link>
         </div>
         <div className="mt-4"><TeamGoalProgress progress={monthlyProgress} hasApproaches={monthlyMetrics.approaches > 0} compact /></div>
+        {monthlyImports.batchCount > 0 && <p className="mt-3 text-[10px] text-white/45">Inclui {monthlyImports.batchCount} lote{monthlyImports.batchCount === 1 ? '' : 's'} de resultados importados · equipe</p>}
       </DashboardMotionSection>
     </div>
 

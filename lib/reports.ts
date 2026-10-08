@@ -4,6 +4,7 @@ import { prisma } from './db';
 import { auxiliaryFunnelStages, isInterestStage, isMeetingStage, mainFunnelStages, normalizeFunnelStage } from './funnel';
 import { getGoalPeriodWindow } from './goal-periods';
 import type { GoalMetricActuals } from './metrics';
+import { addImportedMetricTotals, getImportedMetricTotalsForExactRange } from './metric-imports';
 import { formatReportNote } from './report-notes';
 
 export type ReportRange = { from: Date; to: Date; now?: Date };
@@ -12,6 +13,7 @@ export type RecentReportPeriod = 'week' | 'month';
 export type WeeklyMonthlyReport = {
   period: { from: Date; to: Date };
   goalActuals: GoalMetricActuals;
+  imports: { batchIds: string[]; batchCount: number };
   conversion: { approaches: number; wins: number; rate: number };
   revenue: { sales: number; mrr: number };
   channels: { channel: Channel; approaches: number; wins: number; conversionRate: number }[];
@@ -193,7 +195,7 @@ export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: D
 }
 
 export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyReport> {
-  const [leads, activities, followUps, wins, stageHistory] = await Promise.all([
+  const [leads, activities, followUps, wins, stageHistory, imported] = await Promise.all([
     prisma.lead.findMany({ select: { id: true, stage: true, saleValue: true, mrr: true, wonAt: true, wonById: true } }),
     prisma.activity.findMany({
       where: { createdAt: { gte: range.from, lt: range.to } },
@@ -209,7 +211,8 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
       select: { dueDate: true, state: true, completedAt: true, cancelledAt: true }
     }),
     prisma.saleEvent.findMany({ where: { occurredAt: { gte: range.from, lt: range.to }, reversedAt: null } }),
-    prisma.stageHistory.findMany({ where: { createdAt: { gte: range.from, lt: range.to } } })
+    prisma.stageHistory.findMany({ where: { createdAt: { gte: range.from, lt: range.to } } }),
+    getImportedMetricTotalsForExactRange(range.from, range.to)
   ]);
   const approaches = activities.filter((activity) => activity.type === 'CONTACT' || !activity.type);
   const interests = stageHistory.filter((event) => isInterestStage(event.toStage)).length;
@@ -260,29 +263,30 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
     result.mrr += Number(sale.mrr);
   }
 
+  const crmActuals: GoalMetricActuals = {
+    approaches: approaches.length,
+    interests,
+    meetings,
+    sales: effectiveWins.length,
+    revenue: effectiveWins.reduce((total, lead) => total + Number(lead.saleValue ?? 0), 0),
+    mrr: effectiveWins.reduce((total, lead) => total + Number(lead.mrr ?? 0), 0),
+    followUpsCompleted: followUps.filter((followUp) => followUp.state === 'COMPLETED' && followUp.completedAt && inRange(followUp.completedAt, range)).length,
+    conversionRate: approaches.length ? Number((effectiveWins.length / approaches.length * 100).toFixed(2)) : 0
+  };
+  const goalActuals = addImportedMetricTotals(crmActuals, imported);
+
   return {
     period: { from: range.from, to: range.to },
-    goalActuals: {
-      approaches: approaches.length,
-      interests,
-      meetings,
-      sales: effectiveWins.length,
-      revenue: effectiveWins.reduce((total, lead) => total + Number(lead.saleValue ?? 0), 0),
-      mrr: effectiveWins.reduce((total, lead) => total + Number(lead.mrr ?? 0), 0),
-      followUpsCompleted: followUps.filter((followUp) => followUp.state === 'COMPLETED' && followUp.completedAt && inRange(followUp.completedAt, range)).length,
-      conversionRate: approaches.length ? Number((effectiveWins.length / approaches.length * 100).toFixed(2)) : 0
-    },
-    conversion: { approaches: approaches.length, wins: effectiveWins.length, rate: rate(effectiveWins.length, approaches.length) },
-    revenue: {
-      sales: effectiveWins.reduce((total, lead) => total + Number(lead.saleValue ?? 0), 0),
-      mrr: effectiveWins.reduce((total, lead) => total + Number(lead.mrr ?? 0), 0)
-    },
+    goalActuals,
+    imports: { batchIds: imported.batchIds, batchCount: imported.batchCount },
+    conversion: { approaches: goalActuals.approaches, wins: goalActuals.sales, rate: rate(goalActuals.conversionRate, 100) },
+    revenue: { sales: goalActuals.revenue, mrr: goalActuals.mrr },
     channels,
     members: [...memberResults.entries()].map(([memberId, result]) => ({ memberId, ...result })).sort((first, second) => first.memberId.localeCompare(second.memberId)),
     funnel: [...mainFunnelStages, ...auxiliaryFunnelStages].map((stage) => ({ stage, leads: leads.filter((lead) => normalizeFunnelStage(lead.stage) === stage).length })),
     followUps: {
       pending: followUps.filter((followUp) => followUp.state === 'PENDING' && inRange(followUp.dueDate, range)).length,
-      completed: followUps.filter((followUp) => followUp.state === 'COMPLETED' && followUp.completedAt && inRange(followUp.completedAt, range)).length,
+      completed: goalActuals.followUpsCompleted,
       cancelled: followUps.filter((followUp) => followUp.state === 'CANCELLED' && followUp.cancelledAt && inRange(followUp.cancelledAt, range)).length,
       overdue: followUps.filter((followUp) => followUp.state === 'PENDING' && followUp.dueDate < now && inRange(followUp.dueDate, range)).length
     },

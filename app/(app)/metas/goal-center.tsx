@@ -28,7 +28,9 @@ export function GoalCenter({
   monthlyStartDay,
   now,
   weeklyActuals,
-  monthlyActuals
+  monthlyActuals,
+  weeklyCustomActuals,
+  monthlyCustomActuals
 }: {
   weeklyPeriod: GoalPeriodWindow;
   monthlyPeriod: GoalPeriodWindow;
@@ -38,6 +40,8 @@ export function GoalCenter({
   now: Date;
   weeklyActuals: GoalMetricActuals;
   monthlyActuals: GoalMetricActuals;
+  weeklyCustomActuals: Record<string, number>;
+  monthlyCustomActuals: Record<string, number>;
 }) {
   const [selectedKind, setSelectedKind] = useState<'WEEKLY' | 'MONTHLY'>('WEEKLY');
   const selectionChangedByUser = useRef(false);
@@ -82,10 +86,10 @@ export function GoalCenter({
     </div>
 
     <div id="goal-panel-weekly" role="tabpanel" aria-labelledby="goal-tab-weekly" aria-label="Metas semanais da equipe" hidden={selectedKind !== 'WEEKLY'} className="mt-5">
-      <GoalForm kind="WEEKLY" period={weeklyPeriod} goal={weeklyGoal} actuals={weeklyActuals} monthlyStartDay={monthlyStartDay} now={now} />
+      <GoalForm kind="WEEKLY" period={weeklyPeriod} goal={weeklyGoal} actuals={weeklyActuals} customActuals={weeklyCustomActuals} monthlyStartDay={monthlyStartDay} now={now} />
     </div>
     <div id="goal-panel-monthly" role="tabpanel" aria-labelledby="goal-tab-monthly" aria-label="Metas mensais da equipe" hidden={selectedKind !== 'MONTHLY'} className="mt-5">
-      <GoalForm kind="MONTHLY" period={monthlyPeriod} goal={monthlyGoal} actuals={monthlyActuals} monthlyStartDay={monthlyStartDay} now={now} />
+      <GoalForm kind="MONTHLY" period={monthlyPeriod} goal={monthlyGoal} actuals={monthlyActuals} customActuals={monthlyCustomActuals} monthlyStartDay={monthlyStartDay} now={now} />
     </div>
   </div>;
 }

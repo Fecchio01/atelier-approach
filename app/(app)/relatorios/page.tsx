@@ -121,6 +121,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     </nav>
     {start && !requestedGoal ? <p role="status" className="mt-5 text-sm text-amber-200">Esse ciclo salvo não foi encontrado. Exibindo o período atual.</p> : null}
     <p className="mt-5 text-sm text-white/65">Período analisado: <strong className="text-white">{dateRangeLabel(selectedWindow)}</strong>{selectedGoal ? ' · meta salva' : ' · sem meta configurada'}</p>
+    {report.imports.batchCount > 0 && <p role="status" className="mt-2 text-xs text-[var(--atelier-green)]">Totais da equipe incluem {report.imports.batchCount} lote{report.imports.batchCount === 1 ? '' : 's'} de resultados importados neste intervalo. Os valores não são atribuídos a membros ou canais.</p>}
 
     <ReportsMotionCard as="section" aria-labelledby="goal-comparison-title" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 id="goal-comparison-title" className="text-xl font-semibold">Meta da equipe · realizado x alvo</h2><p className="mt-1 text-sm text-white/60">{period === 'week' ? 'Semana de segunda a domingo' : `Ciclo iniciado no dia ${monthlyStartDay}`}</p></div><Link href="/metas" className="text-sm text-[var(--atelier-green)]">Editar metas</Link></div>

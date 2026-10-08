@@ -18,6 +18,7 @@ import { GET } from '../../app/api/reports/route';
 import * as reportModule from '../../lib/reports';
 import * as reportRouteModule from '../../app/api/reports/route';
 import * as reportPdfModule from '../../lib/report-pdf';
+import * as metricImportsModule from '../../lib/metric-imports';
 
 const prismaDelegateMethods = [
   { delegate: prisma.lead, methods: { findMany: prisma.lead.findMany } },
@@ -134,6 +135,25 @@ describe('commercial reports', () => {
     expect(report.notes).toEqual({ total: 3, recent: ['Aguardando retorno.', 'Contato de acompanhamento.', 'Pediu proposta.'] });
   });
 
+  test('adds imported totals to team report metrics but not to member or channel attribution', async () => {
+    vi.spyOn(prisma.lead, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.activity, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.followUp, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.saleEvent, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.stageHistory, 'findMany').mockResolvedValue([]);
+    vi.spyOn(metricImportsModule, 'getImportedMetricTotalsForExactRange').mockResolvedValue({
+      totals: { approaches: 12, sales: 1, revenue: 5000, mrr: 250, followUpsCompleted: 4, conversionRate: 8.33 },
+      customTotals: {}, batchIds: ['imported-batch'], batchCount: 1, conversionRateSource: 'components', conversionComponents: { approaches: 12, sales: 1 }
+    });
+
+    const report = await buildReport({ from: new Date('2026-09-07T03:00:00.000Z'), to: new Date('2026-09-14T03:00:00.000Z') });
+
+    expect(report.goalActuals).toMatchObject({ approaches: 12, sales: 1, revenue: 5000, mrr: 250, followUpsCompleted: 4, conversionRate: 8.33 });
+    expect(report.imports).toEqual({ batchIds: ['imported-batch'], batchCount: 1 });
+    expect(report.channels).toEqual([]);
+    expect(report.members).toEqual([]);
+  });
+
   test('excludes reversed sale events from period metrics and keeps reversal history in the exported PDF', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'report-reversed-sale', name: 'Oficina Reaberta', stage: 'CONTACTED' } });
     const occurredAt = new Date('2026-09-10T12:00:00.000Z');
@@ -197,6 +217,7 @@ describe('commercial reports', () => {
     const report = {
       conversion: { approaches: 3, wins: 1, rate: 0.33 },
       goalActuals: { approaches: 3, interests: 0, meetings: 0, sales: 1, revenue: 1200, mrr: 297, followUpsCompleted: 0, conversionRate: 33 },
+      imports: { batchIds: [], batchCount: 0 },
       revenue: { sales: 1200, mrr: 297 },
       channels: [], funnel: [], members: [], followUps: { pending: 2, completed: 0, cancelled: 0, overdue: 1 }, notes: { total: 1, recent: ['Retornar amanhã.'] },
       period: { from: new Date('2026-09-07T00:00:00.000Z'), to: new Date('2026-09-14T00:00:00.000Z') }

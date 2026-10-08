@@ -3,7 +3,7 @@ import { Prisma, type MetricImportBatch } from '@prisma/client';
 
 import { prisma } from './db';
 import { parseCustomGoalMetrics } from './custom-goals';
-import type { GoalMetricKey } from './metrics';
+import type { GoalMetricActuals, GoalMetricKey } from './metrics';
 
 const TEAM_OWNER_ID = '__team__';
 const MAX_IMPORT_ROWS = 100;
@@ -24,6 +24,14 @@ export type MetricImportRowInput = {
 };
 
 export type MetricImportBatchWithRows = Prisma.MetricImportBatchGetPayload<{ include: { rows: true } }>;
+export type ImportedMetricTotals = {
+  totals: Partial<GoalMetricActuals>;
+  customTotals: Record<string, number>;
+  batchIds: string[];
+  batchCount: number;
+  conversionRateSource: 'components' | 'reported' | null;
+  conversionComponents: { approaches: number; sales: number } | null;
+};
 
 export class MetricImportConflictError extends Error {
   constructor(message = 'Confirme que os valores deste lote são adicionais antes de importar.') {
@@ -151,7 +159,7 @@ async function assertCustomGoalsMatchPeriod(
 
   for (const row of customRows) {
     const match = savedGoals.find((goal) => goal.id === row.customGoalId);
-    if (!match || (row.unit && normalizedText(row.unit) !== normalizedText(match.unit ?? ''))) {
+    if (!match || normalizedText(row.unit ?? '') !== normalizedText(match.unit ?? '')) {
       throw new TypeError('O indicador personalizado não existe neste ciclo ou sua unidade não corresponde.');
     }
   }
@@ -236,4 +244,75 @@ export async function listMetricImports(database: typeof prisma = prisma): Promi
 export async function deleteMetricImport(id: string, database: typeof prisma = prisma): Promise<boolean> {
   const result = await database.metricImportBatch.deleteMany({ where: { id, ownerId: TEAM_OWNER_ID } });
   return result.count > 0;
+}
+
+export async function getImportedMetricTotalsForExactRange(
+  start: Date,
+  end: Date,
+  database: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<ImportedMetricTotals> {
+  if (!validDate(start) || !validDate(end) || start >= end) {
+    throw new RangeError('Informe um período válido para consultar os resultados importados.');
+  }
+  const batches = await database.metricImportBatch.findMany({
+    where: { ownerId: TEAM_OWNER_ID, periodStart: start, periodEnd: end },
+    include: { rows: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
+  });
+  const totals: Partial<GoalMetricActuals> = {};
+  const customTotals: Record<string, number> = {};
+  let pairedApproaches = 0;
+  let pairedSales = 0;
+  let hasPairedComponents = false;
+  let reportedConversion: number | undefined;
+
+  for (const batch of batches) {
+    const batchTotals: Partial<Record<GoalMetricKey, number>> = {};
+    for (const row of batch.rows) {
+      const value = Number(row.value);
+      if (!Number.isFinite(value) || value < 0) continue;
+      if (row.metricKey) batchTotals[row.metricKey as GoalMetricKey] = (batchTotals[row.metricKey as GoalMetricKey] ?? 0) + value;
+      else if (row.customGoalId) customTotals[row.customGoalId] = (customTotals[row.customGoalId] ?? 0) + value;
+    }
+    for (const [key, value] of Object.entries(batchTotals) as Array<[GoalMetricKey, number]>) {
+      if (key !== 'conversionRate') totals[key] = (totals[key] ?? 0) + value;
+    }
+    if (batchTotals.approaches !== undefined && batchTotals.sales !== undefined) {
+      hasPairedComponents = true;
+      pairedApproaches += batchTotals.approaches;
+      pairedSales += batchTotals.sales;
+    } else if (batchTotals.conversionRate !== undefined) {
+      // Percentages from separate reports are not additive; retain the latest explicit value.
+      reportedConversion = batchTotals.conversionRate;
+    }
+  }
+
+  const conversionRateSource = reportedConversion !== undefined ? 'reported' : hasPairedComponents ? 'components' : null;
+  if (conversionRateSource === 'reported') totals.conversionRate = reportedConversion;
+  if (conversionRateSource === 'components') {
+    totals.conversionRate = pairedApproaches ? Number((pairedSales / pairedApproaches * 100).toFixed(2)) : 0;
+  }
+  return {
+    totals, customTotals, batchIds: batches.map((batch) => batch.id), batchCount: batches.length,
+    conversionRateSource,
+    conversionComponents: hasPairedComponents ? { approaches: pairedApproaches, sales: pairedSales } : null
+  };
+}
+
+export function addImportedMetricTotals(actuals: GoalMetricActuals, imported: ImportedMetricTotals): GoalMetricActuals {
+  const combined = { ...actuals };
+  for (const [key, value] of Object.entries(imported.totals) as Array<[GoalMetricKey, number]>) {
+    if (key === 'conversionRate' || value === undefined) continue;
+    combined[key] += value;
+  }
+  if (imported.conversionRateSource === 'components') {
+    const approaches = actuals.approaches + (imported.conversionComponents?.approaches ?? 0);
+    const sales = actuals.sales + (imported.conversionComponents?.sales ?? 0);
+    combined.conversionRate = approaches
+      ? Number((sales / approaches * 100).toFixed(2))
+      : 0;
+  } else if (imported.conversionRateSource === 'reported' && imported.totals.conversionRate !== undefined) {
+    combined.conversionRate = imported.totals.conversionRate;
+  }
+  return combined;
 }
