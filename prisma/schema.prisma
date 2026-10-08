@@ -215,6 +215,37 @@ model DailyReport {
   snapshot   Json
 }
 
+model MetricImportBatch {
+  id          String             @id @default(cuid())
+  ownerId     String
+  actorId     String
+  fileName    String
+  contentHash String
+  periodStart DateTime
+  periodEnd   DateTime
+  createdAt   DateTime           @default(now())
+  rows        MetricImportRow[]
+
+  @@unique([ownerId, contentHash, periodStart, periodEnd])
+  @@index([ownerId, periodStart, periodEnd])
+  @@index([createdAt])
+}
+
+model MetricImportRow {
+  id           String            @id @default(cuid())
+  batchId      String
+  metricKey    String?
+  customGoalId String?
+  label        String
+  unit         String?
+  value        Decimal           @db.Decimal(14, 4)
+  batch        MetricImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@index([metricKey])
+  @@index([customGoalId])
+}
+
 model MemberProfile {
   id         String            @id
   name       String

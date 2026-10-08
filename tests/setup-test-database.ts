@@ -10,6 +10,7 @@ export default async function setupTestDatabase() {
   const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl } } });
 
   try {
+    await prisma.metricImportBatch.deleteMany();
     await prisma.dailyReport.deleteMany();
     await prisma.lead.deleteMany();
     await prisma.goal.deleteMany();
