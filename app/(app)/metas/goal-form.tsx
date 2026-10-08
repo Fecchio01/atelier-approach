@@ -11,6 +11,7 @@ import { removeImportedPdfGoals, saveCustomGoalsForCycle, saveMonthlyGoal, saveW
 import { initialGoalActionState, type GoalActionState } from './goal-form-state';
 import { CustomGoalMetricRow } from './custom-goal-metrics';
 import { GoalImporter } from './goal-importer';
+import { ResultImporter } from './result-importer';
 import { DashboardMotionSection } from '@/components/dashboard-motion-card';
 
 type GoalRecord = {
@@ -255,6 +256,7 @@ export function GoalForm({
   return <form action={formAction} className="space-y-6 [&_button]:transition-[transform,opacity] [&_button]:duration-[var(--atelier-motion-duration)] [&_button]:ease-[var(--atelier-motion-easing)]">
     <input type="hidden" name="customGoals" value={JSON.stringify(customGoals)} />
     <GoalImporter key={importerRevision} disabled={importPending || customGoalSavePending || pending} onActivityChange={setImporterBusy} onApply={applyImportedSuggestions} />
+    <ResultImporter customGoals={customGoals} disabled={importPending || customGoalSavePending || pending} onActivityChange={setImporterBusy} />
     <section aria-label={kind === 'WEEKLY' ? 'Ciclo semanal atual' : 'Ciclo mensal atual'} className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(118deg,#192224,#11161b)] p-4 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex items-start gap-3">
