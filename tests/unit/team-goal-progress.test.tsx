@@ -7,7 +7,7 @@ vi.stubGlobal('React', React);
 import { TeamGoalProgress } from '../../components/team-goal-progress';
 import type { GoalProgressByMetric } from '../../lib/metrics';
 
-function progress(target: number | null): GoalProgressByMetric {
+function progress(target: number | null, reportedConversion = false): GoalProgressByMetric {
   return {
     approaches: { actual: 5, target, ratio: target ? 0.5 : null },
     interests: { actual: 1, target: null, ratio: null },
@@ -16,7 +16,9 @@ function progress(target: number | null): GoalProgressByMetric {
     revenue: { actual: 0, target: null, ratio: null },
     mrr: { actual: 0, target: null, ratio: null },
     followUpsCompleted: { actual: 0, target: null, ratio: null },
-    conversionRate: { actual: 0, target: null, ratio: null }
+    conversionRate: reportedConversion
+      ? { actual: 27.5, target: 50, ratio: 0.55, reported: true }
+      : { actual: 0, target: null, ratio: null }
   };
 }
 
@@ -34,5 +36,12 @@ describe('expanded team goal progress', () => {
     expect(html).toContain('50%');
     expect(html).toContain('role="progressbar"');
     expect(html).toContain('aria-valuenow="50"');
+  });
+
+  test('shows a PDF-reported conversion rate and target progress without approaches', () => {
+    const html = renderToStaticMarkup(<TeamGoalProgress progress={progress(null, true)} hasApproaches={false} />);
+    expect(html).toContain('27,5%');
+    expect(html).toContain('55%');
+    expect(html).toContain('role="progressbar"');
   });
 });

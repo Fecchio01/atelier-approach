@@ -37,10 +37,11 @@ export type MetricLead = {
 export type DashboardRange = { start: Date; end: Date; now?: Date };
 
 export type GoalMetricKey = 'approaches' | 'interests' | 'meetings' | 'sales' | 'revenue' | 'mrr' | 'followUpsCompleted' | 'conversionRate';
-export type GoalMetricActuals = Record<GoalMetricKey, number>;
+export type GoalMetricActuals = Record<GoalMetricKey, number> & { conversionRateReported?: boolean };
 export type TeamGoalTargets = Record<GoalMetricKey, number | null>;
-export type GoalMetricProgress = { actual: number; target: number | null; ratio: number | null };
+export type GoalMetricProgress = { actual: number; target: number | null; ratio: number | null; reported?: boolean };
 export type GoalProgressByMetric = Record<GoalMetricKey, GoalMetricProgress>;
+const goalMetricKeys: GoalMetricKey[] = ['approaches', 'interests', 'meetings', 'sales', 'revenue', 'mrr', 'followUpsCompleted', 'conversionRate'];
 
 export type DashboardMetrics = {
   sales: number;
@@ -65,14 +66,14 @@ function inRange(date: Date, range: DashboardRange) {
 }
 
 export function getTeamGoalProgress(actuals: GoalMetricActuals, targets: TeamGoalTargets): GoalProgressByMetric {
-  return Object.fromEntries(Object.keys(actuals).map((key) => {
-    const metric = key as GoalMetricKey;
+  return Object.fromEntries(goalMetricKeys.map((metric) => {
     const actual = actuals[metric];
     const target = targets[metric];
-    const ratio = target !== null && target > 0 && !(metric === 'conversionRate' && actuals.approaches === 0)
+    const reported = metric === 'conversionRate' && actuals.conversionRateReported === true;
+    const ratio = target !== null && target > 0 && !(metric === 'conversionRate' && actuals.approaches === 0 && !reported)
       ? Math.round((actual / target) * 100) / 100
       : null;
-    return [metric, { actual, target: target !== null && target > 0 ? target : null, ratio }];
+    return [metric, { actual, target: target !== null && target > 0 ? target : null, ratio, ...(reported ? { reported: true } : {}) }];
   })) as GoalProgressByMetric;
 }
 

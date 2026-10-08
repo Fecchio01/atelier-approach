@@ -125,7 +125,7 @@ function createDailyPdfSections(snapshot: DailyReportSnapshot): ReportPdfSection
       lines: [
         `${snapshot.imports.batchCount} lote(s) considerados até o fechamento; valores sem atribuição a membros ou canais.`,
         ...snapshot.imports.batchIds.map((id) => `Lote: ${id}`),
-        ...Object.entries(snapshot.imports.totals).map(([key, value]) => `${metricLabels[key as GoalMetricKey]}: ${key === 'revenue' || key === 'mrr' ? moneyFormatter.format(value) : numberFormatter.format(value)}`),
+        ...Object.entries(snapshot.imports.totals).map(([key, value]) => `${metricLabels[key as GoalMetricKey]}: ${key === 'revenue' || key === 'mrr' ? moneyFormatter.format(value ?? 0) : numberFormatter.format(value ?? 0)}`),
         ...Object.entries(snapshot.imports.customTotals).map(([id, value]) => `Indicador personalizado ${id}: ${numberFormatter.format(value)}`)
       ]
     }] : []),
@@ -184,7 +184,7 @@ async function createPeriodPdfSections(period: 'week' | 'month', report: WeeklyM
       `Interesses: ${report.goalActuals.interests}`,
       `Reuniões e retornos: ${report.goalActuals.meetings}`,
       `Ganhos: ${report.conversion.wins}`,
-      `Conversão: ${report.conversion.approaches ? `${Math.round(report.conversion.rate * 100)}%` : 'sem abordagens'}`,
+      `Conversão: ${report.conversion.approaches || report.conversion.rateSource === 'reported' ? `${numberFormatter.format(report.conversion.reportedRate ?? report.conversion.rate * 100)}%` : 'sem abordagens'}`,
       `Receita vendida: ${moneyFormatter.format(report.revenue.sales)}`,
       `MRR: ${moneyFormatter.format(report.revenue.mrr)}`,
       `Follow-ups: ${report.followUps.pending} pendentes, ${report.followUps.completed} concluídos, ${report.followUps.cancelled} cancelados, ${report.followUps.overdue} vencidos`

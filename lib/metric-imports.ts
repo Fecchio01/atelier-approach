@@ -25,7 +25,7 @@ export type MetricImportRowInput = {
 
 export type MetricImportBatchWithRows = Prisma.MetricImportBatchGetPayload<{ include: { rows: true } }>;
 export type ImportedMetricTotals = {
-  totals: Partial<GoalMetricActuals>;
+  totals: Partial<Record<GoalMetricKey, number>>;
   customTotals: Record<string, number>;
   batchIds: string[];
   batchCount: number;
@@ -260,7 +260,7 @@ export async function getImportedMetricTotalsForExactRange(
     include: { rows: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
   });
-  const totals: Partial<GoalMetricActuals> = {};
+  const totals: Partial<Record<GoalMetricKey, number>> = {};
   const customTotals: Record<string, number> = {};
   let pairedApproaches = 0;
   let pairedSales = 0;
@@ -314,6 +314,9 @@ export function addImportedMetricTotals(actuals: GoalMetricActuals, imported: Im
       : 0;
   } else if (imported.conversionRateSource === 'reported' && imported.totals.conversionRate !== undefined) {
     combined.conversionRate = imported.totals.conversionRate;
+    combined.conversionRateReported = true;
+  } else {
+    delete combined.conversionRateReported;
   }
   return combined;
 }

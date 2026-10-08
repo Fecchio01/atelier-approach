@@ -3,7 +3,7 @@ import { ActivityType, Channel, LeadStage, Prisma } from '@prisma/client';
 import { prisma } from './db';
 import { auxiliaryFunnelStages, isInterestStage, isMeetingStage, mainFunnelStages, normalizeFunnelStage } from './funnel';
 import { getGoalPeriodWindow } from './goal-periods';
-import type { GoalMetricActuals } from './metrics';
+import type { GoalMetricActuals, GoalMetricKey } from './metrics';
 import { addImportedMetricTotals, getImportedMetricTotalsForExactRange, type ImportedMetricTotals } from './metric-imports';
 import { formatReportNote } from './report-notes';
 
@@ -14,7 +14,7 @@ export type WeeklyMonthlyReport = {
   period: { from: Date; to: Date };
   goalActuals: GoalMetricActuals;
   imports: { batchIds: string[]; batchCount: number };
-  conversion: { approaches: number; wins: number; rate: number };
+  conversion: { approaches: number; wins: number; rate: number; rateSource?: 'reported'; reportedRate?: number };
   revenue: { sales: number; mrr: number };
   channels: { channel: Channel; approaches: number; wins: number; conversionRate: number }[];
   members: { memberId: string; approaches: number; interests: number; meetings: number; wins: number; sales: number; mrr: number }[];
@@ -39,7 +39,7 @@ export type DailyReportSnapshot = {
   imports?: {
     batchIds: string[];
     batchCount: number;
-    totals: Partial<GoalMetricActuals>;
+    totals: Partial<Record<GoalMetricKey, number>>;
     customTotals: Record<string, number>;
   };
   summary: {
@@ -305,7 +305,15 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
     period: { from: range.from, to: range.to },
     goalActuals,
     imports: { batchIds: imported.batchIds, batchCount: imported.batchCount },
-    conversion: { approaches: goalActuals.approaches, wins: goalActuals.sales, rate: rate(goalActuals.conversionRate, 100) },
+    conversion: {
+      approaches: goalActuals.approaches,
+      wins: goalActuals.sales,
+      rate: rate(goalActuals.conversionRate, 100),
+      ...(imported.conversionRateSource === 'reported' ? {
+        rateSource: 'reported' as const,
+        reportedRate: imported.totals.conversionRate
+      } : {})
+    },
     revenue: { sales: goalActuals.revenue, mrr: goalActuals.mrr },
     channels,
     members: [...memberResults.entries()].map(([memberId, result]) => ({ memberId, ...result })).sort((first, second) => first.memberId.localeCompare(second.memberId)),

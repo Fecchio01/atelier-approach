@@ -154,6 +154,31 @@ describe('commercial reports', () => {
     expect(report.members).toEqual([]);
   });
 
+  test('keeps a reported conversion rate visible in the report when its batch has no approaches', async () => {
+    vi.spyOn(prisma.lead, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.activity, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.followUp, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.saleEvent, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.stageHistory, 'findMany').mockResolvedValue([]);
+    vi.spyOn(metricImportsModule, 'getImportedMetricTotalsForExactRange').mockResolvedValue({
+      totals: { conversionRate: 27.5 }, customTotals: {}, batchIds: ['reported-rate'], batchCount: 1,
+      conversionRateSource: 'reported', conversionComponents: null
+    });
+
+    const report = await buildReport({ from: new Date('2026-09-07T03:00:00.000Z'), to: new Date('2026-09-14T03:00:00.000Z') });
+
+    expect(report.conversion).toEqual({ approaches: 0, wins: 0, rate: 0.28, rateSource: 'reported', reportedRate: 27.5 });
+    expect(report.goalActuals).toMatchObject({ conversionRate: 27.5, conversionRateReported: true });
+
+    const createPdf = vi.spyOn(reportPdfModule, 'createReportPdf');
+    const response = await GET(new Request('http://localhost/api/reports?format=pdf&period=week&from=2026-09-07T03%3A00%3A00.000Z&to=2026-09-14T03%3A00%3A00.000Z'));
+    expect(response.status).toBe(200);
+    const sections = createPdf.mock.calls.at(-1)?.[0].sections;
+    expect(sections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Resumo do período', lines: expect.arrayContaining(['Conversão: 27,5%']) })
+    ]));
+  });
+
   test('excludes reversed sale events from period metrics and keeps reversal history in the exported PDF', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'report-reversed-sale', name: 'Oficina Reaberta', stage: 'CONTACTED' } });
     const occurredAt = new Date('2026-09-10T12:00:00.000Z');

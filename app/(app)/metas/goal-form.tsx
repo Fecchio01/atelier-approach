@@ -345,7 +345,7 @@ export function GoalForm({
         <div className="divide-y divide-white/[0.06]">
           {fields.map((field) => {
             const target = draft[field.key] === '' ? null : Number(draft[field.key]);
-            const progressPercent = target !== null && target > 0 && !(field.key === 'conversionRate' && actuals.approaches === 0)
+            const progressPercent = target !== null && target > 0 && !(field.key === 'conversionRate' && actuals.approaches === 0 && !actuals.conversionRateReported)
               ? Math.round((actuals[field.key] / target) * 100)
               : null;
             const progressWidth = Math.min(100, Math.max(0, progressPercent ?? 0));

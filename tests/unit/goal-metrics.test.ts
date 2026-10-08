@@ -77,4 +77,18 @@ describe('team goal progress', () => {
 
     expect(getTeamGoalProgress(actuals, targets).conversionRate).toEqual({ actual: 0, target: 25, ratio: null });
   });
+
+  test('uses a directly reported conversion rate even when the report has no approach count', () => {
+    const actuals: GoalMetricActuals = {
+      approaches: 0, interests: 0, meetings: 0, sales: 0,
+      revenue: 0, mrr: 0, followUpsCompleted: 0, conversionRate: 27.5,
+      conversionRateReported: true
+    };
+    const targets: TeamGoalTargets = {
+      approaches: null, interests: null, meetings: null, sales: null,
+      revenue: null, mrr: null, followUpsCompleted: null, conversionRate: 50
+    };
+
+    expect(getTeamGoalProgress(actuals, targets).conversionRate).toEqual({ actual: 27.5, target: 50, ratio: 0.55, reported: true });
+  });
 });
