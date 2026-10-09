@@ -71,6 +71,47 @@ describe('Overture automotive places', () => {
     expect(() => buildOvertureQuery({ west: -44.5, south: -22.9, east: -43.8, north: -22.1 }, '2026-08-19.0', ['s3://elsewhere/file.parquet'])).toThrow('arquivos Overture inválidos');
   });
 
+  test('queries the requested niche and does not fall back to automotive categories', () => {
+    const path = 's3://overturemaps-us-west-2/release/2026-08-19.0/theme=places/type=place/part-00000-test.parquet';
+    const sql = buildOvertureQuery(
+      { west: -44.5, south: -22.9, east: -43.8, north: -22.1 },
+      '2026-08-19.0',
+      [path],
+      { niche: 'barbearia' }
+    );
+
+    expect(sql).toContain('barber');
+    expect(sql).toContain('barbearia');
+    expect(sql).not.toContain('auto_detailing');
+  });
+
+  test('name lookup overrides niche matching and searches names across categories', () => {
+    const path = 's3://overturemaps-us-west-2/release/2026-08-19.0/theme=places/type=place/part-00000-test.parquet';
+    const sql = buildOvertureQuery(
+      { west: -44.5, south: -22.9, east: -43.8, north: -22.1 },
+      '2026-08-19.0',
+      [path],
+      { niche: 'estética automotiva', businessName: 'Barbearia do João' }
+    );
+
+    expect(sql).toContain('barbearia do joao');
+    expect(sql).not.toContain('auto_detailing');
+    expect(sql).not.toContain('barber_shop');
+  });
+
+  test('escapes quotes in a user-supplied niche before building the query', () => {
+    const path = 's3://overturemaps-us-west-2/release/2026-08-19.0/theme=places/type=place/part-00000-test.parquet';
+    const sql = buildOvertureQuery(
+      { west: -44.5, south: -22.9, east: -43.8, north: -22.1 },
+      '2026-08-19.0',
+      [path],
+      { niche: "barbearia d'João" }
+    );
+
+    expect(sql).toContain("barbearia d''joao");
+    expect(sql).not.toContain("d'joao");
+  });
+
   test('normalizes a named automotive business and its contact channels', () => {
     const businesses = normalizeOverturePlaces([{
       id: 'gers-123',
@@ -125,6 +166,18 @@ describe('Overture automotive places', () => {
     expect(businesses[0].address).toBe('Rua das Flores, 10, Rio de Janeiro, RJ, Brasil');
   });
 
+  test('keeps the full provider taxonomy so the API can revalidate the selected niche', () => {
+    const businesses = normalizeOverturePlaces([
+      { id: 'taxonomy-1', name: 'Studio João', category: 'hair_care', category_hierarchy: 'services barber shop' }
+    ], { niche: 'barbearia' });
+
+    expect(businesses[0]).toMatchObject({
+      name: 'Studio João',
+      category: 'hair_care',
+      categoryHierarchy: 'services barber shop'
+    });
+  });
+
   test('keeps only automotive aesthetics, repair workshops and car washes', () => {
     const businesses = normalizeOverturePlaces([
       { id: 'repair', name: 'Oficina do Vale', category: 'automotive_repair', latitude: -22.5, longitude: -44.07 },
@@ -148,6 +201,24 @@ describe('Overture automotive places', () => {
     expect(businesses.map((business) => business.osmId)).toEqual([
       'overture/repair', 'overture/wash', 'overture/detailing'
     ]);
+  });
+
+  test('keeps only businesses matching the requested niche', () => {
+    const businesses = normalizeOverturePlaces([
+      { id: 'barber', name: 'Barbearia do Bairro', category: 'barber_shop' },
+      { id: 'repair', name: 'Oficina do Bairro', category: 'automotive_repair' }
+    ], { niche: 'barbearia' });
+
+    expect(businesses.map((business) => business.name)).toEqual(['Barbearia do Bairro']);
+  });
+
+  test('finds a business by name regardless of the selected niche or category', () => {
+    const businesses = normalizeOverturePlaces([
+      { id: 'named', name: 'Barbearia do João', category: 'barber_shop' },
+      { id: 'other', name: 'Barbearia Central', category: 'barber_shop' }
+    ], { niche: 'estética automotiva', businessName: 'do joao' });
+
+    expect(businesses.map((business) => business.name)).toEqual(['Barbearia do João']);
   });
 
   test('does not return a place without a verifiable trade name', () => {
@@ -210,5 +281,17 @@ describe('Overture automotive places', () => {
 
     expect(businesses.length).toBeGreaterThan(5);
     expect(businesses.every((business) => business.source === 'Overture')).toBe(true);
+  }, 90_000);
+
+  test.skipIf(process.env.RUN_OVERTURE_LIVE !== '1')('finds barbershops for a Portuguese niche query in São Paulo', async () => {
+    const businesses = await searchOvertureBusinesses(
+      { west: -46.68, south: -23.58, east: -46.60, north: -23.50 },
+      { niche: 'barbearia' }
+    );
+
+    expect(businesses.length).toBeGreaterThan(0);
+    expect(businesses.every(({ category, categoryHierarchy, name }) =>
+      /barber|barbearia|barber shop/i.test(`${category ?? ''} ${categoryHierarchy ?? ''} ${name}`)
+    )).toBe(true);
   }, 90_000);
 });

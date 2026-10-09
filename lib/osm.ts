@@ -60,6 +60,7 @@ export type ExternalBusiness = {
   whatsapp?: string | null;
   address?: string | null;
   category?: string | null;
+  categoryHierarchy?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   source?: 'OpenStreetMap' | 'Overture' | 'OpenStreetMap + Overture';

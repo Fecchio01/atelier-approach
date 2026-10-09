@@ -28,7 +28,8 @@ vi.mock('../../lib/osm', () => {
     isGenericBusinessName: mocks.isGenericBusinessName
   };
 });
-vi.mock('../../lib/overture', () => ({
+vi.mock('../../lib/overture', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../lib/overture')>(),
   searchOvertureArea: mocks.searchOvertureArea,
   planOvertureSearchAreas: mocks.planOvertureSearchAreas,
   splitOvertureSearchArea: mocks.splitOvertureSearchArea
@@ -277,6 +278,48 @@ describe('GET /api/search', () => {
         website: null,
         instagram: '@oficina'
       })]
+    });
+  });
+
+  test('passes the selected niche and business name to Overture, with name taking precedence', async () => {
+    mocks.searchOvertureArea.mockResolvedValue({ businesses: [], hitLimit: false });
+
+    await GET(request('niche=barbearia&businessName=Barbearia%20do%20Jo%C3%A3o&region=Rio%20de%20Janeiro'));
+
+    expect(mocks.searchOvertureArea).toHaveBeenCalledWith(FIRST_AREA, expect.objectContaining({
+      niche: 'barbearia',
+      businessName: 'Barbearia do João'
+    }));
+  });
+
+  test('allows a name-only lookup and uses it across unrelated categories', async () => {
+    mocks.searchOvertureArea.mockResolvedValue({
+      businesses: [business('named-barber', 'Barbearia do João', { category: 'barber_shop' })],
+      hitLimit: false
+    });
+
+    const response = await GET(request('businessName=Barbearia%20do%20Jo%C3%A3o&region=Rio%20de%20Janeiro'));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ businesses: [{ name: 'Barbearia do João' }] });
+    expect(mocks.searchOvertureArea).toHaveBeenCalledWith(FIRST_AREA, expect.objectContaining({
+      businessName: 'Barbearia do João'
+    }));
+  });
+
+  test('filters unrelated categories from the API response for a custom niche', async () => {
+    mocks.searchOvertureArea.mockResolvedValue({
+      businesses: [
+        business('barber', 'Barbearia do Bairro', { category: 'barber_shop' }),
+        business('repair', 'Oficina do Bairro', { category: 'automotive_repair' })
+      ],
+      hitLimit: false
+    });
+
+    const response = await GET(request('niche=barbearia&region=Rio%20de%20Janeiro'));
+
+    await expect(response.json()).resolves.toMatchObject({
+      businesses: [{ name: 'Barbearia do Bairro' }]
     });
   });
 

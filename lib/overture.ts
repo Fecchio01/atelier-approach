@@ -13,6 +13,7 @@ const MAX_OVERTURE_RESULTS = 100;
 const OVERTURE_QUERY_TIMEOUT_MS = 45_000;
 const CATALOG_TTL_MS = 6 * 60 * 60_000;
 const QUERY_CACHE_TTL_MS = 10 * 60_000;
+export const DEFAULT_OVERTURE_NICHE = 'estética automotiva';
 
 type OvertureRow = Record<string, unknown>;
 type QueryExecutor = (sql: string) => Promise<OvertureRow[]>;
@@ -30,6 +31,22 @@ const AUTO_PRODUCT_CATEGORY_PATTERN = /(^| )(auto_parts|car_parts|vehicle_parts|
 const AUTO_PRODUCT_NAME_PATTERN = /\b(auto pecas|autopecas|car parts|auto parts|pecas automotivas|produtos automotivos|automotive products|loja de pecas|loja de acessorios|auto accessories|automotive accessories|concessionaria|dealership|revenda de veiculos|veiculos usados|pneus|tire shop|tyre shop)\b/;
 const UNRELATED_AUTO_PLACE_PATTERN = /retirement home|casa de repouso|residencial senior|corretora de seguros|insurance|detran|protecao veicular|clube de beneficios/i;
 const CONTACT_URL = /https?:\/\/[^\s,;]+/gi;
+const NICHE_TAXONOMY_TERMS: Record<string, string[]> = {
+  barbearia: ['barber', 'barber shop', 'barbershop'],
+  'salao de beleza': ['beauty salon', 'hair salon', 'beauty'],
+  'clinica odontologica': ['dentist', 'dental', 'dental clinic'],
+  dentista: ['dentist', 'dental'],
+  academia: ['gym', 'fitness center', 'fitness'],
+  restaurante: ['restaurant'],
+  imobiliaria: ['real estate agency', 'real estate'],
+  'pet shop': ['pet shop', 'pet store', 'pet supply'],
+  oficina: ['automotive repair', 'auto repair', 'mechanic'],
+  'oficina mecanica': ['automotive repair', 'auto repair', 'mechanic'],
+  'lava jato': ['car wash', 'auto wash'],
+  'estetica automotiva': ['auto detailing', 'car detailing', 'auto repair', 'car wash']
+};
+
+export type OvertureSearchCriteria = { niche: string; businessName?: string };
 
 const NATIONAL_FOCUS_POINTS = [
   { longitude: -43.2, latitude: -22.9 }, // Rio de Janeiro
@@ -99,12 +116,18 @@ function areaDistance(area: SearchBounds, point: { longitude: number; latitude: 
   return longitude * longitude + latitude * latitude;
 }
 
-export async function searchOvertureBusinesses(bounds: SearchBounds): Promise<ExternalBusiness[]> {
-  return (await searchOvertureArea(bounds)).businesses;
+export async function searchOvertureBusinesses(
+  bounds: SearchBounds,
+  criteria: OvertureSearchCriteria = { niche: DEFAULT_OVERTURE_NICHE }
+): Promise<ExternalBusiness[]> {
+  return (await searchOvertureArea(bounds, criteria)).businesses;
 }
 
-export async function searchOvertureArea(bounds: SearchBounds): Promise<OvertureAreaResult> {
-  const key = `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`;
+export async function searchOvertureArea(
+  bounds: SearchBounds,
+  criteria: OvertureSearchCriteria = { niche: DEFAULT_OVERTURE_NICHE }
+): Promise<OvertureAreaResult> {
+  const key = `${bounds.west},${bounds.south},${bounds.east},${bounds.north}:${normalizeSearchTerm(criteria.niche)}:${normalizeSearchTerm(criteria.businessName ?? '')}`;
   const cached = queryCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
@@ -113,14 +136,17 @@ export async function searchOvertureArea(bounds: SearchBounds): Promise<Overture
     .map((row) => stringValue(row.url))
     .filter((url): url is string => Boolean(url && isOverturePlaceFile(url, release)));
   if (!files.length) return { businesses: [], hitLimit: false };
-  const rows = await executeDuckDbQuery(buildOvertureQuery(bounds, release, files));
-  const result = { businesses: normalizeOverturePlaces(rows), hitLimit: rows.length >= MAX_OVERTURE_RESULTS };
+  const rows = await executeDuckDbQuery(buildOvertureQuery(bounds, release, files, criteria));
+  const result = { businesses: normalizeOverturePlaces(rows, criteria), hitLimit: rows.length >= MAX_OVERTURE_RESULTS };
   queryCache.set(key, { value: result, expiresAt: Date.now() + QUERY_CACHE_TTL_MS });
   removeExpiredQueries();
   return result;
 }
 
-export function normalizeOverturePlaces(rows: OvertureRow[]): ExternalBusiness[] {
+export function normalizeOverturePlaces(
+  rows: OvertureRow[],
+  criteria: OvertureSearchCriteria = { niche: DEFAULT_OVERTURE_NICHE }
+): ExternalBusiness[] {
   const businesses: ExternalBusiness[] = [];
   const seenIds = new Set<string>();
 
@@ -132,8 +158,11 @@ export function normalizeOverturePlaces(rows: OvertureRow[]): ExternalBusiness[]
     const categoryHierarchy = stringValue(row.category_hierarchy);
     const name = stringValue(row.name) ?? stringValue(row.brand_name);
     if (!name || !isUsefulPlaceName(name)) continue;
-    if (UNRELATED_AUTO_PLACE_PATTERN.test(normalizeText(`${category ?? ''} ${categoryHierarchy ?? ''} ${name}`))) continue;
-    if (!isTargetAutomotiveService(category, categoryHierarchy, name)) continue;
+    if (!matchesOvertureSearch({ name, category, categoryHierarchy }, criteria)) continue;
+    if (!criteria.businessName && isDefaultAutomotiveNiche(criteria.niche)) {
+      if (UNRELATED_AUTO_PLACE_PATTERN.test(normalizeText(`${category ?? ''} ${categoryHierarchy ?? ''} ${name}`))) continue;
+      if (!isTargetAutomotiveService(category, categoryHierarchy, name)) continue;
+    }
     if (stringValue(row.operating_status)?.toLowerCase() === 'permanently_closed') continue;
 
     seenIds.add(id);
@@ -149,6 +178,7 @@ export function normalizeOverturePlaces(rows: OvertureRow[]): ExternalBusiness[]
       whatsapp: contactUrls.find((url) => ['wa.me', 'api.whatsapp.com', 'wa.link'].includes(urlHost(url))) ?? null,
       address: placeAddress(row),
       category: category?.trim() || null,
+      ...(categoryHierarchy?.trim() ? { categoryHierarchy: categoryHierarchy.trim() } : {}),
       latitude: numberValue(row.latitude),
       longitude: numberValue(row.longitude),
       source: 'Overture'
@@ -213,7 +243,12 @@ export function buildDuckDbInstanceConfig(
   };
 }
 
-export function buildOvertureQuery(bounds: SearchBounds, release: string, files: string[]) {
+export function buildOvertureQuery(
+  bounds: SearchBounds,
+  release: string,
+  files: string[],
+  criteria: OvertureSearchCriteria = { niche: DEFAULT_OVERTURE_NICHE }
+) {
   if (!/^\d{4}-\d{2}-\d{2}\.\d+$/.test(release)) throw new Error('Versão de dados Overture inválida.');
   validateBounds(bounds);
   if (!files.length || files.some((file) => !isOverturePlaceFile(file, release))) {
@@ -221,12 +256,14 @@ export function buildOvertureQuery(bounds: SearchBounds, release: string, files:
   }
 
   const placesPaths = `[${files.map((file) => `'${file.replaceAll("'", "''")}'`).join(', ')}]`;
-  const serviceCategoryPattern = TARGET_AUTO_SERVICE_CATEGORY_PATTERN.source.replaceAll("'", "''");
-  const serviceNamePattern = TARGET_AUTO_SERVICE_NAME_PATTERN.source.replaceAll("'", "''");
-  const productCategoryPattern = AUTO_PRODUCT_CATEGORY_PATTERN.source.replaceAll("'", "''");
-  const productNamePattern = AUTO_PRODUCT_NAME_PATTERN.source.replaceAll("'", "''");
   const categoryText = "translate(lower(concat_ws(' ', coalesce(taxonomy.primary, ''), array_to_string(taxonomy.hierarchy, ' '), coalesce(basic_category, ''))), 'áàâãéêíóôõúç', 'aaaaeeiooouc')";
   const nameText = "translate(lower(concat_ws(' ', coalesce(names.primary, ''), coalesce(brand.names.primary, ''))), 'áàâãéêíóôõúç', 'aaaaeeiooouc')";
+  const searchCondition = buildOvertureSearchCondition(categoryText, nameText, criteria);
+  const automotiveProductExclusion = !criteria.businessName && isDefaultAutomotiveNiche(criteria.niche)
+    ? `AND NOT regexp_matches(${categoryText}, '${AUTO_PRODUCT_CATEGORY_PATTERN.source.replaceAll("'", "''")}')
+      AND (NOT regexp_matches(${nameText}, '${AUTO_PRODUCT_NAME_PATTERN.source.replaceAll("'", "''")}')
+        OR regexp_matches(${nameText}, '${TARGET_AUTO_SERVICE_NAME_PATTERN.source.replaceAll("'", "''")}'))`
+    : '';
   return `
     SELECT
       id,
@@ -247,14 +284,60 @@ export function buildOvertureQuery(bounds: SearchBounds, release: string, files:
     WHERE bbox.xmin BETWEEN ${bounds.west} AND ${bounds.east}
       AND bbox.ymin BETWEEN ${bounds.south} AND ${bounds.north}
       AND operating_status IS DISTINCT FROM 'permanently_closed'
-      AND (
-        regexp_matches(${categoryText}, '${serviceCategoryPattern}')
-        OR regexp_matches(${nameText}, '${serviceNamePattern}')
-      )
-      AND NOT regexp_matches(${categoryText}, '${productCategoryPattern}')
-      AND (NOT regexp_matches(${nameText}, '${productNamePattern}') OR regexp_matches(${nameText}, '${serviceNamePattern}'))
+      AND ${searchCondition}
+      ${automotiveProductExclusion}
     LIMIT ${MAX_OVERTURE_RESULTS}
   `;
+}
+
+export function matchesOvertureSearch(
+  business: Pick<ExternalBusiness, 'name' | 'category'> & { categoryHierarchy?: string | null },
+  criteria: OvertureSearchCriteria
+) {
+  const businessName = normalizeSearchTerm(criteria.businessName ?? '');
+  if (businessName) return normalizeSearchTerm(business.name).includes(businessName);
+
+  if (isDefaultAutomotiveNiche(criteria.niche)) {
+    return isTargetAutomotiveService(business.category ?? null, business.categoryHierarchy ?? null, business.name);
+  }
+
+  const searchableText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''} ${business.name}`);
+  return getNicheSearchTerms(criteria.niche).some((term) => searchableText.includes(term));
+}
+
+function buildOvertureSearchCondition(
+  categoryText: string,
+  nameText: string,
+  criteria: OvertureSearchCriteria
+) {
+  const businessName = normalizeSearchTerm(criteria.businessName ?? '');
+  if (businessName) return `contains(${nameText}, '${escapeSqlString(businessName)}')`;
+  if (isDefaultAutomotiveNiche(criteria.niche)) {
+    const serviceCategories = TARGET_AUTO_SERVICE_CATEGORY_PATTERN.source.replaceAll("'", "''");
+    const serviceNames = TARGET_AUTO_SERVICE_NAME_PATTERN.source.replaceAll("'", "''");
+    return `(regexp_matches(${categoryText}, '${serviceCategories}') OR regexp_matches(${nameText}, '${serviceNames}'))`;
+  }
+  const normalizedCategoryText = `replace(replace(${categoryText}, '_', ' '), '-', ' ')`;
+  const normalizedNameText = `replace(replace(${nameText}, '_', ' '), '-', ' ')`;
+  return `(${getNicheSearchTerms(criteria.niche).map((term) => `(contains(${normalizedCategoryText}, '${escapeSqlString(term)}') OR contains(${normalizedNameText}, '${escapeSqlString(term)}'))`).join(' OR ')})`;
+}
+
+function getNicheSearchTerms(niche: string) {
+  const normalizedNiche = normalizeSearchTerm(niche);
+  const aliases = NICHE_TAXONOMY_TERMS[normalizedNiche] ?? [];
+  return Array.from(new Set([normalizedNiche, ...aliases.map(normalizeSearchTerm)].filter(Boolean)));
+}
+
+function normalizeSearchTerm(value: string) {
+  return normalizeText(value).replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function escapeSqlString(value: string) {
+  return value.replaceAll("'", "''");
+}
+
+function isDefaultAutomotiveNiche(niche: string) {
+  return normalizeSearchTerm(niche) === normalizeSearchTerm(DEFAULT_OVERTURE_NICHE);
 }
 
 function isOverturePlaceFile(url: string, release: string) {

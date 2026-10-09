@@ -19,6 +19,8 @@ type SearchFormProps = {
 };
 
 export type SearchFilters = {
+  niche: string;
+  businessName: string;
   country: string;
   region: string;
   city: string;
@@ -26,10 +28,8 @@ export type SearchFilters = {
 };
 
 export const DEFAULT_SEARCH_FILTERS: SearchFilters = {
-  country: 'BR', region: '', city: '', includeWorked: false
+  niche: 'estética automotiva', businessName: '', country: 'BR', region: '', city: '', includeWorked: false
 };
-
-const FIXED_NICHE = 'estética automotiva';
 const REGIONS = [
   { value: 'Acre, AC', label: 'Acre' },
   { value: 'Alagoas, AL', label: 'Alagoas' },
@@ -66,13 +66,16 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const niche = String(formData.get('niche') ?? '').trim();
+    const businessName = String(formData.get('businessName') ?? '').trim();
     const country = String(formData.get('country') ?? 'BR');
     const region = String(formData.get('region') ?? '');
     const city = String(formData.get('city') ?? '').trim();
     const includeWorked = formData.get('includeWorked') === 'on';
     const isNational = country === 'BR' && !region;
     const params = new URLSearchParams({
-      niche: FIXED_NICHE,
+      niche,
+      businessName,
       country,
       region,
       city,
@@ -102,10 +105,29 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
   }
 
   return (
-    <form aria-busy={isLoading} className="grid min-w-0 gap-5 rounded-2xl border border-white/[0.09] bg-[var(--atelier-surface)] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.12)] sm:p-5 md:grid-cols-2 xl:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.7fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto] md:items-end" onSubmit={handleSubmit}>
+    <form aria-busy={isLoading} className="grid min-w-0 gap-5 rounded-2xl border border-white/[0.09] bg-[var(--atelier-surface)] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.12)] sm:p-5 md:grid-cols-2 xl:grid-cols-[minmax(12rem,1.1fr)_minmax(12rem,1.1fr)_minmax(8rem,0.6fr)_minmax(10rem,0.9fr)_minmax(10rem,0.9fr)_auto] md:items-end" onSubmit={handleSubmit}>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         Nicho
-        <input readOnly value={FIXED_NICHE} className="min-h-11 min-w-0 rounded-lg border border-[var(--atelier-green)]/50 bg-[#171e22] px-3 text-white outline-none" />
+        <input
+          name="niche"
+          required={!filters.businessName.trim()}
+          maxLength={80}
+          value={filters.niche}
+          onChange={(event) => onFiltersChange({ ...filters, niche: event.target.value })}
+          placeholder="Ex.: barbearia, clínica, oficina"
+          className="min-h-11 min-w-0 rounded-lg border border-white/20 bg-[#171e22] px-3 text-white outline-none placeholder:text-white/40 focus:border-[var(--atelier-green)]"
+        />
+      </label>
+      <label className="grid min-w-0 gap-2 text-sm font-medium">
+        Nome da empresa (opcional)
+        <input
+          name="businessName"
+          maxLength={120}
+          value={filters.businessName}
+          onChange={(event) => onFiltersChange({ ...filters, businessName: event.target.value })}
+          placeholder="Ex.: Barbearia do João"
+          className="min-h-11 min-w-0 rounded-lg border border-white/20 bg-[#171e22] px-3 text-white outline-none placeholder:text-white/40 focus:border-[var(--atelier-green)]"
+        />
       </label>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         País
@@ -143,14 +165,14 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
       >
         {isLoading ? 'Pesquisando…' : 'Pesquisar'}
       </button>
-      <div className="grid gap-3 border-t border-white/[0.08] pt-4 text-sm md:col-span-2 xl:col-span-5 xl:grid-cols-[1fr_auto] xl:items-center">
-        <p className="text-white/55">Todos os estabelecimentos encontrados serão exibidos; os canais disponíveis ficam no topo.</p>
+      <div className="grid gap-3 border-t border-white/[0.08] pt-4 text-sm md:col-span-2 xl:col-span-6 xl:grid-cols-[1fr_auto] xl:items-center">
+        <p className="text-white/55">Se informar o nome, a busca procura a empresa mesmo que ela não seja do nicho selecionado.</p>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
           <input name="includeWorked" checked={filters.includeWorked} onChange={(event) => onFiltersChange({ ...filters, includeWorked: event.target.checked })} type="checkbox" className="shrink-0 accent-[var(--atelier-green)]" />
           Mostrar empresas já trabalhadas
         </label>
       </div>
-      {error ? <p role="alert" className="rounded-lg border border-red-300/25 bg-[#281a1e] p-3 text-sm leading-6 text-red-200 md:col-span-2 xl:col-span-5">{error}</p> : null}
+      {error ? <p role="alert" className="rounded-lg border border-red-300/25 bg-[#281a1e] p-3 text-sm leading-6 text-red-200 md:col-span-2 xl:col-span-6">{error}</p> : null}
     </form>
   );
 }

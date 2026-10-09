@@ -10,6 +10,8 @@ import {
 } from '../../../lib/osm';
 import {
   OvertureSearchArea,
+  DEFAULT_OVERTURE_NICHE,
+  matchesOvertureSearch,
   planOvertureSearchAreas,
   searchOvertureArea,
   splitOvertureSearchArea
@@ -42,6 +44,8 @@ type SavedSearch = {
 class OvertureUnavailableError extends Error {}
 
 type ResearchFilters = {
+  niche: string;
+  businessName: string;
   phoneOnly: boolean;
   digitalPresence: boolean;
   minScore: number | null;
@@ -92,7 +96,7 @@ export async function GET(request: Request) {
   const national = searchParams.get('national') === 'true';
   const filters = parseResearchFilters(searchParams);
 
-  if (!niche || (!national && !region) || !filters) {
+  if ((!niche && !filters?.businessName) || (niche?.length ?? 0) > 80 || !filters || filters.businessName.length > 120 || (!national && !region)) {
     return Response.json(
       { error: 'Informe nicho e região.' },
       { status: 400 }
@@ -170,7 +174,10 @@ async function consumeOverturePage(savedSearch: SavedSearch) {
     queriedAreas += 1;
 
     try {
-      const result = await searchOvertureArea(area);
+      const result = await searchOvertureArea(area, {
+        niche: savedSearch.filters.niche,
+        businessName: savedSearch.filters.businessName
+      });
       successfulAreaQueries += 1;
       const unseen = result.businesses.filter((business) => {
         if (savedSearch.seenBusinessIds.has(business.osmId)) return false;
@@ -246,7 +253,11 @@ function deserializeSearchState(value: Prisma.JsonValue): SavedSearch | null {
     || !Array.isArray(state.seenBusinessIds) || !Array.isArray(state.seenBusinesses)) return null;
 
   return {
-    filters: filters as ResearchFilters,
+    filters: {
+      ...filters,
+      niche: typeof filters.niche === 'string' ? filters.niche : DEFAULT_OVERTURE_NICHE,
+      businessName: typeof filters.businessName === 'string' ? filters.businessName : ''
+    } as ResearchFilters,
     expiresAt,
     overtureAreas: state.overtureAreas as OvertureSearchArea[],
     overtureQueue: state.overtureQueue as ExternalBusiness[],
@@ -275,6 +286,7 @@ function unavailableResponse(message = UNAVAILABLE_MESSAGE) {
 
 async function filterBusinessesForResponse(businesses: ExternalBusiness[], filters: ResearchFilters) {
   const filteredBusinesses = businesses.filter((business) => hasVerifiableName(business.name)
+    && matchesOvertureSearch(business, filters)
     && matchesResearchFilters(business, filters));
   const existingLeads = await prisma.lead.findMany({
     where: { osmId: { in: filteredBusinesses.map((business) => business.osmId) } },
@@ -310,6 +322,8 @@ function parseResearchFilters(searchParams: URLSearchParams): ResearchFilters | 
     return null;
   }
   return {
+    niche: searchParams.get('niche')?.trim() || DEFAULT_OVERTURE_NICHE,
+    businessName: searchParams.get('businessName')?.trim() ?? '',
     phoneOnly: searchParams.get('phoneOnly') === 'true',
     digitalPresence: searchParams.get('digitalPresence') === 'true',
     minScore,
