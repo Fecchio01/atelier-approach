@@ -33,10 +33,10 @@ const UNRELATED_AUTO_PLACE_PATTERN = /retirement home|casa de repouso|residencia
 const CONTACT_URL = /https?:\/\/[^\s,;]+/gi;
 const NICHE_TAXONOMY_TERMS: Record<string, string[]> = {
   barbearia: ['barber', 'barber shop', 'barbershop'],
-  'salao de beleza': ['beauty salon', 'hair salon', 'beauty'],
+  'salao de beleza': ['beauty salon', 'hair salon'],
   'clinica odontologica': ['dentist', 'dental', 'dental clinic'],
   dentista: ['dentist', 'dental'],
-  academia: ['gym', 'fitness center', 'fitness'],
+  academia: ['gym', 'fitness center'],
   restaurante: ['restaurant'],
   imobiliaria: ['real estate agency', 'real estate'],
   'pet shop': ['pet shop', 'pet store', 'pet supply'],
@@ -302,7 +302,7 @@ export function matchesOvertureSearch(
   }
 
   const searchableText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''} ${business.name}`);
-  return getNicheSearchTerms(criteria.niche).some((term) => searchableText.includes(term));
+  return getNicheSearchTerms(criteria.niche).some((term) => matchesWholeSearchPhrase(searchableText, term));
 }
 
 function buildOvertureSearchCondition(
@@ -311,15 +311,18 @@ function buildOvertureSearchCondition(
   criteria: OvertureSearchCriteria
 ) {
   const businessName = normalizeSearchTerm(criteria.businessName ?? '');
-  if (businessName) return `contains(${nameText}, '${escapeSqlString(businessName)}')`;
+  const normalizedCategoryText = `regexp_replace(replace(replace(${categoryText}, '_', ' '), '-', ' '), '\\s+', ' ', 'g')`;
+  const normalizedNameText = `regexp_replace(replace(replace(${nameText}, '_', ' '), '-', ' '), '\\s+', ' ', 'g')`;
+  if (businessName) return `contains(${normalizedNameText}, '${escapeSqlString(businessName)}')`;
   if (isDefaultAutomotiveNiche(criteria.niche)) {
     const serviceCategories = TARGET_AUTO_SERVICE_CATEGORY_PATTERN.source.replaceAll("'", "''");
     const serviceNames = TARGET_AUTO_SERVICE_NAME_PATTERN.source.replaceAll("'", "''");
     return `(regexp_matches(${categoryText}, '${serviceCategories}') OR regexp_matches(${nameText}, '${serviceNames}'))`;
   }
-  const normalizedCategoryText = `replace(replace(${categoryText}, '_', ' '), '-', ' ')`;
-  const normalizedNameText = `replace(replace(${nameText}, '_', ' '), '-', ' ')`;
-  return `(${getNicheSearchTerms(criteria.niche).map((term) => `(contains(${normalizedCategoryText}, '${escapeSqlString(term)}') OR contains(${normalizedNameText}, '${escapeSqlString(term)}'))`).join(' OR ')})`;
+  return `(${getNicheSearchTerms(criteria.niche).map((term) => {
+    const phrasePattern = `(^|[^a-z0-9])${escapeRegex(term)}([^a-z0-9]|$)`;
+    return `(regexp_matches(${normalizedCategoryText}, '${escapeSqlString(phrasePattern)}') OR regexp_matches(${normalizedNameText}, '${escapeSqlString(phrasePattern)}'))`;
+  }).join(' OR ')})`;
 }
 
 function getNicheSearchTerms(niche: string) {
@@ -334,6 +337,14 @@ function normalizeSearchTerm(value: string) {
 
 function escapeSqlString(value: string) {
   return value.replaceAll("'", "''");
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function matchesWholeSearchPhrase(text: string, phrase: string) {
+  return new RegExp(`(^|[^a-z0-9])${escapeRegex(phrase)}([^a-z0-9]|$)`).test(text);
 }
 
 function isDefaultAutomotiveNiche(niche: string) {

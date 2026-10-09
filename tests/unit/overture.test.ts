@@ -99,6 +99,20 @@ describe('Overture automotive places', () => {
     expect(sql).not.toContain('barber_shop');
   });
 
+  test('normalizes hyphens in names in the provider query', () => {
+    const path = 's3://overturemaps-us-west-2/release/2026-08-19.0/theme=places/type=place/part-00000-test.parquet';
+    const sql = buildOvertureQuery(
+      { west: -44.5, south: -22.9, east: -43.8, north: -22.1 },
+      '2026-08-19.0',
+      [path],
+      { niche: '', businessName: 'Auto-Prime' }
+    );
+
+    expect(sql).toContain("regexp_replace(replace(replace(translate(lower(concat_ws(' ', coalesce(names.primary, ''), coalesce(brand.names.primary, '')))");
+    expect(sql).toContain("contains(regexp_replace(");
+    expect(sql).toContain("'auto prime'");
+  });
+
   test('escapes quotes in a user-supplied niche before building the query', () => {
     const path = 's3://overturemaps-us-west-2/release/2026-08-19.0/theme=places/type=place/part-00000-test.parquet';
     const sql = buildOvertureQuery(
@@ -210,6 +224,38 @@ describe('Overture automotive places', () => {
     ], { niche: 'barbearia' });
 
     expect(businesses.map((business) => business.name)).toEqual(['Barbearia do Bairro']);
+  });
+
+  test('avoids broad taxonomy aliases that return unrelated businesses', () => {
+    const salons = normalizeOverturePlaces([
+      { id: 'salon', name: 'Studio Beauty', category: 'beauty_salon' },
+      { id: 'venue', name: 'Salão de Festas Beauty', category: 'event_venue' }
+    ], { niche: 'salão de beleza' });
+    const gyms = normalizeOverturePlaces([
+      { id: 'gym', name: 'Academia Fitness', category: 'fitness_center' },
+      { id: 'store', name: 'Loja Fitness', category: 'sporting_goods_store' },
+      { id: 'supplement', name: 'Fitness Suplementos', category: 'vitamin_supplement_store' }
+    ], { niche: 'academia' });
+    const petStores = normalizeOverturePlaces([
+      { id: 'pet', name: 'Pet Shop Central', category: 'pet_store' },
+      { id: 'carpet', name: 'Carpet Shop Central', category: 'carpet_store' }
+    ], { niche: 'pet shop' });
+
+    expect(salons.map((business) => business.osmId)).toEqual(['overture/salon']);
+    expect(gyms.map((business) => business.osmId)).toEqual(['overture/gym']);
+    expect(petStores.map((business) => business.osmId)).toEqual(['overture/pet']);
+  });
+
+  test('uses word boundaries for arbitrary niche SQL matching', () => {
+    const path = 's3://overturemaps-us-west-2/release/2026-08-19.0/theme=places/type=place/part-00000-test.parquet';
+    const sql = buildOvertureQuery(
+      { west: -44.5, south: -22.9, east: -43.8, north: -22.1 },
+      '2026-08-19.0',
+      [path],
+      { niche: 'pet shop' }
+    );
+
+    expect(sql).toContain("(^|[^a-z0-9])pet shop([^a-z0-9]|$)");
   });
 
   test('finds a business by name regardless of the selected niche or category', () => {
