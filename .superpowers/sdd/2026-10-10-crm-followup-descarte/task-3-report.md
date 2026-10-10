@@ -51,3 +51,55 @@ Exit status: 0. `git diff --check` also completed with no whitespace errors.
 ## Scope and environment
 
 No database commands or production changes were made. The temporary `vitest.lifecycle.config.ts` used to isolate DB-free tests was removed after verification. Existing unrelated `.next-*` directories, plan files, and the preexisting Task 1 report modification were left untouched.
+
+## Review fix round
+
+Addressed three transition integrity cases:
+
+- Moving manually out of `FOLLOW_UP` now cancels all pending follow-ups for that lead in the same transaction, preventing a later completion from restoring an obsolete `returnStage`.
+- Scheduling a follow-up directly from `WON` returns HTTP 409 before writes, preserving the won stage, financial fields, and sale event.
+- Completing a follow-up whose origin is `DISCARDED` restores `discardedAt` to the completion instant.
+
+### RED
+
+Added regressions for those cases, then ran:
+
+```text
+npm test -- --config vitest.lifecycle.config.ts
+```
+
+The new tests failed as expected:
+
+```text
+tests/unit/lead-routes.test.ts (49 tests | 3 failed | 27 skipped)
+Test Files  1 failed | 1 passed (2)
+Tests  3 failed | 20 passed | 30 skipped (53)
+```
+
+Failures were: restored `DISCARDED` left `discardedAt` null; leaving `FOLLOW_UP` left its pending follow-up active; scheduling from `WON` returned 200 instead of 409.
+
+### GREEN
+
+After the route changes, reran the same focused DB-free command:
+
+```text
+npm test -- --config vitest.lifecycle.config.ts
+```
+
+```text
+✓ tests/unit/lead-sale-concurrency.test.ts (4 tests | 3 skipped) 10ms
+✓ tests/unit/lead-routes.test.ts (49 tests | 27 skipped) 26ms
+
+Test Files  2 passed (2)
+Tests  23 passed | 30 skipped (53)
+```
+
+Typecheck:
+
+```text
+npm run typecheck
+> atelier-approach@0.1.0 typecheck
+> tsc --noEmit --incremental false
+```
+
+Exit status: 0. The temporary config was removed again after tests. No database setup or DB mutation was run.

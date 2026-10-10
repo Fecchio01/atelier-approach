@@ -685,6 +685,7 @@ describe('lifecycle transition contract without database', () => {
   let stageHistory: { fromStage: string; toStage: string }[];
   let creates: unknown[];
   let updates: Partial<LifecycleLead>[];
+  let saleEventWrites: string[];
 
   beforeEach(() => {
     mocks.getCurrentUser.mockResolvedValue({ id: 'lifecycle-user' });
@@ -704,6 +705,7 @@ describe('lifecycle transition contract without database', () => {
     stageHistory = [];
     creates = [];
     updates = [];
+    saleEventWrites = [];
 
     const tx = {
       $queryRaw: async () => [{ id: lead.id }],
@@ -736,7 +738,11 @@ describe('lifecycle transition contract without database', () => {
       crmSettings: { findUnique: async () => ({ followUpDelayDays: 2 }) },
       stageHistory: { create: async ({ data }: { data: { fromStage: string; toStage: string } }) => { stageHistory.push(data); return data; } },
       activity: { create: async ({ data }: { data: { type: string; note: string } }) => { activities.push(data); return data; } },
-      saleEvent: { findFirst: async () => null, update: async () => null, create: async () => null },
+      saleEvent: {
+        findFirst: async () => null,
+        update: async () => { saleEventWrites.push('update'); return null; },
+        create: async () => { saleEventWrites.push('create'); return null; }
+      },
       serviceCatalogItem: { findMany: async () => [] }
     };
     vi.spyOn(prisma, '$transaction').mockImplementation((async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)) as never);
@@ -778,6 +784,17 @@ describe('lifecycle transition contract without database', () => {
     expect(activities.map(({ type }) => type)).toEqual(['FOLLOW_UP_COMPLETED']);
   });
 
+  test('restoring DISCARDED on completion sets discardedAt to the completion instant', async () => {
+    const now = new Date('2026-09-10T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    lead.stage = 'FOLLOW_UP';
+    followUps.push({ id: 'follow-up-discarded', leadId: lead.id, ownerId: 'lifecycle-user', dueDate: now, state: 'PENDING', returnStage: 'DISCARDED', note: 'Retornar.', completedAt: null, completedById: null, cancelledAt: null, cancelledById: null });
+
+    expect((await patch({ followUpAction: 'COMPLETE', followUpId: 'follow-up-discarded' })).status).toBe(200);
+    expect(lead).toMatchObject({ stage: 'DISCARDED', discardedAt: now, stageEnteredAt: now, postFollowUpAt: now });
+  });
+
   test('preserves the current stage for a legacy follow-up with no return stage', async () => {
     const now = new Date('2026-09-10T10:00:00Z');
     vi.useFakeTimers();
@@ -799,6 +816,31 @@ describe('lifecycle transition contract without database', () => {
 
     expect((await patch({ stage: 'PROPOSAL' })).status).toBe(200);
     expect(lead).toMatchObject({ stage: 'PROPOSAL', stageEnteredAt: now, postFollowUpAt: null, discardedAt: null });
+  });
+
+  test('cancels a pending follow-up when manually leaving FOLLOW_UP', async () => {
+    const now = new Date('2026-09-10T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    lead.stage = 'FOLLOW_UP';
+    followUps.push({ id: 'follow-up-stale-origin', leadId: lead.id, ownerId: 'lifecycle-user', dueDate: now, state: 'PENDING', returnStage: 'INTEREST', note: 'Retornar.', completedAt: null, completedById: null, cancelledAt: null, cancelledById: null });
+
+    expect((await patch({ stage: 'PROPOSAL' })).status).toBe(200);
+    expect(lead.stage).toBe('PROPOSAL');
+    expect(followUps[0]).toMatchObject({ state: 'CANCELLED', cancelledAt: now, cancelledById: 'lifecycle-user' });
+  });
+
+  test('rejects follow-up scheduling from WON without reversing sale state', async () => {
+    lead = { ...lead, stage: 'WON', saleValue: 1200, mrr: 300, wonAt: new Date('2026-09-01T10:00:00Z'), wonById: 'original-winner' };
+
+    const response = await patch({ stage: 'FOLLOW_UP' });
+    expect(response.status).toBe(409);
+    expect(lead).toMatchObject({ stage: 'WON', saleValue: 1200, mrr: 300, wonById: 'original-winner' });
+    expect(lead.wonAt).toEqual(new Date('2026-09-01T10:00:00Z'));
+    expect(saleEventWrites).toHaveLength(0);
+    expect(creates).toHaveLength(0);
+    expect(stageHistory).toHaveLength(0);
+    expect(activities).toHaveLength(0);
   });
 
   test('sets discard time for manual discard and clears it when manually reopened', async () => {

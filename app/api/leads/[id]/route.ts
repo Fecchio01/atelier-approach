@@ -152,6 +152,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const lead = await tx.lead.findUnique({ where: { id } });
     if (!lead) throw new Error('LEAD_NOT_FOUND');
     if (stage === 'WON' && lead.stage === 'WON') throw new Error('ALREADY_WON');
+    if (stage === 'FOLLOW_UP' && lead.stage === 'WON') throw new Error('WON_CANNOT_SCHEDULE_FOLLOW_UP');
     const now = new Date();
     if (stage === 'FOLLOW_UP' && stage !== lead.stage && isPostFollowUpCooldownActive(lead.postFollowUpAt, now)) {
       throw new Error('POST_FOLLOW_UP_COOLDOWN');
@@ -199,6 +200,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       updated = await tx.lead.update({ where: { id }, data: leadData });
       await tx.stageHistory.create({ data: { leadId: id, actorId: user.id, fromStage: lead.stage, toStage: stage } });
+
+      if (lead.stage === 'FOLLOW_UP' && stage !== 'FOLLOW_UP') {
+        await tx.followUp.updateMany({
+          where: { leadId: id, state: 'PENDING' },
+          data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id }
+        });
+      }
 
       if (stage === 'WON') {
         await tx.saleEvent.create({ data: {
@@ -283,7 +291,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             ...(returnStage ? { stage: returnStage } : {}),
             stageEnteredAt: now,
             postFollowUpAt: now,
-            ...(returnStage && returnStage !== 'DISCARDED' ? { discardedAt: null } : {})
+            ...(returnStage === 'DISCARDED' ? { discardedAt: now } : returnStage ? { discardedAt: null } : {})
           }
         });
         if (returnStage && restoredStage !== lead.stage) {
@@ -305,7 +313,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return updated;
   }).catch((error: unknown) => {
-    if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'FINANCIALS_REQUIRE_WON', 'INVALID_SERVICE_SELECTION', 'POST_FOLLOW_UP_COOLDOWN'].includes(error.message)) return error.message;
+    if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'WON_CANNOT_SCHEDULE_FOLLOW_UP', 'FINANCIALS_REQUIRE_WON', 'INVALID_SERVICE_SELECTION', 'POST_FOLLOW_UP_COOLDOWN'].includes(error.message)) return error.message;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_FOUND') return null;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_PENDING') return false;
     throw error;
@@ -313,6 +321,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (updatedLead === 'LEAD_NOT_FOUND') return Response.json({ error: 'Lead não encontrado.' }, { status: 404 });
   if (updatedLead === 'ALREADY_WON') return Response.json({ error: 'Este lead já está marcado como ganho. Reabra-o antes de registrar uma nova venda.' }, { status: 409 });
+  if (updatedLead === 'WON_CANNOT_SCHEDULE_FOLLOW_UP') return Response.json({ error: 'Reabra o negócio antes de agendar um follow-up.' }, { status: 409 });
   if (updatedLead === 'FINANCIALS_REQUIRE_WON') return Response.json({ error: 'Os valores financeiros só podem ser alterados em um negócio ganho.' }, { status: 400 });
   if (updatedLead === 'INVALID_SERVICE_SELECTION') return Response.json({ error: 'Um ou mais serviços não existem ou estão arquivados. Nenhuma alteração foi salva.' }, { status: 400 });
   if (updatedLead === 'POST_FOLLOW_UP_COOLDOWN') return Response.json({ error: 'Aguarde o encerramento do prazo pós-follow-up antes de agendar outro retorno.' }, { status: 409 });
