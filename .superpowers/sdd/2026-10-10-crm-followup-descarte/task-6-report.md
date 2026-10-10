@@ -33,3 +33,42 @@ Test Files  1 passed (1)
 E2E was not run: `playwright.config.ts` invokes `tests/setup-test-database.ts`, which deletes `MetricImportBatch`, `DailyReport`, `Lead`, `Goal`, and `MemberProfile` rows. This task prohibits destructive DB setup. The E2E empty-state assertion is committed but remains unexecuted; the populated warning/detail link is verified by the DB-free unit test.
 
 No database commands, deployment, or production access were used.
+
+## Review fix — deadline/origin indexes
+
+Added Prisma `@@index([postFollowUpAt, id])` for bounded warning retrieval ordered by lifecycle deadline, and `@@index([leadId, state, completedAt, id])` for selecting a lead's latest completed origin. Added both indexes in a new migration, `20261010000100_crm_lifecycle_warning_indexes`; the already-applied lifecycle migration was not edited. This migration contains only two `CREATE INDEX` statements.
+
+RED contract run (before schema/migration changes):
+
+```text
+npm test -- --config vitest.lifecycle-indexes.config.ts
+
+Test Files  1 failed (1)
+Tests       2 failed | 2 passed (4)
+```
+
+The failures were the expected missing Prisma model index and missing new migration SQL assertions.
+
+Prisma validation/generation:
+
+```text
+npx prisma validate
+The schema at prisma\schema.prisma is valid 🚀
+
+npx prisma generate
+✔ Generated Prisma Client (v6.16.1) to .\node_modules\@prisma\client in 116ms
+```
+
+Final focused DB-free checks:
+
+```text
+npm test -- --config vitest.lifecycle-indexes.config.ts
+
+✓ tests/unit/lead-lifecycle-migration.test.ts (4 tests) 4ms
+✓ tests/unit/dashboard-lifecycle-warnings.test.tsx (4 tests) 31ms
+
+Test Files  2 passed (2)
+Tests       8 passed (8)
+```
+
+`npm run typecheck` and `git diff --check` exited 0 (line-ending normalization warnings only). No migration deployment, DB setup, or database connection was performed.

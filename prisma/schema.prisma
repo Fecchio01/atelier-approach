@@ -87,6 +87,7 @@ model Lead {
 
   @@index([stage, stageEnteredAt])
   @@index([discardedAt])
+  @@index([postFollowUpAt, id])
 }
 
 model Activity {
@@ -183,6 +184,7 @@ model FollowUp {
 
   @@index([leadId])
   @@index([ownerId, dueDate])
+  @@index([leadId, state, completedAt, id])
 }
 
 model Goal {

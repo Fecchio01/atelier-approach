@@ -6,6 +6,8 @@ import { describe, expect, test } from 'vitest';
 const schema = readFileSync(resolve(process.cwd(), 'prisma/schema.prisma'), 'utf8');
 const migrationPath = resolve(process.cwd(), 'prisma/migrations/20261010000000_crm_followup_discard_lifecycle/migration.sql');
 const migration = existsSync(migrationPath) ? readFileSync(migrationPath, 'utf8') : '';
+const warningIndexMigrationPath = resolve(process.cwd(), 'prisma/migrations/20261010000100_crm_lifecycle_warning_indexes/migration.sql');
+const warningIndexMigration = existsSync(warningIndexMigrationPath) ? readFileSync(warningIndexMigrationPath, 'utf8') : '';
 const modelBlock = (name: string) => schema.match(new RegExp(`^model ${name} \\{([\\s\\S]*?)^\\}`, 'm'))?.[1] ?? '';
 
 type Equal<Actual, Expected> = (<T>() => T extends Actual ? 1 : 2) extends
@@ -28,7 +30,9 @@ describe('CRM lifecycle migration', () => {
     expect(leadModel).toMatch(/^\s*discardedAt\s+DateTime\?\s*$/m);
     expect(leadModel).toMatch(/^\s*@@index\(\[stage, stageEnteredAt\]\)\s*$/m);
     expect(leadModel).toMatch(/^\s*@@index\(\[discardedAt\]\)\s*$/m);
+    expect(leadModel).toMatch(/^\s*@@index\(\[postFollowUpAt, id\]\)\s*$/m);
     expect(followUpModel).toMatch(/^\s*returnStage\s+LeadStage\?\s*$/m);
+    expect(followUpModel).toMatch(/^\s*@@index\(\[leadId, state, completedAt, id\]\)\s*$/m);
   });
 
   test('adds the fields and indexes without rewriting existing CRM records', () => {
@@ -51,5 +55,12 @@ describe('CRM lifecycle migration', () => {
     expect(backfill).toContain('"StageHistory"."leadId" = "Lead"."id"');
     expect(backfill).toContain('WHERE EXISTS');
     expect(migration).toMatch(/ADD COLUMN "discardedAt" TIMESTAMP\(3\)(?! NOT NULL| DEFAULT)/);
+  });
+
+  test('adds deadline-ordering and completed-origin lookup indexes in a new additive migration', () => {
+    expect(warningIndexMigration).toContain('CREATE INDEX "Lead_postFollowUpAt_id_idx" ON "Lead"("postFollowUpAt", "id")');
+    expect(warningIndexMigration).toContain('CREATE INDEX "FollowUp_leadId_state_completedAt_id_idx" ON "FollowUp"("leadId", "state", "completedAt", "id")');
+    expect(warningIndexMigration).not.toMatch(/\b(DELETE|DROP)\b/i);
+    expect(warningIndexMigration).not.toMatch(/ALTER TABLE/i);
   });
 });
