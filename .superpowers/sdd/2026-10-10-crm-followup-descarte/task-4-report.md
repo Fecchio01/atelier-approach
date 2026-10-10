@@ -57,3 +57,41 @@ Exit status: 0. `git diff --check` was clean. The temporary `vitest.lifecycle.co
 ## Coverage notes
 
 The DB-free tests cover due follow-up with exact due time/origin/latest actor, team-owner fallback, excluded stages, stale pending follow-up cancellation, five-day discard boundary, seven-day purge boundary, null/young retention preservation, a manual-move compare-and-set race, concurrent/repeated invocation idempotency, active cooldown, missing/incorrect cron credentials, and count-only authorized output.
+
+## Review fix round
+
+Added a pure `isCronAuthExemptPath` path predicate used by middleware. It exempts only the exact `/api/cron/crm-lifecycle` path; the cron route still enforces its bearer `CRON_SECRET`. Other API paths, trailing slashes, and descendants remain subject to normal Auth.js middleware. Split post-follow-up expiry eligibility from follow-up scheduling eligibility: five-day expiry now also processes `FOLLOW_UP` (including legacy completions that preserve that stage) and `NO_RESPONSE`, while the two-day follow-up selector still excludes both and excludes `WON`/`DISCARDED`.
+
+### RED
+
+Added a processor regression for legacy `FOLLOW_UP` and `NO_RESPONSE` timers plus exact-path middleware predicate assertions, then ran:
+
+```text
+npm test -- --config vitest.lifecycle.config.ts
+```
+
+The processor regression expected 2 discards but got 0; the cron test suite also could not resolve the not-yet-created path predicate module. Both exposed the missing behavior.
+
+### GREEN
+
+After implementing the exact-path bypass and separate expiry stage set, the focused DB-free run passed:
+
+```text
+npm test -- --config vitest.lifecycle.config.ts
+```
+
+```text
+✓ tests/unit/crm-lifecycle-cron.test.ts (4 tests) 9ms
+✓ tests/unit/lead-lifecycle-processor.test.ts (8 tests) 9ms
+
+Test Files  2 passed (2)
+Tests  12 passed (12)
+```
+
+```text
+npm run typecheck
+> atelier-approach@0.1.0 typecheck
+> tsc --noEmit --incremental false
+```
+
+Typecheck exited 0 and `git diff --check` was clean. Tests continued to use the temporary config with no global setup; no DB access or deployment occurred.

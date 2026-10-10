@@ -3,6 +3,7 @@ import { getFollowUpDueAt, isPurgeEligible, type LifecycleProcessingResult } fro
 
 const teamOwnerId = '__team__';
 const activeStages = ['NEW', 'CONTACTED', 'INTEREST', 'IN_CONVERSATION', 'QUALIFIED', 'PROPOSAL', 'MEETING'] as const;
+const postFollowUpExpiryStages = [...activeStages, 'FOLLOW_UP', 'NO_RESPONSE'] as const;
 const systemNote = 'Atualização automática por inatividade.';
 
 type LifecycleLead = {
@@ -61,7 +62,7 @@ export async function processLeadLifecycle(database: LifecycleDatabase, now: Dat
   let discardedForInactivity = 0;
 
   const discardCandidates = await database.lead.findMany({
-    where: { stage: { in: activeStages }, postFollowUpAt: { lte: discardCutoff } },
+    where: { stage: { in: postFollowUpExpiryStages }, postFollowUpAt: { lte: discardCutoff } },
     select: { id: true, stage: true, stageEnteredAt: true, postFollowUpAt: true, discardedAt: true }
   });
   for (const candidate of discardCandidates) {

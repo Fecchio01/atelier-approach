@@ -111,6 +111,17 @@ describe('lead lifecycle processor without database', () => {
     expect(fixture.histories[0]).toMatchObject({ fromStage: 'INTEREST', toStage: 'DISCARDED', actorId: '__team__' });
   });
 
+  test('expires legacy FOLLOW_UP and NO_RESPONSE post-follow-up timers without auto-scheduling them', async () => {
+    const fixture = makeDatabase({ leads: [
+      { id: 'legacy-follow-up', stage: 'FOLLOW_UP', stageEnteredAt: at('2026-09-05T10:00:00Z'), postFollowUpAt: at('2026-09-05T10:00:00Z'), discardedAt: null },
+      { id: 'no-response-after-follow-up', stage: 'NO_RESPONSE', stageEnteredAt: at('2026-09-05T10:00:00Z'), postFollowUpAt: at('2026-09-05T10:00:00Z'), discardedAt: null }
+    ] });
+
+    await expect(processLeadLifecycle(fixture.db, now)).resolves.toEqual({ movedToFollowUp: 0, discardedForInactivity: 2, permanentlyDeleted: 0 });
+    expect(fixture.leads.map(({ stage }) => stage)).toEqual(['DISCARDED', 'DISCARDED']);
+    expect(fixture.followUps).toHaveLength(0);
+  });
+
   test('preserves null/young discarded dates and purges only at seven days', async () => {
     const fixture = makeDatabase({ leads: [
       { id: 'legacy-null', stage: 'DISCARDED', stageEnteredAt: at('2020-01-01T00:00:00Z'), postFollowUpAt: null, discardedAt: null },
