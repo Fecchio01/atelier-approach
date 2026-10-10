@@ -264,10 +264,10 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
           <p className="text-sm text-white/60">Negócio ganho. Venda: {currency.format(Number(lead.saleValue ?? 0))}. MRR: {currency.format(Number(lead.mrr ?? 0))}. Você pode corrigir os valores manualmente.</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="grid min-w-0 gap-1 text-xs text-white/55">Valor da venda
-              <input aria-label="Valor da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? lead.saleValue ?? ''} onChange={(event) => { setFinancialsSaved(false); setSaleValues({ ...saleValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
+              <input aria-label="Valor da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? lead.saleValue ?? ''} onChange={(event) => { setFinancialsSaved(false); setSaleValues({ ...saleValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-[var(--atelier-surface-raised)] px-2 text-sm text-white outline-none focus:border-[var(--atelier-green)]" />
             </label>
             <label className="grid min-w-0 gap-1 text-xs text-white/55">MRR
-              <input aria-label="MRR" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? lead.mrr ?? ''} onChange={(event) => { setFinancialsSaved(false); setMrrValues({ ...mrrValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
+              <input aria-label="MRR" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? lead.mrr ?? ''} onChange={(event) => { setFinancialsSaved(false); setMrrValues({ ...mrrValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-[var(--atelier-surface-raised)] px-2 text-sm text-white outline-none focus:border-[var(--atelier-green)]" />
             </label>
           </div>
           <button type="button" disabled={savingId === lead.id} onClick={() => saveFinancials(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">{savingId === lead.id ? 'Salvando valores…' : 'Salvar valores da venda'}</button>
@@ -304,10 +304,10 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
               <p className="text-sm text-white/60">Informe os valores acordados. Esses números serão registrados diretamente na venda.</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid min-w-0 gap-1 text-xs text-white/55">Valor da venda
-                  <input aria-label="Valor manual da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? ''} onChange={(event) => setSaleValues({ ...saleValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
+                  <input aria-label="Valor manual da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? ''} onChange={(event) => setSaleValues({ ...saleValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-[var(--atelier-surface-raised)] px-2 text-sm text-white outline-none focus:border-[var(--atelier-green)]" />
                 </label>
                 <label className="grid min-w-0 gap-1 text-xs text-white/55">MRR
-                  <input aria-label="MRR manual" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? ''} onChange={(event) => setMrrValues({ ...mrrValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
+                  <input aria-label="MRR manual" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? ''} onChange={(event) => setMrrValues({ ...mrrValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-[var(--atelier-surface-raised)] px-2 text-sm text-white outline-none focus:border-[var(--atelier-green)]" />
                 </label>
               </div>
               {invalidManualValues ? <p role="alert" className="text-sm text-red-200">Informe valores válidos, com até duas casas decimais.</p> : null}
