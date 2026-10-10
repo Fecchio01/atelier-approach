@@ -60,27 +60,33 @@ enum ServiceBillingType {
 }
 
 model Lead {
-  id           String         @id @default(cuid())
-  osmId        String         @unique
-  name         String?
-  phone        String?
-  website      String?
-  instagram    String?
-  whatsapp     String?
-  address      String?
-  category     String?
-  latitude     Float?
-  longitude    Float?
-  syncedAt     DateTime?
-  stage        LeadStage      @default(CONTACTED)
-  saleValue    Decimal?
-  mrr          Decimal?
-  wonAt        DateTime?
-  wonById      String?
-  activities   Activity[]
-  followUps    FollowUp[]
-  stageHistory StageHistory[]
-  saleEvents   SaleEvent[]
+  id             String         @id @default(cuid())
+  osmId          String         @unique
+  name           String?
+  phone          String?
+  website        String?
+  instagram      String?
+  whatsapp       String?
+  address        String?
+  category       String?
+  latitude       Float?
+  longitude      Float?
+  syncedAt       DateTime?
+  stage          LeadStage      @default(CONTACTED)
+  stageEnteredAt DateTime       @default(now())
+  postFollowUpAt DateTime?
+  discardedAt    DateTime?
+  saleValue      Decimal?
+  mrr            Decimal?
+  wonAt          DateTime?
+  wonById        String?
+  activities     Activity[]
+  followUps      FollowUp[]
+  stageHistory   StageHistory[]
+  saleEvents     SaleEvent[]
+
+  @@index([stage, stageEnteredAt])
+  @@index([discardedAt])
 }
 
 model Activity {
@@ -172,6 +178,7 @@ model FollowUp {
   completedById String?
   cancelledAt   DateTime?
   cancelledById String?
+  returnStage   LeadStage?
   lead          Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId])
@@ -216,14 +223,14 @@ model DailyReport {
 }
 
 model MetricImportBatch {
-  id          String             @id @default(cuid())
+  id          String            @id @default(cuid())
   ownerId     String
   actorId     String
   fileName    String
   contentHash String
   periodStart DateTime
   periodEnd   DateTime
-  createdAt   DateTime           @default(now())
+  createdAt   DateTime          @default(now())
   rows        MetricImportRow[]
 
   @@unique([ownerId, contentHash, periodStart, periodEnd])
