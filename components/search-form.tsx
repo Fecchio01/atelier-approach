@@ -28,7 +28,7 @@ export type SearchFilters = {
 };
 
 export const DEFAULT_SEARCH_FILTERS: SearchFilters = {
-  niche: 'estética automotiva', businessName: '', country: 'BR', region: '', city: '', includeWorked: false
+  niche: '', businessName: '', country: 'BR', region: '', city: '', includeWorked: false
 };
 const REGIONS = [
   { value: 'Acre, AC', label: 'Acre' },

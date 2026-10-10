@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { expect, test } from 'vitest';
+import { DEFAULT_SEARCH_FILTERS } from '../../components/search-form';
 
 test('offers Brazil as a country and derives national search without a radius', () => {
   const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
@@ -22,10 +23,10 @@ test('submits the actual selected form values so restored browser selections are
   expect(formSource).toContain("const isNational = country === 'BR' && !region;");
 });
 
-test('starts with the current niche but lets the user edit it', () => {
+test('starts with no niche selected and lets the user enter one', () => {
   const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
 
-  expect(formSource).toContain("niche: 'estética automotiva'");
+  expect(DEFAULT_SEARCH_FILTERS.niche).toBe('');
   expect(formSource).toContain('name="niche"');
   expect(formSource).not.toContain('readOnly value={FIXED_NICHE}');
   expect(formSource).toContain('Cidade (opcional)');
