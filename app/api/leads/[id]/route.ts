@@ -3,6 +3,7 @@ import { ActivityType, Channel, FollowUpState, LeadStage, Prisma } from '@prisma
 import { getCurrentUser } from '../../../../lib/auth';
 import { getFollowUpDelayDays } from '../../../../lib/commercial-settings';
 import { prisma } from '../../../../lib/db';
+import { getStageLifecycleUpdate, isPostFollowUpCooldownActive } from '../../../../lib/lead-lifecycle';
 import { getFollowUpDueDate } from '../../../../lib/follow-up-scheduling';
 import { priceInCents, summarizeServiceItems } from '../../../../lib/service-sales';
 
@@ -151,12 +152,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const lead = await tx.lead.findUnique({ where: { id } });
     if (!lead) throw new Error('LEAD_NOT_FOUND');
     if (stage === 'WON' && lead.stage === 'WON') throw new Error('ALREADY_WON');
+    const now = new Date();
+    if (stage === 'FOLLOW_UP' && stage !== lead.stage && isPostFollowUpCooldownActive(lead.postFollowUpAt, now)) {
+      throw new Error('POST_FOLLOW_UP_COOLDOWN');
+    }
     if (hasFinancials && stage !== 'WON' && (lead.stage !== 'WON' || stage)) throw new Error('FINANCIALS_REQUIRE_WON');
     let updated = lead;
 
     if (stage && stage !== lead.stage) {
-      const now = new Date();
-      const leadData: Prisma.LeadUpdateInput = { stage };
+      const leadData: Prisma.LeadUpdateInput = { stage, ...getStageLifecycleUpdate(stage, now) };
       let selectedServices: { id: string; name: string; price: Prisma.Decimal; billingType: 'ONE_TIME' | 'MONTHLY' }[] = [];
       if (stage === 'WON') {
         if (serviceSelection?.length) {
@@ -255,14 +259,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     if (stage === 'FOLLOW_UP' && stage !== lead.stage && !followUpAction) {
-      const now = new Date();
       const delayDays = await getFollowUpDelayDays(tx);
       const scheduledDueDate = getFollowUpDueDate(now, delayDays);
       await tx.followUp.updateMany({
         where: { leadId: id, state: 'PENDING' },
         data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id }
       });
-      await tx.followUp.create({ data: { leadId: id, dueDate: scheduledDueDate, ownerId: user.id, note: 'Retorno agendado pelo CRM.' } });
+      await tx.followUp.create({ data: { leadId: id, dueDate: scheduledDueDate, ownerId: user.id, returnStage: lead.stage, note: 'Retorno agendado pelo CRM.' } });
       await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'FOLLOW_UP_SCHEDULED', note: 'Follow-up agendado.' } });
     }
 
@@ -270,15 +273,28 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const followUp = await tx.followUp.findFirst({ where: { id: followUpId, leadId: id } });
       if (!followUp) throw new Error('FOLLOW_UP_NOT_FOUND');
       if (followUp.state !== FollowUpState.PENDING) throw new Error('FOLLOW_UP_NOT_PENDING');
-      const now = new Date();
       if (followUpAction === 'COMPLETE') {
         await tx.followUp.update({ where: { id: followUpId }, data: { state: 'COMPLETED', completedAt: now, completedById: user.id } });
+        const returnStage = followUp.returnStage;
+        const restoredStage = returnStage ?? lead.stage;
+        updated = await tx.lead.update({
+          where: { id },
+          data: {
+            ...(returnStage ? { stage: returnStage } : {}),
+            stageEnteredAt: now,
+            postFollowUpAt: now,
+            ...(returnStage && returnStage !== 'DISCARDED' ? { discardedAt: null } : {})
+          }
+        });
+        if (returnStage && restoredStage !== lead.stage) {
+          await tx.stageHistory.create({ data: { leadId: id, actorId: user.id, fromStage: lead.stage, toStage: returnStage } });
+        }
         await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'FOLLOW_UP_COMPLETED', note: 'Follow-up concluído.' } });
       } else {
         await tx.followUp.update({ where: { id: followUpId }, data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id } });
         await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'FOLLOW_UP_CANCELLED', note: followUpAction === 'RESCHEDULE' ? 'Follow-up reagendado.' : 'Follow-up cancelado.' } });
         if (followUpAction === 'RESCHEDULE' && dueDate) {
-          await tx.followUp.create({ data: { leadId: id, dueDate, ownerId: user.id, note: 'Retorno reagendado pelo CRM.' } });
+          await tx.followUp.create({ data: { leadId: id, dueDate, ownerId: user.id, returnStage: followUp.returnStage, note: 'Retorno reagendado pelo CRM.' } });
           await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'FOLLOW_UP_SCHEDULED', note: 'Novo follow-up agendado.' } });
         }
       }
@@ -289,7 +305,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return updated;
   }).catch((error: unknown) => {
-    if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'FINANCIALS_REQUIRE_WON', 'INVALID_SERVICE_SELECTION'].includes(error.message)) return error.message;
+    if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'FINANCIALS_REQUIRE_WON', 'INVALID_SERVICE_SELECTION', 'POST_FOLLOW_UP_COOLDOWN'].includes(error.message)) return error.message;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_FOUND') return null;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_PENDING') return false;
     throw error;
@@ -299,6 +315,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (updatedLead === 'ALREADY_WON') return Response.json({ error: 'Este lead já está marcado como ganho. Reabra-o antes de registrar uma nova venda.' }, { status: 409 });
   if (updatedLead === 'FINANCIALS_REQUIRE_WON') return Response.json({ error: 'Os valores financeiros só podem ser alterados em um negócio ganho.' }, { status: 400 });
   if (updatedLead === 'INVALID_SERVICE_SELECTION') return Response.json({ error: 'Um ou mais serviços não existem ou estão arquivados. Nenhuma alteração foi salva.' }, { status: 400 });
+  if (updatedLead === 'POST_FOLLOW_UP_COOLDOWN') return Response.json({ error: 'Aguarde o encerramento do prazo pós-follow-up antes de agendar outro retorno.' }, { status: 409 });
   if (updatedLead === null) return Response.json({ error: 'Follow-up não encontrado para este lead.' }, { status: 404 });
   if (updatedLead === false) return Response.json({ error: 'Este follow-up já foi encerrado.' }, { status: 409 });
   return Response.json({ lead: updatedLead });

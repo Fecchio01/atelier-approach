@@ -652,3 +652,190 @@ describe('sale financial contract without database', () => {
     expect(sales).toHaveLength(0);
   });
 });
+
+describe('lifecycle transition contract without database', () => {
+  type LifecycleLead = {
+    id: string;
+    stage: string;
+    stageEnteredAt: Date;
+    postFollowUpAt: Date | null;
+    discardedAt: Date | null;
+    saleValue: number | null;
+    mrr: number | null;
+    wonAt: Date | null;
+    wonById: string | null;
+  };
+  type LifecycleFollowUp = {
+    id: string;
+    leadId: string;
+    ownerId: string;
+    dueDate: Date;
+    state: string;
+    returnStage: string | null;
+    note: string;
+    completedAt: Date | null;
+    completedById: string | null;
+    cancelledAt: Date | null;
+    cancelledById: string | null;
+  };
+
+  let lead: LifecycleLead;
+  let followUps: LifecycleFollowUp[];
+  let activities: { type: string; note: string }[];
+  let stageHistory: { fromStage: string; toStage: string }[];
+  let creates: unknown[];
+  let updates: Partial<LifecycleLead>[];
+
+  beforeEach(() => {
+    mocks.getCurrentUser.mockResolvedValue({ id: 'lifecycle-user' });
+    lead = {
+      id: 'lifecycle-lead',
+      stage: 'INTEREST',
+      stageEnteredAt: new Date('2026-09-01T10:00:00Z'),
+      postFollowUpAt: null,
+      discardedAt: null,
+      saleValue: null,
+      mrr: null,
+      wonAt: null,
+      wonById: null
+    };
+    followUps = [];
+    activities = [];
+    stageHistory = [];
+    creates = [];
+    updates = [];
+
+    const tx = {
+      $queryRaw: async () => [{ id: lead.id }],
+      lead: {
+        findUnique: async () => ({ ...lead }),
+        update: async ({ data }: { data: Partial<LifecycleLead> }) => {
+          updates.push(data);
+          Object.assign(lead, data);
+          return { ...lead };
+        }
+      },
+      followUp: {
+        updateMany: async ({ where, data }: { where: { state: string }; data: Partial<LifecycleFollowUp> }) => {
+          followUps.filter((item) => item.state === where.state).forEach((item) => Object.assign(item, data));
+          return { count: 0 };
+        },
+        create: async ({ data }: { data: Pick<LifecycleFollowUp, 'leadId' | 'ownerId' | 'dueDate' | 'note'> & { returnStage: string | null } }) => {
+          creates.push(data);
+          const created = { id: `follow-up-${followUps.length + 1}`, ...data, state: 'PENDING', completedAt: null, completedById: null, cancelledAt: null, cancelledById: null };
+          followUps.push(created);
+          return created;
+        },
+        findFirst: async ({ where }: { where: { id: string; leadId: string } }) => followUps.find((item) => item.id === where.id && item.leadId === where.leadId) ?? null,
+        update: async ({ where, data }: { where: { id: string }; data: Partial<LifecycleFollowUp> }) => {
+          const found = followUps.find((item) => item.id === where.id)!;
+          Object.assign(found, data);
+          return found;
+        }
+      },
+      crmSettings: { findUnique: async () => ({ followUpDelayDays: 2 }) },
+      stageHistory: { create: async ({ data }: { data: { fromStage: string; toStage: string } }) => { stageHistory.push(data); return data; } },
+      activity: { create: async ({ data }: { data: { type: string; note: string } }) => { activities.push(data); return data; } },
+      saleEvent: { findFirst: async () => null, update: async () => null, create: async () => null },
+      serviceCatalogItem: { findMany: async () => [] }
+    };
+    vi.spyOn(prisma, '$transaction').mockImplementation((async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)) as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  async function patch(data: Record<string, unknown>) {
+    return PATCH(new Request('http://localhost/api/leads/lifecycle-lead', {
+      method: 'PATCH', body: JSON.stringify(data)
+    }), { params: Promise.resolve({ id: lead.id }) });
+  }
+
+  test('stores the exact origin stage on a newly scheduled follow-up', async () => {
+    const now = new Date('2026-09-10T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    expect((await patch({ stage: 'FOLLOW_UP' })).status).toBe(200);
+    expect(lead).toMatchObject({ stage: 'FOLLOW_UP', stageEnteredAt: now });
+    expect(creates).toEqual([expect.objectContaining({ returnStage: 'INTEREST', dueDate: new Date('2026-09-12T10:00:00Z') })]);
+    expect(stageHistory.map(({ fromStage, toStage }) => [fromStage, toStage])).toEqual([['INTEREST', 'FOLLOW_UP']]);
+  });
+
+  test('completes a follow-up and atomically restores its origin stage and starts the timer', async () => {
+    const now = new Date('2026-09-10T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    lead.stage = 'FOLLOW_UP';
+    followUps.push({ id: 'follow-up-1', leadId: lead.id, ownerId: 'lifecycle-user', dueDate: new Date('2026-09-08T10:00:00Z'), state: 'PENDING', returnStage: 'INTEREST', note: 'Retornar.', completedAt: null, completedById: null, cancelledAt: null, cancelledById: null });
+
+    expect((await patch({ followUpAction: 'COMPLETE', followUpId: 'follow-up-1' })).status).toBe(200);
+    expect(lead).toMatchObject({ stage: 'INTEREST', stageEnteredAt: now, postFollowUpAt: now });
+    expect(followUps[0]).toMatchObject({ state: 'COMPLETED', completedAt: now, completedById: 'lifecycle-user' });
+    expect(stageHistory.map(({ fromStage, toStage }) => [fromStage, toStage])).toEqual([['FOLLOW_UP', 'INTEREST']]);
+    expect(activities.map(({ type }) => type)).toEqual(['FOLLOW_UP_COMPLETED']);
+  });
+
+  test('preserves the current stage for a legacy follow-up with no return stage', async () => {
+    const now = new Date('2026-09-10T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    lead.stage = 'FOLLOW_UP';
+    followUps.push({ id: 'follow-up-legacy', leadId: lead.id, ownerId: 'lifecycle-user', dueDate: new Date('2026-09-08T10:00:00Z'), state: 'PENDING', returnStage: null, note: 'Legado.', completedAt: null, completedById: null, cancelledAt: null, cancelledById: null });
+
+    expect((await patch({ followUpAction: 'COMPLETE', followUpId: 'follow-up-legacy' })).status).toBe(200);
+    expect(lead).toMatchObject({ stage: 'FOLLOW_UP', stageEnteredAt: now, postFollowUpAt: now });
+    expect(stageHistory).toHaveLength(0);
+    expect(activities.map(({ type }) => type)).toEqual(['FOLLOW_UP_COMPLETED']);
+  });
+
+  test('resets the stage timer and clears the post-follow-up timer on a manual advance', async () => {
+    const now = new Date('2026-09-10T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    lead.postFollowUpAt = new Date('2026-09-09T10:00:00Z');
+
+    expect((await patch({ stage: 'PROPOSAL' })).status).toBe(200);
+    expect(lead).toMatchObject({ stage: 'PROPOSAL', stageEnteredAt: now, postFollowUpAt: null, discardedAt: null });
+  });
+
+  test('sets discard time for manual discard and clears it when manually reopened', async () => {
+    const now = new Date('2026-09-10T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    expect((await patch({ stage: 'DISCARDED' })).status).toBe(200);
+    expect(lead).toMatchObject({ stage: 'DISCARDED', stageEnteredAt: now, discardedAt: now });
+    expect((await patch({ stage: 'CONTACTED' })).status).toBe(200);
+    expect(lead).toMatchObject({ stage: 'CONTACTED', stageEnteredAt: now, discardedAt: null });
+  });
+
+  test('does not create a second follow-up during the five-day post-completion timer', async () => {
+    const now = new Date('2026-09-10T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    lead.postFollowUpAt = new Date('2026-09-07T10:00:00Z');
+
+    const response = await patch({ stage: 'FOLLOW_UP' });
+    expect(response.status).toBe(409);
+    expect(creates).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(stageHistory).toHaveLength(0);
+    expect(activities).toHaveLength(0);
+  });
+
+  test('duplicate completion cannot add a second completion activity', async () => {
+    const now = new Date('2026-09-10T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    lead.stage = 'FOLLOW_UP';
+    followUps.push({ id: 'follow-up-once', leadId: lead.id, ownerId: 'lifecycle-user', dueDate: now, state: 'PENDING', returnStage: 'INTEREST', note: 'Uma vez.', completedAt: null, completedById: null, cancelledAt: null, cancelledById: null });
+
+    expect((await patch({ followUpAction: 'COMPLETE', followUpId: 'follow-up-once' })).status).toBe(200);
+    expect((await patch({ followUpAction: 'COMPLETE', followUpId: 'follow-up-once' })).status).toBe(409);
+    expect(activities.filter(({ type }) => type === 'FOLLOW_UP_COMPLETED')).toHaveLength(1);
+    expect(stageHistory).toHaveLength(1);
+  });
+});

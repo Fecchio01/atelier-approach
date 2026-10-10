@@ -8,6 +8,29 @@ export type LifecycleProcessingResult = {
   permanentlyDeleted: number;
 };
 
+export function getStageLifecycleUpdate(stage: string, enteredAt: Date): {
+  stageEnteredAt: Date;
+  postFollowUpAt: null;
+  discardedAt: Date | null;
+} {
+  if (!Number.isFinite(enteredAt.valueOf())) {
+    throw new RangeError('A data de entrada na etapa deve ser válida.');
+  }
+  return {
+    stageEnteredAt: enteredAt,
+    postFollowUpAt: null,
+    discardedAt: stage === 'DISCARDED' ? enteredAt : null
+  };
+}
+
+export function isPostFollowUpCooldownActive(postFollowUpAt: Date | null, now: Date): boolean {
+  if (postFollowUpAt === null) return false;
+  if (!Number.isFinite(now.valueOf())) {
+    throw new RangeError('A data atual deve ser válida.');
+  }
+  return now.valueOf() < getPostFollowUpDiscardAt(postFollowUpAt).valueOf();
+}
+
 export function getFollowUpDueAt(stageEnteredAt: Date, delayDays: number): Date {
   const enteredAtMs = stageEnteredAt.valueOf();
   if (!Number.isFinite(enteredAtMs) || !Number.isInteger(delayDays) || delayDays <= 0) {

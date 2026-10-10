@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { afterEach, beforeAll, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // Authentication is the only boundary replaced: transactions, row locks,
 // reads, writes and snapshots all execute against the isolated PostgreSQL DB.
@@ -7,6 +7,7 @@ vi.mock('../../lib/auth', () => ({ getCurrentUser: async () => ({ id: 'concurren
 import { PATCH } from '../../app/api/leads/[id]/route';
 import { prisma } from '../../lib/db';
 
+describe('PostgreSQL sale row-lock concurrency', () => {
 const leadIds: string[] = [];
 const serviceIds: string[] = [];
 beforeAll(async () => {
@@ -121,4 +122,67 @@ test.each(['CONTACTED', 'WON'] as const)('concurrent close/reopen from %s yields
     expect(result).toMatchObject({ saleValue: null, mrr: null, wonAt: null, wonById: null });
   }
   assertSnapshots(result, data);
+});
+});
+
+describe('concurrent follow-up completion without database', () => {
+  let lead: { id: string; stage: string; stageEnteredAt: Date; postFollowUpAt: Date | null; discardedAt: Date | null };
+  let followUp: { id: string; leadId: string; ownerId: string; dueDate: Date; state: string; returnStage: string | null; note: string; completedAt: Date | null; completedById: string | null };
+  let activities: { type: string; note: string }[];
+  let transitions: { fromStage: string; toStage: string }[];
+  let lockCalls: number;
+  let lockQueue: Promise<void>;
+
+  beforeEach(() => {
+    lead = { id: 'completion-race-lead', stage: 'FOLLOW_UP', stageEnteredAt: new Date('2026-09-01T10:00:00Z'), postFollowUpAt: null, discardedAt: null };
+    followUp = { id: 'completion-race-follow-up', leadId: lead.id, ownerId: 'concurrency-member', dueDate: new Date('2026-09-02T10:00:00Z'), state: 'PENDING', returnStage: 'CONTACTED', note: 'Retornar.', completedAt: null, completedById: null };
+    activities = [];
+    transitions = [];
+    lockCalls = 0;
+    lockQueue = Promise.resolve();
+
+    vi.spyOn(prisma, '$transaction').mockImplementation((async (callback: (client: object) => Promise<unknown>) => {
+      let releaseLock = () => {};
+      const tx = {
+        $queryRaw: async () => {
+          lockCalls += 1;
+          const previous = lockQueue;
+          lockQueue = new Promise<void>((resolve) => { releaseLock = resolve; });
+          await previous;
+          return [{ id: lead.id }];
+        },
+        lead: {
+          findUnique: async () => ({ ...lead }),
+          update: async ({ data }: { data: Partial<typeof lead> }) => { Object.assign(lead, data); return { ...lead }; }
+        },
+        followUp: {
+          findFirst: async ({ where }: { where: { id: string; leadId: string } }) => where.id === followUp.id && where.leadId === followUp.leadId ? { ...followUp } : null,
+          update: async ({ data }: { data: Partial<typeof followUp> }) => { Object.assign(followUp, data); return { ...followUp }; }
+        },
+        stageHistory: { create: async ({ data }: { data: { fromStage: string; toStage: string } }) => { transitions.push(data); return data; } },
+        activity: { create: async ({ data }: { data: { type: string; note: string } }) => { activities.push(data); return data; } }
+      };
+      try {
+        return await callback(tx);
+      } finally {
+        releaseLock();
+      }
+    }) as never);
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  test('serializes duplicate completion so only one completion activity and return transition are recorded', async () => {
+    const patch = () => PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ followUpAction: 'COMPLETE', followUpId: followUp.id })
+    }), { params: Promise.resolve({ id: lead.id }) });
+
+    const responses = await Promise.all([patch(), patch()]);
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 409]);
+    expect(lockCalls).toBe(2);
+    expect(lead).toMatchObject({ stage: 'CONTACTED', postFollowUpAt: expect.any(Date) });
+    expect(followUp.state).toBe('COMPLETED');
+    expect(activities.filter(({ type }) => type === 'FOLLOW_UP_COMPLETED')).toHaveLength(1);
+    expect(transitions.map(({ fromStage, toStage }) => [fromStage, toStage])).toEqual([['FOLLOW_UP', 'CONTACTED']]);
+  });
 });
