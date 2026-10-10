@@ -2,7 +2,6 @@ import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 
 import authConfig from '@/lib/auth-config';
-import { isCronAuthExemptPath } from '@/lib/middleware-paths';
 
 const { auth } = NextAuth(authConfig);
 
@@ -11,9 +10,8 @@ export default auth((request) => {
   const isRequiredAuthEndpoint =
     pathname === '/api/auth/csrf' || pathname === '/api/auth/callback/credentials';
   const isPublicBrandAsset = pathname.startsWith('/brand/');
-  const isLifecycleCron = isCronAuthExemptPath(pathname);
 
-  if (pathname === '/login' || isRequiredAuthEndpoint || isPublicBrandAsset || isLifecycleCron) {
+  if (pathname === '/login' || isRequiredAuthEndpoint || isPublicBrandAsset) {
     return NextResponse.next();
   }
 

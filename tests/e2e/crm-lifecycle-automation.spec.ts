@@ -8,7 +8,6 @@ import { e2eCredentials } from './credentials';
 const dayMs = 24 * 60 * 60 * 1000;
 const activeStages = ['NEW', 'CONTACTED', 'INTEREST', 'IN_CONVERSATION', 'QUALIFIED', 'PROPOSAL', 'MEETING'] as const;
 const discardStages = [...activeStages, 'FOLLOW_UP', 'NO_RESPONSE'] as const;
-const cronSecret = 'crm-lifecycle-e2e-cron-secret';
 
 function testDatabaseUrl() {
   const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -26,7 +25,7 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/$/, { timeout: 20_000 });
 }
 
-async function assertCronCandidatesAreFixtureScoped(database: PrismaClient, fixtureIds: string[]) {
+async function assertPageRequestCandidatesAreFixtureScoped(database: PrismaClient, fixtureIds: string[]) {
   const now = new Date();
   const settings = await database.crmSettings.findUnique({ where: { id: 'team' }, select: { followUpDelayDays: true } });
   const delayDays = settings?.followUpDelayDays ?? 2;
@@ -50,16 +49,7 @@ async function assertCronCandidatesAreFixtureScoped(database: PrismaClient, fixt
   ]);
   const allowed = new Set(fixtureIds);
   const outOfScope = [...due, ...expired, ...purge].map(({ id }) => id).filter((id) => !allowed.has(id));
-  expect(outOfScope, 'Cron would mutate non-fixture leads in atelier_test').toEqual([]);
-}
-
-async function runProtectedCron(page: Page, database: PrismaClient, fixtureIds: string[]) {
-  await assertCronCandidatesAreFixtureScoped(database, fixtureIds);
-  const response = await page.request.get('/api/cron/crm-lifecycle', {
-    headers: { authorization: `Bearer ${cronSecret}` }
-  });
-  expect(response.status()).toBe(200);
-  return response.json() as Promise<{ movedToFollowUp: number; discardedForInactivity: number; permanentlyDeleted: number }>;
+  expect(outOfScope, 'CRM page load would mutate non-fixture leads in atelier_test').toEqual([]);
 }
 
 test('runs a complete CRM lead lifecycle with only scoped atelier_test fixtures', async ({ page }) => {
@@ -70,7 +60,7 @@ test('runs a complete CRM lead lifecycle with only scoped atelier_test fixtures'
   const leadName = `Ciclo CRM E2E ${suffix}`;
 
   try {
-    await assertCronCandidatesAreFixtureScoped(database, fixtureIds);
+    await assertPageRequestCandidatesAreFixtureScoped(database, fixtureIds);
     await signIn(page);
 
     const settings = await database.crmSettings.findUnique({ where: { id: 'team' }, select: { followUpDelayDays: true } });
@@ -84,14 +74,11 @@ test('runs a complete CRM lead lifecycle with only scoped atelier_test fixtures'
     });
     fixtureIds.push(dueLead.id);
 
-    const unauthorizedCron = await page.request.get('/api/cron/crm-lifecycle');
-    expect(unauthorizedCron.status()).toBe(401);
-    const scheduled = await runProtectedCron(page, database, fixtureIds);
-    expect(scheduled.movedToFollowUp).toBeGreaterThanOrEqual(1);
+    await assertPageRequestCandidatesAreFixtureScoped(database, fixtureIds);
+    await page.goto(`/crm?lead=${encodeURIComponent(dueLead.id)}`);
     const followUpLead = await database.lead.findUnique({ where: { id: dueLead.id }, select: { stage: true, followUps: { select: { state: true, returnStage: true } } } });
     expect(followUpLead).toMatchObject({ stage: 'FOLLOW_UP', followUps: [{ state: 'PENDING', returnStage: 'CONTACTED' }] });
 
-    await page.goto(`/crm?lead=${encodeURIComponent(dueLead.id)}`);
     const detail = page.getByRole('dialog', { name: leadName });
     await expect(detail).toBeVisible();
     await expect(detail.getByText('Veio de Abordado')).toBeVisible();
@@ -114,14 +101,14 @@ test('runs a complete CRM lead lifecycle with only scoped atelier_test fixtures'
     await expect(page.getByRole('dialog', { name: leadName })).toBeVisible();
 
     await database.lead.update({ where: { id: dueLead.id }, data: { postFollowUpAt: new Date(Date.now() - 5 * dayMs) } });
-    const discarded = await runProtectedCron(page, database, fixtureIds);
-    expect(discarded.discardedForInactivity).toBeGreaterThanOrEqual(1);
+    await assertPageRequestCandidatesAreFixtureScoped(database, fixtureIds);
+    await page.goto('/crm');
     const discardedLead = await database.lead.findUnique({ where: { id: dueLead.id }, select: { stage: true, discardedAt: true, postFollowUpAt: true } });
     expect(discardedLead).toMatchObject({ stage: 'DISCARDED', discardedAt: expect.any(Date), postFollowUpAt: null });
 
     await database.lead.update({ where: { id: dueLead.id }, data: { discardedAt: new Date(Date.now() - 8 * dayMs) } });
-    const purged = await runProtectedCron(page, database, fixtureIds);
-    expect(purged.permanentlyDeleted).toBeGreaterThanOrEqual(1);
+    await assertPageRequestCandidatesAreFixtureScoped(database, fixtureIds);
+    await page.goto('/crm');
     await expect(database.lead.findUnique({ where: { id: dueLead.id }, select: { id: true } })).resolves.toBeNull();
 
     const manualTrashLead = await database.lead.create({

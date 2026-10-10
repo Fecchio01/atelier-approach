@@ -27,6 +27,7 @@ import { getMemberProfiles } from '@/lib/member-profile';
 import { getDashboardTrend } from '@/lib/dashboard-trend';
 import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
 import { getDashboardLifecycleWarnings } from '@/lib/dashboard-lifecycle-warnings';
+import { processCrmLifecycleForPageRequest } from '@/lib/crm-lifecycle-page-request';
 import { addImportedMetricTotals, getImportedMetricTotalsForExactRange } from '@/lib/metric-imports';
 import { getDashboardDataFetchWindow, getGoalPeriodWindow, getLocalDayWindow, selectDashboardWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels } from '@/lib/funnel';
@@ -81,6 +82,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
   const today = getLocalDayWindow(now);
   const fetchWindow = getDashboardDataFetchWindow(now);
+  await processCrmLifecycleForPageRequest(undefined, now);
   const [user, settings, profiles, dailyReport, goals, leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps, lifecycleWarnings] = await Promise.all([
     getCurrentUser(),
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),

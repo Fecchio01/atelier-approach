@@ -3,9 +3,11 @@ import { prisma } from '@/lib/db';
 import { PageHeading } from '@/components/ui';
 import { getFollowUpDelayDays } from '@/lib/commercial-settings';
 import { getCrmBoardLeads } from '@/lib/crm-board';
+import { processCrmLifecycleForPageRequest } from '@/lib/crm-lifecycle-page-request';
 
 export default async function CrmPage({ searchParams }: { searchParams: Promise<{ lead?: string; notice?: string }> }) {
   const { lead: focusedLeadId, notice } = await searchParams;
+  await processCrmLifecycleForPageRequest();
   const [leads, services, followUpDelayDays] = await Promise.all([getCrmBoardLeads(),
   prisma.serviceCatalogItem.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
   getFollowUpDelayDays()]);
