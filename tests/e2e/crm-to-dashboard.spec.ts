@@ -11,6 +11,9 @@ test('shows the complete operational dashboard with branded navigation and funne
 
   await expect(page).toHaveURL('http://127.0.0.1:3001/');
   await expect(page.getByRole('heading', { name: 'Visão operacional' })).toBeVisible();
+  const lifecycleWarnings = page.getByRole('region', { name: 'Atenção aos próximos descartes' });
+  await expect(lifecycleWarnings.getByText('Este aviso é informativo. Leads sem avanço são movidos automaticamente para a lixeira ao fim do prazo.')).toBeVisible();
+  await expect(lifecycleWarnings.getByText('Nenhum lead próximo do descarte automático.')).toBeVisible();
   await expect(page.getByRole('img', { name: 'Marca Atelier Approach' })).toBeVisible();
   await expect(page.getByText('Mais oficinas. Mais negócios.', { exact: true })).toHaveCount(0);
   const primaryNavigation = page.getByRole('navigation', { name: 'Navegação principal' }).first();

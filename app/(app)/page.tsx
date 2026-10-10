@@ -19,12 +19,14 @@ import { DashboardPeriodSelector } from '@/components/dashboard-period-selector'
 import { DailyCloseControl } from '@/components/daily-close-control';
 import { DashboardTrendChart } from '@/components/dashboard-trend-chart';
 import { DashboardMotionArticle, DashboardMotionSection } from '@/components/dashboard-motion-card';
+import { DashboardLifecycleWarnings } from '@/components/dashboard-lifecycle-warnings';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getDailyReportForDate } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { getDashboardTrend } from '@/lib/dashboard-trend';
 import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
+import { getDashboardLifecycleWarnings } from '@/lib/dashboard-lifecycle-warnings';
 import { addImportedMetricTotals, getImportedMetricTotalsForExactRange } from '@/lib/metric-imports';
 import { getDashboardDataFetchWindow, getGoalPeriodWindow, getLocalDayWindow, selectDashboardWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
 import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLabels } from '@/lib/funnel';
@@ -79,7 +81,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
   const today = getLocalDayWindow(now);
   const fetchWindow = getDashboardDataFetchWindow(now);
-  const [user, settings, profiles, dailyReport, goals, leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps] = await Promise.all([
+  const [user, settings, profiles, dailyReport, goals, leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps, lifecycleWarnings] = await Promise.all([
     getCurrentUser(),
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
     getMemberProfiles(),
@@ -116,7 +118,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
       take: 5,
       select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
-    })
+    }),
+    getDashboardLifecycleWarnings(now)
   ]);
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
@@ -203,6 +206,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
 
     <div className="mt-5">
       <DailyCloseControl initiallyClosed={Boolean(dailyReport)} reportHref={`/relatorios?period=day&date=${dailyDate}`} />
+    </div>
+
+    <div className="mt-5">
+      <DashboardLifecycleWarnings warnings={lifecycleWarnings} />
     </div>
 
     <div className="mt-7 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
