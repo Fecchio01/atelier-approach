@@ -60,7 +60,7 @@ tsc --noEmit --incremental false  # exited 0
 
 The focused test was repeated after the full suite and passed again: `Test Files 1 passed (1); Tests 3 passed (3)`.
 
-## Full unit suite and migration deployment
+## Initial full unit suite and migration deployment attempt
 
 The full unit suite was run with `npm test`. Database-backed tests fail because the isolated database does not yet have the new `Lead.stageEnteredAt` column. Representative exact error:
 
@@ -85,3 +85,49 @@ Deployment stopped at the existing `20261007000000_metric_result_imports` migrat
 ## Commit
 
 The task files and this report are committed together after scoped review.
+
+## Round 1 review follow-up
+
+The initial deployment blocker above was subsequently resolved by the controller in the isolated `atelier_test` schema. Per controller-provided verification: the partially applied `20261007000000_metric_result_imports` migration was completed without deleting rows, its migration record was resolved, the lifecycle SQL was applied through the Supabase admin connection because `atelier_app` cannot own or alter `Lead` and `FollowUp`, and Prisma now reports migration status up to date. No further database changes were made during this review-fix task.
+
+The applied lifecycle migration is additive: it adds columns and indexes and runs an `UPDATE` only for the required discard timestamp backfill; it has no `DELETE` or `DROP` statements.
+
+Read-only migration status command, with `DATABASE_URL` sourced only from a `TEST_DATABASE_URL` whose `schema` parameter was checked to equal `atelier_test`:
+
+```text
+npx prisma migrate status
+
+Datasource "db": PostgreSQL database "postgres", schema "atelier_test" at "aws-0-sa-east-1.pooler.supabase.com:5432"
+10 migrations found in prisma/migrations
+Database schema is up to date!
+```
+
+Read-only data check used the same schema-guarded URL. It checked `current_schema()`, row counts, null `stageEnteredAt` values, and whether each lead with a `DISCARDED` history transition had `discardedAt` equal to the minimum transition timestamp. Exact output:
+
+```json
+{"scope":[{"schema":"atelier_test","leads":0,"followups":0,"activities":0,"stage_history":0}],"leadFields":[{"leads":0,"missing_stage_entered":0,"null_discarded":0}],"history":[{"discarded_history_leads":0,"timestamp_mismatches":0}]}
+```
+
+The isolated schema currently contains no lead or history rows, so this read-only query could not independently compare legacy timestamp values or before/after CRM record counts. The migration status is verified as up to date; the controller-provided statement above is the evidence that the pre-existing migration repair preserved rows when it was completed.
+
+The lifecycle contract test was strengthened in this round. Schema text assertions now inspect only the `Lead` and `FollowUp` model blocks, including the two `Lead` indexes. Compile-time assertions against generated Prisma `Lead` and `FollowUp` types require the exact four field types and nullability.
+
+Because the normal Vitest config runs a global setup that deletes rows from the test database, the focused test was executed with a temporary config that omitted global setup; that config was removed afterward. No test command in this round wrote to `atelier_test`.
+
+Commands and results:
+
+```text
+npx vitest run --config vitest.lifecycle.config.ts
+
+✓ tests/unit/lead-lifecycle-migration.test.ts (3 tests) 4ms
+Test Files  1 passed (1)
+Tests  3 passed (3)
+
+npm run typecheck
+
+> tsc --noEmit --incremental false
+# exited 0
+
+npx prisma validate
+The schema at prisma\schema.prisma is valid 🚀
+```
