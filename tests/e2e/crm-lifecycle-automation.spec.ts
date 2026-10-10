@@ -110,7 +110,7 @@ test('runs a complete CRM lead lifecycle with only scoped atelier_test fixtures'
     await expect(warningPanel.getByText('Abordado · origem: Abordado')).toBeVisible();
     await expect(warningPanel.getByText('Vence em menos de 1 dia')).toBeVisible();
     await warningPanel.getByRole('link', { name: new RegExp(leadName) }).click();
-    await expect(page).toHaveURL(new RegExp(`/crm\?lead=${dueLead.id}$`));
+    await expect(page).toHaveURL(new RegExp(String.raw`/crm\?lead=${dueLead.id}$`));
     await expect(page.getByRole('dialog', { name: leadName })).toBeVisible();
 
     await database.lead.update({ where: { id: dueLead.id }, data: { postFollowUpAt: new Date(Date.now() - 5 * dayMs) } });

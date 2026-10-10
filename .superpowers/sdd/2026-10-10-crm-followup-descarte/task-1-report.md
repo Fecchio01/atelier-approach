@@ -110,6 +110,29 @@ Read-only data check used the same schema-guarded URL. It checked `current_schem
 
 The isolated schema currently contains no lead or history rows, so this read-only query could not independently compare legacy timestamp values or before/after CRM record counts. The migration status is verified as up to date; the controller-provided statement above is the evidence that the pre-existing migration repair preserved rows when it was completed.
 
+### Rollback-only lifecycle migration behavior check (controller-run)
+
+To exercise legacy data without persisting fixtures, the controller ran the exact lifecycle migration/backfill SQL inside a rollback-only transaction against temporary shadow tables for `Lead`, `FollowUp`, and `StageHistory` in isolated `atelier_test`. The transaction ended with `ROLLBACK`. The controller reported this exact result:
+
+```json
+[{"preserved_lead_fixtures":3,"initialized_stage_timestamps":3,"backfilled_discard_timestamps":1,"null_history_preserved":1}]
+```
+
+This verifies the backfill and preservation behavior against three temporary lead fixtures, including one lead with a discard transition and one without trustworthy discard history. It was run by the controller, not by this task agent; it did not persist fixtures or make database changes. The actual `atelier_test` schema remains empty of historical CRM rows, so production-row timestamp values remain unobservable there.
+
+After documenting this controller-run check, the focused test was rerun with the no-global-setup config (removed after use):
+
+```text
+npx vitest run --config vitest.lifecycle.config.ts
+✓ tests/unit/lead-lifecycle-migration.test.ts (3 tests) 3ms
+Test Files  1 passed (1)
+Tests  3 passed (3)
+
+npm run typecheck
+> tsc --noEmit --incremental false
+# exited 0
+```
+
 The lifecycle contract test was strengthened in this round. Schema text assertions now inspect only the `Lead` and `FollowUp` model blocks, including the two `Lead` indexes. Compile-time assertions against generated Prisma `Lead` and `FollowUp` types require the exact four field types and nullability.
 
 Because the normal Vitest config runs a global setup that deletes rows from the test database, the focused test was executed with a temporary config that omitted global setup; that config was removed afterward. No test command in this round wrote to `atelier_test`.

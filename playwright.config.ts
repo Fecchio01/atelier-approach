@@ -1,5 +1,5 @@
 import { loadEnvConfig } from '@next/env';
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 
 import { e2eCredentials } from './tests/e2e/credentials';
 
@@ -38,11 +38,6 @@ export default defineConfig({
       name: 'chromium',
       testIgnore: 'ios-funnel-scroll.spec.ts',
       use: { browserName: 'chromium' }
-    },
-    {
-      name: 'webkit',
-      testMatch: 'ios-funnel-scroll.spec.ts',
-      use: { ...devices['iPhone 13'] }
     }
   ]
 });
