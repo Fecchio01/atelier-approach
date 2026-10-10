@@ -52,10 +52,18 @@ test('keeps the country field from overlapping the fixed niche field', () => {
   const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
 
   expect(formSource).toContain('md:grid-cols-2');
-  expect(formSource).toContain('xl:grid-cols-[minmax(12rem,1.1fr)_minmax(12rem,1.1fr)_minmax(8rem,0.6fr)_minmax(10rem,0.9fr)_minmax(10rem,0.9fr)_auto]');
-  expect(formSource).toContain('md:col-span-2 xl:col-span-6');
+  expect(formSource).toContain('xl:grid-cols-[repeat(5,minmax(0,1fr))_auto]');
+  expect(formSource).toContain('md:col-span-2 lg:col-span-3 xl:col-span-6');
   expect(formSource).not.toContain('md:col-span-6');
   expect(formSource).toContain('grid min-w-0 gap-2 text-sm font-medium');
+});
+
+test('uses flexible desktop columns so the submit button stays inside the search card', () => {
+  const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
+
+  expect(formSource).toContain('xl:grid-cols-[repeat(5,minmax(0,1fr))_auto]');
+  expect(formSource).not.toContain('minmax(12rem,1.1fr)');
+  expect(formSource).toContain('lg:grid-cols-3');
 });
 
 test('loads and accumulates progressive search batches instead of paginating a local slice', () => {

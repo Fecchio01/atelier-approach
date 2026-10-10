@@ -56,4 +56,19 @@ describe('commercial lead controls', () => {
     expect(html).toContain('199,90');
     expect(html).not.toContain('>Fechar negócio</button>');
   });
+
+  it('labels the company category as its niche and translates Overture category codes', () => {
+    const html = render({ category: 'automotive_repair' });
+
+    expect(html).toContain('Nicho');
+    expect(html).toContain('Oficina mecânica');
+    expect(html).not.toContain('automotive_repair');
+  });
+
+  it('does not guess a niche when the company has no category', () => {
+    const html = render({ category: null });
+
+    expect(html).toContain('Não identificado');
+    expect(html).not.toContain('Estética automotiva');
+  });
 });

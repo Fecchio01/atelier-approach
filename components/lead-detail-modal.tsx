@@ -7,6 +7,7 @@ import type { CrmLead } from './kanban-board';
 import { googleMapsSearchUrl } from '@/lib/google-maps-url';
 
 import { displayCompanyName } from '@/lib/display-name';
+import { getBusinessNicheLabel } from '@/lib/business-category';
 import { MotionPanel } from './motion-primitives';
 import { getSelectedServiceSummary, type CommercialServiceOption } from '@/lib/commercial-ui';
 
@@ -203,7 +204,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
           {([['CONTACT', 'Contato'], ['HISTORY', 'Histórico']] as const).map(([tab, label]) => <button key={tab} type="button" aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)} className={`relative min-h-11 whitespace-nowrap text-sm font-semibold ${activeTab === tab ? 'text-[var(--atelier-green)]' : 'text-white/50 hover:text-white/80'}`}>{label}{activeTab === tab ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--atelier-green)]" /> : null}</button>)}
         </nav>
         {activeTab === 'CONTACT' ? <section className="grid gap-5 pb-1">
-          <div className="grid gap-5 sm:grid-cols-[74px_minmax(0,1fr)] sm:items-center"><div className="grid h-[74px] w-[74px] place-items-center rounded-full border border-white/15 bg-white/[0.035]" aria-hidden="true"><StorefrontIcon size={35} weight="regular" className="text-white/70" /></div><div className="min-w-0"><h3 className="text-base font-semibold text-white/90">Detalhes da empresa</h3><p className="mt-1 text-sm text-white/50">{lead.category ?? 'Estética automotiva'}</p>{lead.address ? <p className="mt-2 break-words text-sm text-white/65">{lead.address}</p> : null}</div></div>
+          <div className="grid gap-5 sm:grid-cols-[74px_minmax(0,1fr)] sm:items-center"><div className="grid h-[74px] w-[74px] place-items-center rounded-full border border-white/15 bg-white/[0.035]" aria-hidden="true"><StorefrontIcon size={35} weight="regular" className="text-white/70" /></div><div className="min-w-0"><h3 className="text-base font-semibold text-white/90">Detalhes da empresa</h3><p className="mt-1 text-xs font-medium text-white/40">Nicho</p><p className="text-sm text-white/65">{getBusinessNicheLabel(lead.category)}</p>{lead.address ? <p className="mt-2 break-words text-sm text-white/65">{lead.address}</p> : null}</div></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{contactLinks(lead).map(({ label, href }) => <a key={label} href={href} target={label === 'Ligar' ? undefined : '_blank'} rel="noreferrer" className="group flex min-h-14 items-center gap-3 rounded-lg border border-white/[0.10] bg-white/[0.025] px-3 text-sm font-semibold text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,.04)] hover:border-[var(--atelier-green)]/45 hover:bg-white/[0.05]"><ContactActionIcon label={label} /><span className="min-w-0 flex-1">{label}</span><ArrowSquareOutIcon aria-hidden="true" size={17} weight="regular" className="text-white/35 transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] group-hover:-translate-y-px group-hover:text-white/75" /></a>)}</div>
           <div className="grid gap-4 border-t border-white/[0.09] pt-5 md:grid-cols-2">
             <div className="grid gap-2"><label className="grid gap-2 text-xs font-medium text-white/55">Mover para etapa

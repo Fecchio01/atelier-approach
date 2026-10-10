@@ -105,7 +105,7 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
   }
 
   return (
-    <form aria-busy={isLoading} className="grid min-w-0 gap-5 rounded-2xl border border-white/[0.09] bg-[var(--atelier-surface)] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.12)] sm:p-5 md:grid-cols-2 xl:grid-cols-[minmax(12rem,1.1fr)_minmax(12rem,1.1fr)_minmax(8rem,0.6fr)_minmax(10rem,0.9fr)_minmax(10rem,0.9fr)_auto] md:items-end" onSubmit={handleSubmit}>
+    <form aria-busy={isLoading} className="grid min-w-0 gap-5 rounded-2xl border border-white/[0.09] bg-[var(--atelier-surface)] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.12)] sm:p-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto] md:items-end" onSubmit={handleSubmit}>
       <label className="grid min-w-0 gap-2 text-sm font-medium">
         Nicho
         <input
@@ -165,14 +165,14 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
       >
         {isLoading ? 'Pesquisando…' : 'Pesquisar'}
       </button>
-      <div className="grid gap-3 border-t border-white/[0.08] pt-4 text-sm md:col-span-2 xl:col-span-6 xl:grid-cols-[1fr_auto] xl:items-center">
+      <div className="grid gap-3 border-t border-white/[0.08] pt-4 text-sm md:col-span-2 lg:col-span-3 xl:col-span-6 xl:grid-cols-[1fr_auto] xl:items-center">
         <p className="text-white/55">Se informar o nome, a busca procura a empresa mesmo que ela não seja do nicho selecionado.</p>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 px-3">
           <input name="includeWorked" checked={filters.includeWorked} onChange={(event) => onFiltersChange({ ...filters, includeWorked: event.target.checked })} type="checkbox" className="shrink-0 accent-[var(--atelier-green)]" />
           Mostrar empresas já trabalhadas
         </label>
       </div>
-      {error ? <p role="alert" className="rounded-lg border border-red-300/25 bg-[#281a1e] p-3 text-sm leading-6 text-red-200 md:col-span-2 xl:col-span-6">{error}</p> : null}
+      {error ? <p role="alert" className="rounded-lg border border-red-300/25 bg-[#281a1e] p-3 text-sm leading-6 text-red-200 md:col-span-2 lg:col-span-3 xl:col-span-6">{error}</p> : null}
     </form>
   );
 }
