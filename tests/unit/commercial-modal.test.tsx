@@ -38,6 +38,13 @@ describe('commercial lead controls', () => {
     expect(html).not.toContain('>Próxima ação</button>');
     expect(html).not.toContain('Canal da atividade');
     expect(html).not.toContain('type="datetime-local"');
+    expect(html).not.toContain('Agendar follow-up');
+  });
+
+  it('allows manually scheduling a follow-up from active funnel stages after contact', () => {
+    const html = render({ stage: 'IN_CONVERSATION' });
+
+    expect(html).toContain('Agendar follow-up');
   });
 
   it('explains automatic scheduling and displays the pending follow-up date', () => {

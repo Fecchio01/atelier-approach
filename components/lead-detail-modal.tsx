@@ -212,6 +212,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   const renderLead = (lead: CrmLead) => {
     const pendingFollowUps = lead.followUps.filter((followUp) => followUp.state === 'PENDING');
     const activeFollowUp = pendingFollowUps[0];
+    const showFollowUpCard = Boolean(activeFollowUp) || ['IN_CONVERSATION', 'QUALIFIED', 'PROPOSAL', 'MEETING'].includes(normalizeFunnelStage(lead.stage));
     const selectedSummary = getSelectedServiceSummary(services, selectedServiceIds, salePrices);
     const invalidSalePrice = selectedServiceIds.some((id) => {
       try { priceInCents(salePrices[id]); return false; } catch { return true; }
@@ -229,7 +230,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{contactLinks(lead).map(({ label, href }) => <a key={label} href={href} target={label === 'Ligar' ? undefined : '_blank'} rel="noreferrer" className="group flex min-h-14 items-center gap-3 rounded-lg border border-white/[0.10] bg-white/[0.025] px-3 text-sm font-semibold text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,.04)] hover:border-[var(--atelier-green)]/45 hover:bg-white/[0.05]"><ContactActionIcon label={label} /><span className="min-w-0 flex-1">{label}</span><ArrowSquareOutIcon aria-hidden="true" size={17} weight="regular" className="text-white/35 transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] group-hover:-translate-y-px group-hover:text-white/75" /></a>)}</div>
           <div className="grid gap-3 border-t border-white/[0.09] pt-5">
             <h3 className="text-sm font-semibold text-white/80">Etapa e retorno</h3>
-            <div className="grid min-w-0 gap-4 md:grid-cols-2">
+            <div className={`grid min-w-0 gap-4 ${showFollowUpCard ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
               <div className="grid min-w-0 content-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
                 <label className="grid min-w-0 gap-2 text-xs font-medium text-white/55">Mover para etapa
                   <select value={stageDraft === 'WON' ? '' : stageDraft} disabled={savingId === lead.id} onChange={(event) => setStageDraft(event.target.value as Stage)} className="min-h-12 w-full min-w-0 rounded-lg border border-white/[0.14] bg-[#11171c] px-3 text-sm text-white">
@@ -239,7 +240,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
                 </label>
                 <button type="button" disabled={savingId === lead.id || stageDraft === 'WON' || stageDraft === normalizeFunnelStage(lead.stage)} onClick={() => saveStageChange(lead.id)} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">Salvar alterações</button>
               </div>
-              <div className="grid min-w-0 content-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              {showFollowUpCard ? <div className="grid min-w-0 content-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
                 <p className="text-xs leading-5 text-white/55">Ao entrar em Follow-up, o retorno é agendado automaticamente em {followUpDelayDays} {followUpDelayDays === 1 ? 'dia' : 'dias'}.</p>
                 {activeFollowUp ? <p className="text-sm text-white/80">Retorno atual: <time dateTime={activeFollowUp.dueDate}>{dateTimeLabel(activeFollowUp.dueDate)}</time></p> : null}
                 {activeFollowUp ? <label className="grid min-w-0 gap-2 text-xs font-medium text-white/55">Nova data para reagendamento
@@ -250,7 +251,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
                   <button type="button" disabled={savingId === lead.id} onClick={() => updateFollowUp(lead.id, activeFollowUp.id, 'COMPLETE')} className="min-h-11 rounded-lg border border-white/20 px-3 text-sm disabled:opacity-60">Concluir follow-up</button>
                   <button type="button" disabled={savingId === lead.id} onClick={() => updateFollowUp(lead.id, activeFollowUp.id, 'CANCEL')} className="min-h-11 rounded-lg border border-white/20 px-3 text-sm disabled:opacity-60">Cancelar follow-up</button>
                 </div> : null}
-              </div>
+              </div> : null}
             </div>
           </div>
         <div className="grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2">
@@ -264,10 +265,10 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
           <p className="text-sm text-white/60">Negócio ganho. Venda: {currency.format(Number(lead.saleValue ?? 0))}. MRR: {currency.format(Number(lead.mrr ?? 0))}. Você pode corrigir os valores manualmente.</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="grid min-w-0 gap-1 text-xs text-white/55">Valor da venda
-              <input aria-label="Valor da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? lead.saleValue ?? ''} onChange={(event) => { setFinancialsSaved(false); setSaleValues({ ...saleValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-[var(--atelier-surface-raised)] px-2 text-sm text-white outline-none focus:border-[var(--atelier-green)]" />
+              <input aria-label="Valor da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? lead.saleValue ?? ''} onChange={(event) => { setFinancialsSaved(false); setSaleValues({ ...saleValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
             </label>
             <label className="grid min-w-0 gap-1 text-xs text-white/55">MRR
-              <input aria-label="MRR" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? lead.mrr ?? ''} onChange={(event) => { setFinancialsSaved(false); setMrrValues({ ...mrrValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-[var(--atelier-surface-raised)] px-2 text-sm text-white outline-none focus:border-[var(--atelier-green)]" />
+              <input aria-label="MRR" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? lead.mrr ?? ''} onChange={(event) => { setFinancialsSaved(false); setMrrValues({ ...mrrValues, [lead.id]: event.target.value }); }} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
             </label>
           </div>
           <button type="button" disabled={savingId === lead.id} onClick={() => saveFinancials(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">{savingId === lead.id ? 'Salvando valores…' : 'Salvar valores da venda'}</button>
@@ -304,10 +305,10 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
               <p className="text-sm text-white/60">Informe os valores acordados. Esses números serão registrados diretamente na venda.</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid min-w-0 gap-1 text-xs text-white/55">Valor da venda
-                  <input aria-label="Valor manual da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? ''} onChange={(event) => setSaleValues({ ...saleValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-[var(--atelier-surface-raised)] px-2 text-sm text-white outline-none focus:border-[var(--atelier-green)]" />
+                  <input aria-label="Valor manual da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? ''} onChange={(event) => setSaleValues({ ...saleValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
                 </label>
                 <label className="grid min-w-0 gap-1 text-xs text-white/55">MRR
-                  <input aria-label="MRR manual" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? ''} onChange={(event) => setMrrValues({ ...mrrValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-[var(--atelier-surface-raised)] px-2 text-sm text-white outline-none focus:border-[var(--atelier-green)]" />
+                  <input aria-label="MRR manual" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? ''} onChange={(event) => setMrrValues({ ...mrrValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
                 </label>
               </div>
               {invalidManualValues ? <p role="alert" className="text-sm text-red-200">Informe valores válidos, com até duas casas decimais.</p> : null}
