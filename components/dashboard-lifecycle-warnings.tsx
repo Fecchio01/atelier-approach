@@ -7,6 +7,8 @@ function shortDate(value: Date) {
 }
 
 export function DashboardLifecycleWarnings({ warnings }: { warnings: DashboardLifecycleWarning[] }) {
+  if (warnings.length === 0) return null;
+
   return <section aria-labelledby="lifecycle-warning-title" className="rounded-xl border border-amber-200/15 bg-[var(--atelier-surface)] p-4 md:p-5">
     <div className="flex items-start gap-3">
       <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-300/[0.08] text-sm font-semibold text-amber-200">!</span>

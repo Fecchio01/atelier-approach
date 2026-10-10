@@ -66,11 +66,10 @@ describe('dashboard lifecycle warnings', () => {
     expect(html).toContain('/crm?lead=lead-123');
   });
 
-  test('renders a quiet empty state when no lead is near discard', () => {
+  test('renders no warning panel when no lead is near discard', () => {
     const html = renderToStaticMarkup(createElement(DashboardLifecycleWarnings, { warnings: [] }));
 
-    expect(html).toContain('Nenhum lead próximo do descarte automático.');
-    expect(html).not.toContain('aprovar');
+    expect(html).toBe('');
   });
 
   test('does not warn for an advanced lead without an active post-follow-up deadline', async () => {
