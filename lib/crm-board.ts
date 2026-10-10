@@ -17,10 +17,22 @@ export function getCrmBoardLeads(database: Prisma.TransactionClient | typeof pri
       latitude: true,
       longitude: true,
       stage: true,
+      stageEnteredAt: true,
+      postFollowUpAt: true,
+      discardedAt: true,
       saleValue: true,
       mrr: true,
-      activities: { orderBy: { createdAt: 'desc' }, take: 1 }
+      activities: { orderBy: { createdAt: 'desc' }, take: 1 },
+      followUps: {
+        where: { state: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { returnStage: true }
+      }
     },
     orderBy: { id: 'desc' }
-  });
+  }).then((leads) => leads.map((lead) => ({
+    ...lead,
+    followUpOriginStage: lead.followUps[0]?.returnStage ?? null
+  })));
 }

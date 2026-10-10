@@ -55,6 +55,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   const [salePrices, setSalePrices] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<DetailTab>('CONTACT');
   const [stageDraft, setStageDraft] = useState<Stage>(normalizeFunnelStage(lead.stage));
+  const headerFollowUpOrigin = lead.followUpOriginStage ?? lead.followUps.find((item) => item.state === 'PENDING')?.returnStage ?? null;
 
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
@@ -291,8 +292,8 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
     <MotionPanel className="relative max-h-full w-full max-w-3xl">
     <div data-testid="lead-modal-surface" className="starting:translate-y-2 starting:opacity-0 transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] relative flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--atelier-floating-border)] bg-[#10161b] shadow-[0_28px_100px_rgba(0,0,0,.55)]">
       <div inert={confirmingReturn || confirmingDiscard} className="flex min-h-0 flex-col">
-      <header data-atelier-floating className="bg-[var(--atelier-floating-surface)] flex items-start justify-between gap-5 border-b border-white/[0.09] px-6 py-6 sm:px-8">
-        <div className="min-w-0"><p className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50"><span className="h-2 w-2 rounded-full bg-[var(--atelier-green)]" />{stageLabels[normalizeFunnelStage(lead.stage)]}</p><h2 id="lead-detail-title" className="break-words text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">{displayCompanyName(lead.name)}</h2><p className="mt-2 text-xs text-white/40">Detalhes, contatos e próxima ação</p></div>
+        <header data-atelier-floating className="bg-[var(--atelier-floating-surface)] flex items-start justify-between gap-5 border-b border-white/[0.09] px-6 py-6 sm:px-8">
+        <div className="min-w-0"><p className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50"><span className="h-2 w-2 rounded-full bg-[var(--atelier-green)]" />{stageLabels[normalizeFunnelStage(lead.stage)]}</p><h2 id="lead-detail-title" className="break-words text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">{displayCompanyName(lead.name)}</h2>{lead.stage === 'FOLLOW_UP' && headerFollowUpOrigin ? <p className="mt-2 text-xs font-medium text-[var(--atelier-green)]/80">Veio de {stageLabels[normalizeFunnelStage(headerFollowUpOrigin)]}</p> : <p className="mt-2 text-xs text-white/40">Detalhes, contatos e próxima ação</p>}</div>
         <button ref={closeRef} type="button" aria-label="Fechar detalhes" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/[0.14] text-lg text-white/60 hover:bg-white/[0.06] hover:text-white"><span aria-hidden="true">×</span></button>
       </header>
       {error && !confirmingReturn && !confirmingDiscard ? <p role="alert" className="border-b border-red-300/15 bg-red-300/5 px-6 py-3 text-sm text-red-200">{error}</p> : null}

@@ -13,6 +13,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     ...lead,
     saleValue: lead.saleValue?.toString() ?? null,
     mrr: lead.mrr?.toString() ?? null,
+    stageEnteredAt: lead.stageEnteredAt.toISOString(),
+    postFollowUpAt: lead.postFollowUpAt?.toISOString() ?? null,
+    discardedAt: lead.discardedAt?.toISOString() ?? null,
+    followUpOriginStage: lead.followUpOriginStage,
     activities: lead.activities.map((activity) => ({ ...activity, createdAt: activity.createdAt.toISOString() })),
     followUps: [],
     detailsLoaded: false
