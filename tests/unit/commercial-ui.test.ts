@@ -25,4 +25,13 @@ describe('getSelectedServiceSummary', () => {
   it('returns zero totals for an empty selection so the user can close without a catalog item', () => {
     expect(getSelectedServiceSummary([], [])).toEqual({ saleValue: 0, mrr: 0 });
   });
+
+  it('uses per-sale prices when provided while leaving the catalog defaults out of past totals', () => {
+    const summary = getSelectedServiceSummary([
+      { id: 'monthly', name: 'Plano mensal', price: '199.90', billingType: 'MONTHLY' },
+      { id: 'setup', name: 'Implantação', price: '1000.00', billingType: 'ONE_TIME' }
+    ], ['monthly', 'setup'], { monthly: '149.90', setup: '850.25' });
+
+    expect(summary).toEqual({ saleValue: 1000.15, mrr: 149.9 });
+  });
 });

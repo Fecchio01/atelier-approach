@@ -4,7 +4,7 @@ import { getCurrentUser } from '../../../../lib/auth';
 import { getFollowUpDelayDays } from '../../../../lib/commercial-settings';
 import { prisma } from '../../../../lib/db';
 import { getFollowUpDueDate } from '../../../../lib/follow-up-scheduling';
-import { summarizeServiceItems } from '../../../../lib/service-sales';
+import { priceInCents, summarizeServiceItems } from '../../../../lib/service-sales';
 
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
 
@@ -16,6 +16,7 @@ type CrmUpdate = {
   saleValue?: unknown;
   mrr?: unknown;
   serviceIds?: unknown;
+  serviceItems?: unknown;
   activity?: { channel?: unknown; note?: unknown };
 };
 
@@ -87,14 +88,33 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   const hasFinancials = hasSaleValue || hasMrr;
   const hasServiceIds = Object.prototype.hasOwnProperty.call(body, 'serviceIds');
+  const hasServiceItems = Object.prototype.hasOwnProperty.call(body, 'serviceItems');
+  if (hasServiceIds && hasServiceItems) return Response.json({ error: 'Informe os serviços em apenas um formato.' }, { status: 400 });
   if (hasServiceIds && (!Array.isArray(body.serviceIds) || body.serviceIds.some((serviceId) => typeof serviceId !== 'string' || !serviceId.trim()))) {
     return Response.json({ error: 'Seleção de serviços inválida.' }, { status: 400 });
   }
-  const serviceIds = hasServiceIds ? body.serviceIds as string[] : undefined;
+  let serviceSelection: { id: string; price?: string }[] | undefined;
+  if (hasServiceItems) {
+    if (!Array.isArray(body.serviceItems)) return Response.json({ error: 'Seleção de serviços inválida.' }, { status: 400 });
+    try {
+      serviceSelection = body.serviceItems.map((item: unknown) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('invalid');
+        const entry = item as Record<string, unknown>;
+        if (typeof entry.id !== 'string' || !entry.id.trim()) throw new Error('invalid');
+        if (entry.price === undefined) return { id: entry.id };
+        return { id: entry.id, price: (priceInCents(entry.price) / 100).toFixed(2) };
+      });
+    } catch {
+      return Response.json({ error: 'Um ou mais preços por venda são inválidos.' }, { status: 400 });
+    }
+  } else if (hasServiceIds) {
+    serviceSelection = (body.serviceIds as string[]).map((id) => ({ id }));
+  }
+  const serviceIds = serviceSelection?.map(({ id }) => id);
   if (serviceIds && new Set(serviceIds).size !== serviceIds.length) {
     return Response.json({ error: 'Não selecione o mesmo serviço mais de uma vez.' }, { status: 400 });
   }
-  if (serviceIds?.length && hasFinancials) {
+  if (serviceSelection?.length && hasFinancials) {
     return Response.json({ error: 'Informe os serviços ou os valores manuais, não os dois.' }, { status: 400 });
   }
 
@@ -139,9 +159,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const leadData: Prisma.LeadUpdateInput = { stage };
       let selectedServices: { id: string; name: string; price: Prisma.Decimal; billingType: 'ONE_TIME' | 'MONTHLY' }[] = [];
       if (stage === 'WON') {
-        if (serviceIds?.length) {
-          selectedServices = await tx.serviceCatalogItem.findMany({ where: { id: { in: serviceIds }, isActive: true } });
-          if (selectedServices.length !== serviceIds.length) throw new Error('INVALID_SERVICE_SELECTION');
+        if (serviceSelection?.length) {
+          const selectedIds = serviceSelection.map(({ id }) => id);
+          const catalogServices = await tx.serviceCatalogItem.findMany({ where: { id: { in: selectedIds }, isActive: true } });
+          if (catalogServices.length !== serviceSelection.length) throw new Error('INVALID_SERVICE_SELECTION');
+          selectedServices = serviceSelection.map((selected) => {
+            const service = catalogServices.find(({ id: serviceId }) => serviceId === selected.id);
+            if (!service) throw new Error('INVALID_SERVICE_SELECTION');
+            return { ...service, price: selected.price === undefined ? service.price : new Prisma.Decimal(selected.price) };
+          });
         }
         const summary = summarizeServiceItems(selectedServices.map(({ price, billingType }) => ({ price: price.toString(), billingType })));
         const saleValue = selectedServices.length

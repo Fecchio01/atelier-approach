@@ -1,4 +1,4 @@
-import { summarizeServiceItems } from './service-sales';
+import { priceInCents, summarizeServiceItems } from './service-sales';
 
 export type CommercialServiceOption = {
   id: string;
@@ -9,10 +9,22 @@ export type CommercialServiceOption = {
 
 export function getSelectedServiceSummary(
   services: readonly CommercialServiceOption[],
-  selectedIds: readonly string[]
+  selectedIds: readonly string[],
+  perSalePrices: Readonly<Record<string, string>> = {}
 ) {
   const selected = new Set(selectedIds);
   return summarizeServiceItems(services
     .filter((service) => selected.has(service.id))
-    .map(({ price, billingType }) => ({ price, billingType })));
+    .map(({ id, price, billingType }) => {
+      const override = perSalePrices[id];
+      let effectivePrice = price;
+      if (override !== undefined) {
+        try {
+          effectivePrice = (priceInCents(override) / 100).toFixed(2);
+        } catch {
+          // Keep the preview usable while the user corrects an invalid input.
+        }
+      }
+      return { price: effectivePrice, billingType };
+    }));
 }

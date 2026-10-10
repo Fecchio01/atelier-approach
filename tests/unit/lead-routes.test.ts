@@ -326,6 +326,45 @@ describe('lead routes', () => {
     await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({ stage: 'WON', saleValue: expect.anything(), mrr: expect.anything() });
   });
 
+  test('uses optional per-sale service prices and snapshots them independently from catalog prices', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/service-sale-price-override' } });
+    const [monthly, setup] = await Promise.all([
+      prisma.serviceCatalogItem.create({ data: { name: 'Plano mensal', price: '199.90', billingType: 'MONTHLY' } }),
+      prisma.serviceCatalogItem.create({ data: { name: 'Implantação', price: '1000.00', billingType: 'ONE_TIME' } })
+    ]);
+
+    const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceItems: [
+        { id: monthly.id, price: '149.90' },
+        { id: setup.id, price: '850.25' }
+      ] })
+    }), { params: Promise.resolve({ id: lead.id }) });
+
+    expect(response.status).toBe(200);
+    const sale = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id }, include: { lineItems: true } });
+    expect(Number(sale.saleValue)).toBe(1000.15);
+    expect(Number(sale.mrr)).toBe(149.9);
+    expect(sale.lineItems.map(({ serviceId, serviceName, price, billingType }) => ({
+      serviceId, serviceName, price: Number(price), billingType
+    }))).toEqual(expect.arrayContaining([
+      { serviceId: monthly.id, serviceName: 'Plano mensal', price: 149.9, billingType: 'MONTHLY' },
+      { serviceId: setup.id, serviceName: 'Implantação', price: 850.25, billingType: 'ONE_TIME' }
+    ]));
+  });
+
+  test('rejects invalid per-sale prices without moving the lead or recording revenue', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/invalid-service-sale-price' } });
+    const service = await prisma.serviceCatalogItem.create({ data: { name: 'Serviço', price: '100', billingType: 'ONE_TIME' } });
+
+    const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceItems: [{ id: service.id, price: '12.345' }] })
+    }), { params: Promise.resolve({ id: lead.id }) });
+
+    expect(response.status).toBe(400);
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({ stage: 'CONTACTED', saleValue: null, mrr: null });
+    await expect(prisma.saleEvent.count({ where: { leadId: lead.id } })).resolves.toBe(0);
+  });
+
   test.each([
     ['missing', 'missing-service-id'],
     ['archived', 'archived-service-id']

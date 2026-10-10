@@ -10,6 +10,7 @@ import { displayCompanyName } from '@/lib/display-name';
 import { getBusinessNicheLabel } from '@/lib/business-category';
 import { MotionPanel } from './motion-primitives';
 import { getSelectedServiceSummary, type CommercialServiceOption } from '@/lib/commercial-ui';
+import { priceInCents } from '@/lib/service-sales';
 
 type Stage = FunnelStage;
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
@@ -51,6 +52,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   const [saleValues, setSaleValues] = useState<Record<string, string>>({});
   const [mrrValues, setMrrValues] = useState<Record<string, string>>({});
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [salePrices, setSalePrices] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<DetailTab>('CONTACT');
   const [stageDraft, setStageDraft] = useState<Stage>(normalizeFunnelStage(lead.stage));
 
@@ -143,7 +145,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   }
 
   async function closeLead(id: string) {
-    await updateLead(id, { stage: 'WON', serviceIds: selectedServiceIds });
+    await updateLead(id, { stage: 'WON', serviceItems: selectedServiceIds.map((serviceId) => ({ id: serviceId, price: salePrices[serviceId] })) });
   }
 
   async function saveFinancials(id: string) {
@@ -197,7 +199,10 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   const renderLead = (lead: CrmLead) => {
     const pendingFollowUps = lead.followUps.filter((followUp) => followUp.state === 'PENDING');
     const activeFollowUp = pendingFollowUps[0];
-    const selectedSummary = getSelectedServiceSummary(services, selectedServiceIds);
+    const selectedSummary = getSelectedServiceSummary(services, selectedServiceIds, salePrices);
+    const invalidSalePrice = selectedServiceIds.some((id) => {
+      try { priceInCents(salePrices[id]); return false; } catch { return true; }
+    });
     return (
       <div className="grid items-start gap-5">
         <nav className="flex flex-wrap gap-x-6 gap-y-1 border-b border-white/[0.11]" aria-label="Seções do lead">
@@ -241,14 +246,28 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
           </> : <>
             <fieldset disabled={savingId === lead.id} className="grid min-w-0 gap-3">
               <legend className="mb-3 text-sm font-semibold">Serviços vendidos</legend>
-              {services.length ? services.map((service) => <label key={service.id} className="flex min-h-12 min-w-0 items-start gap-3 rounded-lg border border-white/15 p-3 text-sm">
-                <input type="checkbox" checked={selectedServiceIds.includes(service.id)} onChange={(event) => setSelectedServiceIds((previous) => event.target.checked ? [...previous, service.id] : previous.filter((id) => id !== service.id))} className="mt-1 size-4 shrink-0 accent-[var(--atelier-green)]" />
-                <span className="min-w-0 break-words">{service.name}<span className="mt-1 block text-xs text-white/55">{currency.format(Number(service.price))} · {service.billingType === 'MONTHLY' ? 'Mensal' : 'Cobrança única'}</span></span>
-              </label>) : <p className="text-sm text-white/60">Nenhum serviço ativo. Cadastre serviços nas Configurações comerciais ou feche sem valores.</p>}
+              {services.length ? services.map((service) => {
+                const selected = selectedServiceIds.includes(service.id);
+                return <div key={service.id} className="grid min-w-0 gap-3 rounded-lg border border-white/15 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center">
+                  <label className="flex min-w-0 items-start gap-3">
+                    <input type="checkbox" checked={selected} onChange={(event) => {
+                      if (event.target.checked) {
+                        setSelectedServiceIds((previous) => [...previous, service.id]);
+                        setSalePrices((previous) => ({ ...previous, [service.id]: previous[service.id] ?? service.price }));
+                      } else setSelectedServiceIds((previous) => previous.filter((id) => id !== service.id));
+                    }} className="mt-1 size-4 shrink-0 accent-[var(--atelier-green)]" />
+                    <span className="min-w-0 break-words">{service.name}<span className="mt-1 block text-xs text-white/55">Preço padrão: {currency.format(Number(service.price))} · {service.billingType === 'MONTHLY' ? 'Mensal' : 'Cobrança única'}</span></span>
+                  </label>
+                  {selected ? <label className="grid gap-1 text-xs text-white/55">Preço nesta venda
+                    <input aria-label={`Preço nesta venda: ${service.name}`} inputMode="decimal" type="number" min="0" step="0.01" value={salePrices[service.id] ?? service.price} onChange={(event) => setSalePrices((previous) => ({ ...previous, [service.id]: event.target.value }))} className="min-h-10 min-w-0 rounded-md border border-white/20 bg-black/40 px-2 text-sm text-white" />
+                  </label> : null}
+                </div>;
+              }) : <p className="text-sm text-white/60">Nenhum serviço ativo. Cadastre serviços nas Configurações comerciais ou feche sem valores.</p>}
             </fieldset>
             <div aria-live="polite" aria-label="Resumo da venda" className="grid gap-1 rounded-lg bg-white/5 p-3 text-sm"><p>Total da venda</p><p className="text-lg font-semibold">{currency.format(selectedSummary.saleValue)}</p><p>MRR: {currency.format(selectedSummary.mrr)}</p></div>
             {!selectedServiceIds.length ? <p className="text-sm text-amber-200">Os valores desta venda ficarão em zero.</p> : null}
-            <button type="button" disabled={savingId === lead.id} onClick={() => closeLead(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">{savingId === lead.id ? 'Fechando…' : 'Fechar negócio'}</button>
+            {invalidSalePrice ? <p role="alert" className="text-sm text-red-200">Use preços com até duas casas decimais.</p> : null}
+            <button type="button" disabled={savingId === lead.id || invalidSalePrice} onClick={() => closeLead(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">{savingId === lead.id ? 'Fechando…' : 'Fechar negócio'}</button>
           </>}
         </div>
         <div className="grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2">
