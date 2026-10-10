@@ -11,10 +11,11 @@ import { getBusinessNicheLabel } from '@/lib/business-category';
 import { MotionPanel } from './motion-primitives';
 import { getSelectedServiceSummary, type CommercialServiceOption } from '@/lib/commercial-ui';
 import { priceInCents } from '@/lib/service-sales';
+import { formatReportNote } from '@/lib/report-notes';
 
 type Stage = FunnelStage;
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
-type DetailTab = 'CONTACT' | 'HISTORY';
+type DetailTab = 'CONTACT' | 'HISTORY' | 'SALE';
 const columns = mainFunnelStages.filter((stage) => stage !== 'WON').map((stage) => ({ stage, title: stageLabels[stage] }));
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -53,6 +54,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   const [mrrValues, setMrrValues] = useState<Record<string, string>>({});
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [salePrices, setSalePrices] = useState<Record<string, string>>({});
+  const [saleMode, setSaleMode] = useState<'SERVICES' | 'MANUAL'>('SERVICES');
   const [activeTab, setActiveTab] = useState<DetailTab>('CONTACT');
   const [stageDraft, setStageDraft] = useState<Stage>(normalizeFunnelStage(lead.stage));
   const headerFollowUpOrigin = lead.followUpOriginStage ?? lead.followUps.find((item) => item.state === 'PENDING')?.returnStage ?? null;
@@ -146,6 +148,16 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   }
 
   async function closeLead(id: string) {
+    if (saleMode === 'MANUAL') {
+      const saleValue = saleValues[id] ?? '';
+      const mrr = mrrValues[id] ?? '';
+      try { priceInCents(saleValue); priceInCents(mrr); } catch {
+        setError('Informe valores válidos para venda e MRR, com até duas casas decimais.');
+        return;
+      }
+      await updateLead(id, { stage: 'WON', saleValue: Number(saleValue), mrr: Number(mrr) });
+      return;
+    }
     await updateLead(id, { stage: 'WON', serviceItems: selectedServiceIds.map((serviceId) => ({ id: serviceId, price: salePrices[serviceId] })) });
   }
 
@@ -204,33 +216,49 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
     const invalidSalePrice = selectedServiceIds.some((id) => {
       try { priceInCents(salePrices[id]); return false; } catch { return true; }
     });
+    const invalidManualValues = saleMode === 'MANUAL' && [saleValues[lead.id], mrrValues[lead.id]].some((value) => {
+      try { priceInCents(value ?? ''); return false; } catch { return true; }
+    });
     return (
       <div className="grid items-start gap-5">
         <nav className="flex flex-wrap gap-x-6 gap-y-1 border-b border-white/[0.11]" aria-label="Seções do lead">
-          {([['CONTACT', 'Contato'], ['HISTORY', 'Histórico']] as const).map(([tab, label]) => <button key={tab} type="button" aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)} className={`relative min-h-11 whitespace-nowrap text-sm font-semibold ${activeTab === tab ? 'text-[var(--atelier-green)]' : 'text-white/50 hover:text-white/80'}`}>{label}{activeTab === tab ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--atelier-green)]" /> : null}</button>)}
+          {([['CONTACT', 'Contato'], ['HISTORY', 'Histórico'], ['SALE', 'Venda']] as const).map(([tab, label]) => <button key={tab} type="button" aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)} className={`relative min-h-11 whitespace-nowrap text-sm font-semibold ${activeTab === tab ? 'text-[var(--atelier-green)]' : 'text-white/50 hover:text-white/80'}`}>{label}{activeTab === tab ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--atelier-green)]" /> : null}</button>)}
         </nav>
         {activeTab === 'CONTACT' ? <section className="grid gap-5 pb-1">
           <div className="grid gap-5 sm:grid-cols-[74px_minmax(0,1fr)] sm:items-center"><div className="grid h-[74px] w-[74px] place-items-center rounded-full border border-white/15 bg-white/[0.035]" aria-hidden="true"><StorefrontIcon size={35} weight="regular" className="text-white/70" /></div><div className="min-w-0"><h3 className="text-base font-semibold text-white/90">Detalhes da empresa</h3><p className="mt-1 text-xs font-medium text-white/40">Nicho</p><p className="text-sm text-white/65">{getBusinessNicheLabel(lead.category)}</p>{lead.address ? <p className="mt-2 break-words text-sm text-white/65">{lead.address}</p> : null}</div></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{contactLinks(lead).map(({ label, href }) => <a key={label} href={href} target={label === 'Ligar' ? undefined : '_blank'} rel="noreferrer" className="group flex min-h-14 items-center gap-3 rounded-lg border border-white/[0.10] bg-white/[0.025] px-3 text-sm font-semibold text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,.04)] hover:border-[var(--atelier-green)]/45 hover:bg-white/[0.05]"><ContactActionIcon label={label} /><span className="min-w-0 flex-1">{label}</span><ArrowSquareOutIcon aria-hidden="true" size={17} weight="regular" className="text-white/35 transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] group-hover:-translate-y-px group-hover:text-white/75" /></a>)}</div>
-          <div className="grid gap-4 border-t border-white/[0.09] pt-5 md:grid-cols-2">
-            <div className="grid gap-2"><label className="grid gap-2 text-xs font-medium text-white/55">Mover para etapa
-              <select value={stageDraft === 'WON' ? '' : stageDraft} disabled={savingId === lead.id} onChange={(event) => setStageDraft(event.target.value as Stage)} className="min-h-12 rounded-lg border border-white/[0.14] bg-[#11171c] px-3 text-sm text-white">
-                {lead.stage === 'WON' ? <option value="" disabled>Ganho — escolha uma etapa para reabrir</option> : null}
-                {[...columns, { stage: 'NO_RESPONSE' as Stage, title: 'Sem resposta' }, ...(lead.stage === 'DISCARDED' ? [{ stage: 'DISCARDED' as Stage, title: 'Descartado' }] : [])].map(({ stage, title }) => <option key={stage} value={stage}>{title}</option>)}
-              </select>
-            </label><button type="button" disabled={savingId === lead.id || stageDraft === 'WON' || stageDraft === normalizeFunnelStage(lead.stage)} onClick={() => saveStageChange(lead.id)} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">Salvar alterações</button></div>
-            <div className="grid gap-2">
-              <p className="text-xs leading-5 text-white/55">Ao entrar em Follow-up, o retorno é agendado automaticamente em {followUpDelayDays} {followUpDelayDays === 1 ? 'dia' : 'dias'}.</p>
-              {activeFollowUp ? <p className="text-sm text-white/80">Retorno atual: <time dateTime={activeFollowUp.dueDate}>{dateTimeLabel(activeFollowUp.dueDate)}</time></p> : null}
-              {activeFollowUp ? <label className="grid gap-2 text-xs font-medium text-white/55">Nova data para reagendamento
-              <input aria-label="Data do follow-up" type="datetime-local" value={followUpAt[lead.id] ?? ''} onChange={(event) => setFollowUpAt({ ...followUpAt, [lead.id]: event.target.value })} className="min-h-12 rounded-lg border border-white/[0.14] bg-[#11171c] px-3 text-sm text-white" />
-            </label> : null}<button type="button" disabled={savingId === lead.id || (!activeFollowUp && lead.stage === 'FOLLOW_UP')} onClick={() => scheduleFollowUp(lead)} className="min-h-11 rounded-lg border border-[var(--atelier-green)] px-3 text-sm font-semibold text-[var(--atelier-green)] disabled:opacity-60">{activeFollowUp ? 'Reagendar follow-up' : 'Agendar follow-up'}</button>
-              {activeFollowUp ? <div className="grid gap-2 sm:grid-cols-2">
-                <button type="button" disabled={savingId === lead.id} onClick={() => updateFollowUp(lead.id, activeFollowUp.id, 'COMPLETE')} className="min-h-11 rounded-lg border border-white/20 px-3 text-sm disabled:opacity-60">Concluir follow-up</button>
-                <button type="button" disabled={savingId === lead.id} onClick={() => updateFollowUp(lead.id, activeFollowUp.id, 'CANCEL')} className="min-h-11 rounded-lg border border-white/20 px-3 text-sm disabled:opacity-60">Cancelar follow-up</button>
-              </div> : null}
+          <div className="grid gap-3 border-t border-white/[0.09] pt-5">
+            <h3 className="text-sm font-semibold text-white/80">Etapa e retorno</h3>
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
+              <div className="grid min-w-0 content-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+                <label className="grid min-w-0 gap-2 text-xs font-medium text-white/55">Mover para etapa
+                  <select value={stageDraft === 'WON' ? '' : stageDraft} disabled={savingId === lead.id} onChange={(event) => setStageDraft(event.target.value as Stage)} className="min-h-12 w-full min-w-0 rounded-lg border border-white/[0.14] bg-[#11171c] px-3 text-sm text-white">
+                    {lead.stage === 'WON' ? <option value="" disabled>Ganho — escolha uma etapa para reabrir</option> : null}
+                    {[...columns, { stage: 'NO_RESPONSE' as Stage, title: 'Sem resposta' }, ...(lead.stage === 'DISCARDED' ? [{ stage: 'DISCARDED' as Stage, title: 'Descartado' }] : [])].map(({ stage, title }) => <option key={stage} value={stage}>{title}</option>)}
+                  </select>
+                </label>
+                <button type="button" disabled={savingId === lead.id || stageDraft === 'WON' || stageDraft === normalizeFunnelStage(lead.stage)} onClick={() => saveStageChange(lead.id)} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">Salvar alterações</button>
+              </div>
+              <div className="grid min-w-0 content-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+                <p className="text-xs leading-5 text-white/55">Ao entrar em Follow-up, o retorno é agendado automaticamente em {followUpDelayDays} {followUpDelayDays === 1 ? 'dia' : 'dias'}.</p>
+                {activeFollowUp ? <p className="text-sm text-white/80">Retorno atual: <time dateTime={activeFollowUp.dueDate}>{dateTimeLabel(activeFollowUp.dueDate)}</time></p> : null}
+                {activeFollowUp ? <label className="grid min-w-0 gap-2 text-xs font-medium text-white/55">Nova data para reagendamento
+                  <input aria-label="Data do follow-up" type="datetime-local" value={followUpAt[lead.id] ?? ''} onChange={(event) => setFollowUpAt({ ...followUpAt, [lead.id]: event.target.value })} className="min-h-12 w-full min-w-0 rounded-lg border border-white/[0.14] bg-[#11171c] px-3 text-sm text-white" />
+                </label> : null}
+                <button type="button" disabled={savingId === lead.id || (!activeFollowUp && lead.stage === 'FOLLOW_UP')} onClick={() => scheduleFollowUp(lead)} className="min-h-11 w-full rounded-lg border border-[var(--atelier-green)] px-3 text-sm font-semibold text-[var(--atelier-green)] disabled:opacity-60">{activeFollowUp ? 'Reagendar follow-up' : 'Agendar follow-up'}</button>
+                {activeFollowUp ? <div className="grid gap-2 sm:grid-cols-2">
+                  <button type="button" disabled={savingId === lead.id} onClick={() => updateFollowUp(lead.id, activeFollowUp.id, 'COMPLETE')} className="min-h-11 rounded-lg border border-white/20 px-3 text-sm disabled:opacity-60">Concluir follow-up</button>
+                  <button type="button" disabled={savingId === lead.id} onClick={() => updateFollowUp(lead.id, activeFollowUp.id, 'CANCEL')} className="min-h-11 rounded-lg border border-white/20 px-3 text-sm disabled:opacity-60">Cancelar follow-up</button>
+                </div> : null}
+              </div>
             </div>
           </div>
+        <div className="grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2">
+          <button ref={returnButtonRef} type="button" disabled={savingId === lead.id} onClick={() => { confirmationFocusTarget.current = 'RETURN'; setError(null); setConfirmingReturn(true); }} className="min-h-11 rounded-lg border border-red-300/45 px-3 text-sm text-red-200 disabled:opacity-60">Devolver para pesquisa</button>
+          {lead.stage !== 'DISCARDED' ? <button ref={discardButtonRef} type="button" disabled={savingId === lead.id} onClick={discardLead} className="min-h-11 rounded-lg border border-red-300/45 px-3 text-sm text-red-200 disabled:opacity-60">Descartar empresa</button> : null}
+        </div>
+        </section> : null}
+        {activeTab === 'SALE' ? <section className="grid gap-4 pb-1">
         <div className="grid gap-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
           {lead.stage === 'WON' ? <>
           <p className="text-sm text-white/60">Negócio ganho. Venda: {currency.format(Number(lead.saleValue ?? 0))}. MRR: {currency.format(Number(lead.mrr ?? 0))}. Você pode corrigir os valores manualmente.</p>
@@ -245,6 +273,11 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
           <button type="button" disabled={savingId === lead.id} onClick={() => saveFinancials(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">{savingId === lead.id ? 'Salvando valores…' : 'Salvar valores da venda'}</button>
           {financialsSaved ? <p role="status" className="text-sm text-[var(--atelier-green)]">Valores da venda salvos.</p> : null}
           </> : <>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Forma de registrar venda">
+              <button type="button" aria-pressed={saleMode === 'SERVICES'} onClick={() => setSaleMode('SERVICES')} className={`min-h-10 rounded-lg border px-3 text-sm font-medium ${saleMode === 'SERVICES' ? 'border-[var(--atelier-green)] text-[var(--atelier-green)]' : 'border-white/15 text-white/60'}`}>Selecionar serviço</button>
+              <button type="button" aria-pressed={saleMode === 'MANUAL'} onClick={() => setSaleMode('MANUAL')} className={`min-h-10 rounded-lg border px-3 text-sm font-medium ${saleMode === 'MANUAL' ? 'border-[var(--atelier-green)] text-[var(--atelier-green)]' : 'border-white/15 text-white/60'}`}>Informar valores manualmente</button>
+            </div>
+            {saleMode === 'SERVICES' ? <>
             <fieldset disabled={savingId === lead.id} className="grid min-w-0 gap-3">
               <legend className="mb-3 text-sm font-semibold">Serviços vendidos</legend>
               {services.length ? services.map((service) => {
@@ -267,20 +300,28 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
             </fieldset>
             <div aria-live="polite" aria-label="Resumo da venda" className="grid gap-1 rounded-lg bg-white/5 p-3 text-sm"><p>Total da venda</p><p className="text-lg font-semibold">{currency.format(selectedSummary.saleValue)}</p><p>MRR: {currency.format(selectedSummary.mrr)}</p></div>
             {!selectedServiceIds.length ? <p className="text-sm text-amber-200">Os valores desta venda ficarão em zero.</p> : null}
-            {invalidSalePrice ? <p role="alert" className="text-sm text-red-200">Use preços com até duas casas decimais.</p> : null}
-            <button type="button" disabled={savingId === lead.id || invalidSalePrice} onClick={() => closeLead(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">{savingId === lead.id ? 'Fechando…' : 'Fechar negócio'}</button>
+            </> : <>
+              <p className="text-sm text-white/60">Informe os valores acordados. Esses números serão registrados diretamente na venda.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid min-w-0 gap-1 text-xs text-white/55">Valor da venda
+                  <input aria-label="Valor manual da venda" inputMode="decimal" type="number" min="0" step="0.01" value={saleValues[lead.id] ?? ''} onChange={(event) => setSaleValues({ ...saleValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
+                </label>
+                <label className="grid min-w-0 gap-1 text-xs text-white/55">MRR
+                  <input aria-label="MRR manual" inputMode="decimal" type="number" min="0" step="0.01" value={mrrValues[lead.id] ?? ''} onChange={(event) => setMrrValues({ ...mrrValues, [lead.id]: event.target.value })} className="min-h-11 min-w-0 rounded-md border border-white/20 bg-black px-2 text-sm text-white" />
+                </label>
+              </div>
+              {invalidManualValues ? <p role="alert" className="text-sm text-red-200">Informe valores válidos, com até duas casas decimais.</p> : null}
+            </>}
+            {saleMode === 'SERVICES' && invalidSalePrice ? <p role="alert" className="text-sm text-red-200">Use preços com até duas casas decimais.</p> : null}
+            <button type="button" disabled={savingId === lead.id || (saleMode === 'SERVICES' ? invalidSalePrice : invalidManualValues)} onClick={() => closeLead(lead.id)} className="min-h-11 rounded-md bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:opacity-60">{savingId === lead.id ? 'Fechando…' : 'Fechar negócio'}</button>
           </>}
-        </div>
-        <div className="grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2">
-          <button ref={returnButtonRef} type="button" disabled={savingId === lead.id} onClick={() => { confirmationFocusTarget.current = 'RETURN'; setError(null); setConfirmingReturn(true); }} className="min-h-11 rounded-lg border border-red-300/45 px-3 text-sm text-red-200 disabled:opacity-60">Devolver para pesquisa</button>
-          {lead.stage !== 'DISCARDED' ? <button ref={discardButtonRef} type="button" disabled={savingId === lead.id} onClick={discardLead} className="min-h-11 rounded-lg border border-red-300/45 px-3 text-sm text-red-200 disabled:opacity-60">Descartar empresa</button> : null}
         </div>
         </section> : null}
         {activeTab === 'HISTORY' ? <section className="grid gap-4">{lead.activities.length ? (
           <ol className="grid max-h-60 gap-3 overflow-y-auto rounded-xl border border-white/[0.09] bg-black/10 p-4 text-sm text-white/70" aria-label="Histórico de atividades">
             {lead.activities.map((activity) => <li key={activity.id} className="rounded-md border border-white/10 p-2">
               <div className="flex flex-wrap gap-x-2 text-xs text-white/55"><strong className="text-white/80">{activityLabels[activity.type] ?? activity.type}</strong>{activity.channel ? <span>{channelLabels[activity.channel] ?? activity.channel}</span> : null}<time dateTime={activity.createdAt}>{dateTimeLabel(activity.createdAt)}</time></div>
-              <p className="mt-1 break-words">{activity.note}</p>
+              <p className="mt-1 break-words">{formatReportNote(activity.note)}</p>
             </li>)}
           </ol>
         ) : <p className="rounded-xl border border-dashed border-white/[0.12] px-4 py-12 text-center text-sm text-white/45">Sem atividade registrada.</p>}</section> : null}

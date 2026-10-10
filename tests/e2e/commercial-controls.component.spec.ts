@@ -30,10 +30,12 @@ test.beforeAll(async () => {
       function App() {
         const [open, setOpen] = React.useState(false);
         const [result, setResult] = React.useState('');
-        const [boardLeads, setBoardLeads] = React.useState([lead]);
+      const [boardLeads, setBoardLeads] = React.useState(mode === 'scrollboard'
+        ? Array.from({ length: 18 }, (_, index) => ({ ...lead, id: 'lead-' + index, name: 'Oficina ' + index }))
+        : [lead]);
         return <main style={{ padding: 20 }}>
           <CommercialSettingsForm services={services} followUpDelayDays={3} />
-          {mode === 'board' && <>
+          {(mode === 'board' || mode === 'scrollboard') && <>
             <button onClick={() => setBoardLeads([{ ...lead, stage: 'WON' }])}>Confirmar ganho no servidor</button>
             <button onClick={() => setBoardLeads([{ ...lead, stage: 'CONTACTED' }])}>Receber reabertura externa</button>
             <KanbanBoard leads={boardLeads} services={services} followUpDelayDays={3} />
@@ -107,6 +109,7 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     const won = page.locator('section[aria-label="Ganho"]');
     const card = page.getByRole('button', { name: 'Abrir detalhes de Oficina de teste' });
     await card.click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Venda', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Fechar negócio', exact: true }).click();
     await expect(approached.locator('[data-lead-id="lead"]')).toHaveCount(1);
     release();
@@ -117,6 +120,7 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     await expect(approached.locator('[data-lead-id="lead"]')).toHaveCount(1);
     await expect(won.locator('[data-lead-id="lead"]')).toHaveCount(0);
     await card.click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Venda', exact: true }).click();
     await expect(page.getByRole('dialog').getByRole('button', { name: 'Fechar negócio', exact: true })).toBeVisible();
   });
   test(`catalog edits, validation, archival and delay preserve drafts on ${viewport.name}`, async ({ page }) => {
@@ -179,6 +183,8 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
     await expect(modal.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
     await expect(modal.getByLabel('Mover para etapa').locator('option[value="WON"]')).toHaveCount(0);
+    await expect(modal.getByText('Plano mensal')).toHaveCount(0);
+    await modal.getByRole('button', { name: 'Venda', exact: true }).click();
     await expect(modal.getByText('Os valores desta venda ficarão em zero.')).toBeVisible();
     await modal.getByRole('checkbox', { name: /Plano mensal/ }).check();
     await modal.getByRole('checkbox', { name: /Implantação/ }).check();
@@ -192,9 +198,30 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     expect(surface!.width).toBeLessThanOrEqual(viewport.width);
     expect(surface!.height).toBeLessThanOrEqual(viewport.height);
     await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
-    expect(bodies).toEqual([{ stage: 'WON', serviceIds: ['monthly', 'setup'] }, { stage: 'WON', serviceIds: ['monthly', 'setup'] }]);
+    expect(bodies).toEqual([
+      { stage: 'WON', serviceItems: [{ id: 'monthly', price: '199.90' }, { id: 'setup', price: '500.00' }] },
+      { stage: 'WON', serviceItems: [{ id: 'monthly', price: '199.90' }, { id: 'setup', price: '500.00' }] }
+    ]);
     await expect(modal).toHaveCount(0);
     await expect(page.getByTestId('callback-result')).toHaveText('WON');
+  });
+
+  test(`manual sale and MRR values are submitted when closing without a catalog service on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    let body: Record<string, unknown> | null = null;
+    await page.route('**/api/leads/lead', async (route) => {
+      body = route.request().postDataJSON();
+      await route.fulfill({ json: { lead: { stage: 'WON' } } });
+    });
+    await openComponents(page);
+    await page.getByRole('button', { name: 'Abrir lead' }).click();
+    const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
+    await modal.getByRole('button', { name: 'Venda', exact: true }).click();
+    await modal.getByRole('button', { name: 'Informar valores manualmente' }).click();
+    await modal.getByLabel('Valor manual da venda').fill('850');
+    await modal.getByLabel('MRR manual').fill('120.50');
+    await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
+    await expect.poll(() => body).toEqual({ stage: 'WON', saleValue: 850, mrr: 120.5 });
   });
 
   test(`zero closing, automatic follow-up, discard and return send their contracts on ${viewport.name}`, async ({ page }) => {
@@ -209,8 +236,9 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     await openComponents(page);
     const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
     await page.getByRole('button', { name: 'Abrir lead' }).click();
+    await modal.getByRole('button', { name: 'Venda', exact: true }).click();
     await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
-    expect(requests[0].body).toEqual({ stage: 'WON', serviceIds: [] });
+    expect(requests[0].body).toEqual({ stage: 'WON', serviceItems: [] });
     await page.getByRole('button', { name: 'Abrir lead' }).click();
     await expect(modal.getByLabel('Data do follow-up', { exact: true })).toHaveCount(0);
     await expect(modal.locator('input[type="datetime-local"]')).toHaveCount(0);
@@ -242,6 +270,7 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     await openComponents(page, 'won');
     const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
     await page.getByRole('button', { name: 'Abrir lead' }).click();
+    await modal.getByRole('button', { name: 'Venda', exact: true }).click();
     await expect(modal.getByText(/Negócio ganho/)).toContainText('R$ 699,90');
     await modal.getByLabel('Valor da venda', { exact: true }).fill('850');
     await modal.getByRole('button', { name: 'Salvar valores da venda', exact: true }).click();
@@ -271,9 +300,22 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     await page.getByRole('button', { name: 'Abrir lead' }).click();
     await modal.getByRole('button', { name: 'Histórico', exact: true }).click();
     await expect(modal.getByText('Venda revertida', { exact: true })).toBeVisible();
-    await expect(modal.getByText(/Negócio reaberto para CONTACTED/)).toBeVisible();
+    await expect(modal.getByText(/Negócio reaberto para Abordado/)).toBeVisible();
+    await expect(modal.getByText(/CONTACTED/)).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(modal).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Abrir lead' })).toBeFocused();
+  });
+
+  test(`vertical mouse-wheel scrolling works while hovering a funnel card on ${viewport.name}`, async ({ page }) => {
+    test.skip(viewport.name === 'mobile', 'The mobile funnel uses the page scroll rather than an inner vertical scrollport.');
+    await page.setViewportSize(viewport);
+    await openComponents(page, 'scrollboard');
+    const scrollport = page.getByTestId('crm-main-funnel-scrollport');
+    const card = page.getByRole('button', { name: 'Abrir detalhes de Oficina 0' });
+    await expect(scrollport).toBeVisible();
+    await page.mouse.move((await card.boundingBox())!.x + 10, (await card.boundingBox())!.y + 10);
+    await page.mouse.wheel(0, 300);
+    await expect.poll(() => scrollport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   });
 }

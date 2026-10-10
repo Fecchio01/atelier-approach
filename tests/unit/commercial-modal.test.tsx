@@ -28,12 +28,12 @@ function render(overrides: Partial<CrmLead> = {}) {
 }
 
 describe('commercial lead controls', () => {
-  it('offers catalog closing and discard directly in the initial contact section', () => {
+  it('keeps the initial contact section focused on contact and offers a separate sales tab', () => {
     const html = render();
-    expect(html).toContain('Plano mensal');
-    expect(html).toContain('Fechar negócio');
+    expect(html).toContain('Venda');
+    expect(html).not.toContain('Plano mensal');
+    expect(html).not.toContain('Fechar negócio');
     expect(html).toContain('Descartar empresa');
-    expect(html).toContain('Os valores desta venda ficarão em zero.');
     expect(html).not.toContain('value="WON"');
     expect(html).not.toContain('>Próxima ação</button>');
     expect(html).not.toContain('Canal da atividade');
@@ -51,9 +51,9 @@ describe('commercial lead controls', () => {
 
   it('shows financial corrections for an already won lead in contact', () => {
     const html = render({ stage: 'WON', saleValue: '699.90', mrr: '199.90' });
-    expect(html).toContain('Salvar valores da venda');
-    expect(html).toContain('699,90');
-    expect(html).toContain('199,90');
+    expect(html).not.toContain('Salvar valores da venda');
+    expect(html).not.toContain('699,90');
+    expect(html).not.toContain('199,90');
     expect(html).not.toContain('>Fechar negócio</button>');
   });
 

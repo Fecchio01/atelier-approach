@@ -13,4 +13,8 @@ describe('report note labels', () => {
     expect(formatReportNote('Aguardando retorno.')).toBe('Aguardando retorno.');
     expect(formatReportNote('Etapa alterada para LEGACY_STAGE.')).toBe('Etapa alterada para legacy stage.');
   });
+
+  it('translates stage codes wherever they appear inside a longer CRM history note', () => {
+    expect(formatReportNote('Negócio reaberto para CONTACTED; venda revertida.')).toBe('Negócio reaberto para Abordado; venda revertida.');
+  });
 });
