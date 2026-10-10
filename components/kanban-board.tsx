@@ -157,7 +157,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
           <div aria-hidden="true" className="h-2" style={{ minWidth: '1540px' }} />
         </div>
       </div>
-      <section data-testid="crm-main-funnel-scrollport" role="region" aria-label="Etapas principais do funil" tabIndex={0} className="atelier-scrollbar h-[min(68vh,42rem)] max-h-[min(68dvh,42rem)] overflow-y-auto overscroll-y-contain rounded-xl focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] md:h-auto">
+      <section data-testid="crm-main-funnel-scrollport" role="region" aria-label="Etapas principais do funil" tabIndex={0} className="atelier-scrollbar h-auto max-h-none overflow-y-visible overscroll-y-contain rounded-xl focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] md:h-auto md:max-h-[min(68dvh,42rem)] md:overflow-y-auto">
         <div ref={funnelScrollRef} role="region" aria-label="Funil CRM" tabIndex={0} onScroll={(event) => synchronizeHorizontalScroll(event.currentTarget, topScrollRef.current)} className="atelier-scrollbar-hidden-x min-w-0 max-w-full touch-auto overscroll-x-contain overflow-x-auto overflow-y-hidden pb-1 focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
           <div className="grid grid-cols-7 items-start gap-2.5" style={{ minWidth: '1540px' }}>{mainFunnelStages.map((stage) => renderColumn(stage))}</div>
         </div>
