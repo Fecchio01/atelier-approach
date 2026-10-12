@@ -150,6 +150,19 @@ describe('team goal actions', () => {
     );
   });
 
+  test('saves the proposals sent target as a fixed Avanço metric', async () => {
+    const form = new FormData();
+    form.set('proposalsSent', '5');
+
+    await expect(saveWeeklyGoal(initialGoalActionState, form)).resolves.toMatchObject({ status: 'saved' });
+    expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'WEEKLY' }),
+      expect.objectContaining({ proposalsSent: 5 }),
+      undefined,
+      undefined
+    );
+  });
+
   test('saves monthly custom metrics and cycle settings inside the same transaction', async () => {
     const transaction = {
       goal: { findFirst: vi.fn().mockResolvedValue(null) },

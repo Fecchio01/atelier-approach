@@ -12,6 +12,7 @@ type GoalRecord = {
   approachesTarget: number | null;
   interestsTarget: number | null;
   meetingsTarget: number | null;
+  proposalsSentTarget: number | null;
   salesTarget: number | null;
   revenueTarget: number | null;
   mrrTarget: number | null;

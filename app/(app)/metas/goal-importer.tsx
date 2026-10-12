@@ -14,6 +14,7 @@ const metrics: Array<{ key: GoalMetricKey; label: string; unit?: string }> = [
   { key: 'approaches', label: 'Abordagens' },
   { key: 'interests', label: 'Interesses' },
   { key: 'meetings', label: 'Reuniões e retornos' },
+  { key: 'proposalsSent', label: 'Propostas enviadas' },
   { key: 'followUpsCompleted', label: 'Follow-ups concluídos' },
   { key: 'sales', label: 'Vendas fechadas' },
   { key: 'revenue', label: 'Receita de vendas', unit: 'R$' },

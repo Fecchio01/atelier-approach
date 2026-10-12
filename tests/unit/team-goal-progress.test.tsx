@@ -12,6 +12,7 @@ function progress(target: number | null, reportedConversion = false): GoalProgre
     approaches: { actual: 5, target, ratio: target ? 0.5 : null },
     interests: { actual: 1, target: null, ratio: null },
     meetings: { actual: 0, target: null, ratio: null },
+    proposalsSent: { actual: 3, target, ratio: target ? 0.6 : null },
     sales: { actual: 0, target: null, ratio: null },
     revenue: { actual: 0, target: null, ratio: null },
     mrr: { actual: 0, target: null, ratio: null },
@@ -36,6 +37,16 @@ describe('expanded team goal progress', () => {
     expect(html).toContain('50%');
     expect(html).toContain('role="progressbar"');
     expect(html).toContain('aria-valuenow="50"');
+  });
+
+  test('shows proposal volume in the Avanço section and displays its missing target honestly', () => {
+    const withTarget = renderToStaticMarkup(<TeamGoalProgress progress={progress(5)} hasApproaches />);
+    const withoutTarget = renderToStaticMarkup(<TeamGoalProgress progress={progress(null)} hasApproaches />);
+
+    expect(withTarget).toContain('Propostas enviadas');
+    expect(withTarget).toContain('3 <span class="text-white/40">/</span> 5');
+    expect(withoutTarget).toContain('Propostas enviadas');
+    expect(withoutTarget).toContain('Sem meta');
   });
 
   test('shows a PDF-reported conversion rate and target progress without approaches', () => {

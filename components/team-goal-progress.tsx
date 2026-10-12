@@ -5,6 +5,7 @@ const metrics = [
   ['approaches', 'Abordagens'],
   ['interests', 'Interesses'],
   ['meetings', 'Reuniões'],
+  ['proposalsSent', 'Propostas enviadas'],
   ['sales', 'Vendas fechadas'],
   ['revenue', 'Receita de vendas'],
   ['mrr', 'MRR'],

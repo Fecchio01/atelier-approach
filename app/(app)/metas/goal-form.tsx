@@ -18,6 +18,7 @@ type GoalRecord = {
   approachesTarget: number | null;
   interestsTarget: number | null;
   meetingsTarget: number | null;
+  proposalsSentTarget: number | null;
   salesTarget: number | null;
   revenueTarget: number | null;
   mrrTarget: number | null;
@@ -44,6 +45,7 @@ const metricGroups = [
     Icon: ArrowsClockwiseIcon,
     fields: [
       { key: 'meetings', goalKey: 'meetingsTarget', label: 'Reuniões', min: '1', step: '1' },
+      { key: 'proposalsSent', goalKey: 'proposalsSentTarget', label: 'Propostas enviadas', min: '1', step: '1' },
       { key: 'followUpsCompleted', goalKey: 'followUpsCompletedTarget', label: 'Follow-ups concluídos', min: '1', step: '1' },
       { key: 'sales', goalKey: 'salesTarget', label: 'Vendas fechadas', min: '1', step: '1' }
     ]

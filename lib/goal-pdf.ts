@@ -12,12 +12,19 @@ const metricAliases: Record<GoalMetricKey, string[]> = {
   approaches: ['abordagens', 'abordagem'],
   interests: ['interesses', 'interesse'],
   meetings: ['reunioes e retornos', 'reunioes', 'reuniao'],
+  proposalsSent: ['propostas enviadas', 'proposta enviada'],
   sales: ['vendas fechadas', 'vendas', 'venda'],
   revenue: ['receita de vendas', 'receita', 'faturamento'],
   mrr: ['mrr', 'receita mensal recorrente'],
   followUpsCompleted: ['follow ups concluidos', 'followup concluidos', 'retornos concluidos'],
   conversionRate: ['taxa de conversao', 'conversion rate']
 };
+
+const ignoredMetricLabels = new Set([
+  'respostas recebidas',
+  'cadastros completos',
+  'execucao de novas abordagens'
+]);
 
 const numberSource = String.raw`(?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?)`;
 const signedNumberSource = String.raw`[-−+]?${numberSource}`;
@@ -162,6 +169,7 @@ export function parseGoalDocumentText(text: string): GoalPdfDraft {
     const target = hasUnambiguousTarget(numbers, explicitTarget, explicitCurrent);
     if (!target) continue;
 
+    if (ignoredMetricLabels.has(metricLabel(line, numbers[0]))) continue;
     const metric = matchingMetric(line, numbers[0]);
     if (metric === null) continue;
     if (metric) {

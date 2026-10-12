@@ -12,7 +12,7 @@ import { saveMonthlyStartDay, upsertTeamGoal, type GoalMetricKey } from '@/lib/m
 import { prisma } from '@/lib/db';
 import type { GoalActionState } from './goal-form-state';
 
-const metricKeys: GoalMetricKey[] = ['approaches', 'interests', 'meetings', 'sales', 'revenue', 'mrr', 'followUpsCompleted', 'conversionRate'];
+const metricKeys: GoalMetricKey[] = ['approaches', 'interests', 'meetings', 'proposalsSent', 'sales', 'revenue', 'mrr', 'followUpsCompleted', 'conversionRate'];
 const teamOwnerId = '__team__';
 
 function targetsFromForm(formData: FormData): GoalTargetFormValues {

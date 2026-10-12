@@ -38,6 +38,19 @@ describe('PDF goal text suggestions', () => {
     });
   });
 
+  test('maps proposals sent to its fixed funnel metric and ignores redundant PDF targets', () => {
+    expect(parseGoalDocumentText([
+      'INDICADOR\tMETA',
+      'Propostas enviadas\t5',
+      'Respostas recebidas\t24',
+      'Cadastros completos\t100%',
+      'Execução de novas abordagens\t30'
+    ].join('\n'))).toEqual({
+      targets: { proposalsSent: 5 },
+      customGoals: []
+    });
+  });
+
   test('extracts custom goals with units and an explicitly labeled current value', () => {
     expect(parseGoalDocumentText('Carros: atual 1, meta 3 carros\nClientes atendidos: 20 clientes')).toEqual({
       targets: {},

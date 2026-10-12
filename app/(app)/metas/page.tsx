@@ -27,7 +27,7 @@ export default async function GoalsPage() {
     },
     select: {
       periodKind: true, periodStart: true, periodEnd: true,
-      approachesTarget: true, interestsTarget: true, meetingsTarget: true,
+      approachesTarget: true, interestsTarget: true, meetingsTarget: true, proposalsSentTarget: true,
       salesTarget: true, revenueTarget: true, mrrTarget: true,
       followUpsCompletedTarget: true, conversionRateTarget: true, customGoals: true
     },
