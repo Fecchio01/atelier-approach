@@ -196,6 +196,7 @@ model Goal {
   approachesTarget         Int?
   interestsTarget          Int?
   meetingsTarget           Int?
+  proposalsSentTarget      Int?
   salesTarget              Int?
   revenueTarget            Float?
   mrrTarget                Float?

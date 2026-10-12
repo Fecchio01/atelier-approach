@@ -6,12 +6,12 @@ describe('goal target input', () => {
   test('turns blank optional fields into null and parses all positive targets', () => {
     expect(parseGoalTargets({
       approaches: '20', interests: '8', meetings: '4', sales: '3',
-      revenue: '12500.50', mrr: '899.90', followUpsCompleted: '12', conversionRate: '35'
+      revenue: '12500.50', mrr: '899.90', followUpsCompleted: '12', proposalsSent: '5', conversionRate: '35'
     })).toEqual({
       ok: true,
       targets: {
         approaches: 20, interests: 8, meetings: 4, sales: 3,
-        revenue: 12500.5, mrr: 899.9, followUpsCompleted: 12, conversionRate: 35
+        revenue: 12500.5, mrr: 899.9, followUpsCompleted: 12, proposalsSent: 5, conversionRate: 35
       }
     });
     const noTargets = parseGoalTargets({ approaches: '', interests: '  ' });
@@ -19,13 +19,15 @@ describe('goal target input', () => {
     if (!noTargets.ok) return;
     expect(noTargets.targets).toEqual({
       approaches: null, interests: null, meetings: null, sales: null,
-      revenue: null, mrr: null, followUpsCompleted: null, conversionRate: null
+      revenue: null, mrr: null, followUpsCompleted: null, proposalsSent: null, conversionRate: null
     });
   });
 
   test.each([
     ['zero count target', { approaches: '0' }],
     ['fractional count target', { meetings: '1.5' }],
+    ['zero proposal count target', { proposalsSent: '0' }],
+    ['fractional proposal count target', { proposalsSent: '1.5' }],
     ['negative money target', { revenue: '-1' }],
     ['invalid money target', { mrr: 'NaN' }],
     ['conversion below one percent', { conversionRate: '0.5' }],

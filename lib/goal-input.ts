@@ -3,7 +3,7 @@ import type { GoalMetricKey, TeamGoalTargets } from './metrics';
 export type GoalTargetFormValues = Partial<Record<GoalMetricKey, string | null | undefined>>;
 export type GoalTargetParseResult = { ok: true; targets: TeamGoalTargets } | { ok: false; message: string };
 
-const countTargets: GoalMetricKey[] = ['approaches', 'interests', 'meetings', 'sales', 'followUpsCompleted'];
+const countTargets: GoalMetricKey[] = ['approaches', 'interests', 'meetings', 'proposalsSent', 'sales', 'followUpsCompleted'];
 const moneyTargets: GoalMetricKey[] = ['revenue', 'mrr'];
 const allTargets: GoalMetricKey[] = [...countTargets, ...moneyTargets, 'conversionRate'];
 

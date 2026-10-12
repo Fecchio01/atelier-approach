@@ -80,7 +80,7 @@ describe('dashboard follow-up query and presentation', () => {
     vi.spyOn(prisma.teamGoalSettings, 'findUnique').mockResolvedValue(null);
     vi.spyOn(prisma.goal, 'findMany').mockResolvedValue([]);
     vi.spyOn(prisma.lead, 'findMany').mockResolvedValue([
-      { id: 'lead', stage: 'FOLLOW_UP', saleValue: null, mrr: null, wonAt: null, wonById: null }
+      { id: 'lead', stage: 'FOLLOW_UP', stageEnteredAt: new Date('2026-09-12T12:00:00Z'), postFollowUpAt: null, discardedAt: null, saleValue: null, mrr: null, wonAt: null, wonById: null }
     ] as never);
     vi.spyOn(prisma.activity, 'findMany').mockResolvedValue([]);
     vi.spyOn(prisma.stageHistory, 'findMany').mockResolvedValue([]);
@@ -362,10 +362,27 @@ describe('getDashboardMetrics', () => {
     expect(metrics.personalResults.bia).toBeUndefined();
   });
 
+  test('counts proposal stage entries inside the selected period, not the current stage', () => {
+    const metrics = getDashboardMetrics([
+      {
+        id: 'proposal-history', stage: 'PROPOSAL', saleValue: null, mrr: null, activities: [], followUps: [],
+        stageHistory: [
+          { actorId: 'ana', toStage: 'PROPOSAL', createdAt: new Date('2026-09-07T00:00:00.000Z') },
+          { actorId: 'ana', toStage: 'QUALIFIED', createdAt: new Date('2026-09-08T10:00:00.000Z') },
+          { actorId: 'ana', toStage: 'PROPOSAL', createdAt: new Date('2026-09-09T10:00:00.000Z') },
+          { actorId: 'ana', toStage: 'PROPOSAL', createdAt: new Date('2026-09-14T00:00:00.000Z') }
+        ]
+      },
+      { id: 'proposal-stage-only', stage: 'PROPOSAL', saleValue: null, mrr: null, activities: [], followUps: [], stageHistory: [] }
+    ], { start: new Date('2026-09-07T00:00:00.000Z'), end: new Date('2026-09-14T00:00:00.000Z') });
+
+    expect(metrics.goalActuals.proposalsSent).toBe(2);
+  });
+
   test('updates the existing team goal for the same period', async () => {
     const period = { kind: 'WEEKLY' as const, start: new Date('2026-09-07T03:00:00.000Z'), end: new Date('2026-09-14T03:00:00.000Z') };
     const targets = (approaches: number, interests: number, meetings: number, sales: number, revenue: number) => ({
-      approaches, interests, meetings, sales, revenue, mrr: null, followUpsCompleted: null, conversionRate: null
+      approaches, interests, meetings, proposalsSent: null, sales, revenue, mrr: null, followUpsCompleted: null, conversionRate: null
     });
     await prisma.goal.deleteMany();
 
@@ -376,6 +393,21 @@ describe('getDashboardMetrics', () => {
     expect(await prisma.goal.count()).toBe(1);
   });
 
+  test('persists proposal targets in the team goal upsert', async () => {
+    const period = { kind: 'WEEKLY' as const, start: new Date('2026-09-07T03:00:00.000Z'), end: new Date('2026-09-14T03:00:00.000Z') };
+    const upsert = vi.fn(async (args) => args);
+    const database = { goal: { upsert } } as never;
+    await upsertTeamGoal(period, {
+      approaches: null, interests: null, meetings: null, proposalsSent: 5,
+      sales: null, revenue: null, mrr: null, followUpsCompleted: null, conversionRate: null
+    }, database);
+
+    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ proposalsSentTarget: 5 }),
+      update: expect.objectContaining({ proposalsSentTarget: 5 })
+    }));
+  });
+
   test('saves custom goal target and manual progress on the selected team cycle', async () => {
     const period = { kind: 'WEEKLY' as const, start: new Date('2026-09-21T03:00:00.000Z'), end: new Date('2026-09-28T03:00:00.000Z') };
     await prisma.goal.deleteMany();
@@ -383,7 +415,7 @@ describe('getDashboardMetrics', () => {
     const customGoals = [{ id: 'metric-1', name: 'Carros', unit: 'unidades', target: 3, current: 1, icon: 'car' as const }];
     const saved = await upsertTeamGoal(period, {
       approaches: 9, interests: null, meetings: null, sales: null,
-      revenue: null, mrr: null, followUpsCompleted: null, conversionRate: null
+      proposalsSent: null, revenue: null, mrr: null, followUpsCompleted: null, conversionRate: null
     }, undefined, customGoals);
 
     expect(saved).toMatchObject({
@@ -400,9 +432,9 @@ describe('getDashboardMetrics', () => {
     await prisma.goal.create({ data: {
       ownerId: 'ana', periodKind: 'WEEKLY', periodStart: period.start, periodEnd: period.end,
       approachesTarget: 8, interestsTarget: 2, meetingsTarget: 1, salesTarget: 1, revenueTarget: 1200,
-      mrrTarget: null, followUpsCompletedTarget: null, conversionRateTarget: null
+      proposalsSentTarget: null, mrrTarget: null, followUpsCompletedTarget: null, conversionRateTarget: null
     } });
-    await upsertTeamGoal(period, { approaches: 30, interests: 6, meetings: 4, sales: 3, revenue: 5000, mrr: null, followUpsCompleted: null, conversionRate: null });
+    await upsertTeamGoal(period, { approaches: 30, interests: 6, meetings: 4, proposalsSent: null, sales: 3, revenue: 5000, mrr: null, followUpsCompleted: null, conversionRate: null });
 
     expect(await prisma.goal.findMany({ orderBy: { ownerId: 'asc' } })).toMatchObject([
       { ownerId: '__team__', periodKind: 'WEEKLY', approachesTarget: 30, interestsTarget: 6, meetingsTarget: 4, salesTarget: 3, revenueTarget: 5000 },

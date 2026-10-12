@@ -36,12 +36,12 @@ export type MetricLead = {
 
 export type DashboardRange = { start: Date; end: Date; now?: Date };
 
-export type GoalMetricKey = 'approaches' | 'interests' | 'meetings' | 'sales' | 'revenue' | 'mrr' | 'followUpsCompleted' | 'conversionRate';
+export type GoalMetricKey = 'approaches' | 'interests' | 'meetings' | 'proposalsSent' | 'sales' | 'revenue' | 'mrr' | 'followUpsCompleted' | 'conversionRate';
 export type GoalMetricActuals = Record<GoalMetricKey, number> & { conversionRateReported?: boolean };
 export type TeamGoalTargets = Record<GoalMetricKey, number | null>;
 export type GoalMetricProgress = { actual: number; target: number | null; ratio: number | null; reported?: boolean };
 export type GoalProgressByMetric = Record<GoalMetricKey, GoalMetricProgress>;
-const goalMetricKeys: GoalMetricKey[] = ['approaches', 'interests', 'meetings', 'sales', 'revenue', 'mrr', 'followUpsCompleted', 'conversionRate'];
+const goalMetricKeys: GoalMetricKey[] = ['approaches', 'interests', 'meetings', 'proposalsSent', 'sales', 'revenue', 'mrr', 'followUpsCompleted', 'conversionRate'];
 
 export type DashboardMetrics = {
   sales: number;
@@ -81,6 +81,7 @@ export type GoalTargetRecord = {
   approachesTarget?: number | null;
   interestsTarget?: number | null;
   meetingsTarget?: number | null;
+  proposalsSentTarget?: number | null;
   salesTarget?: number | null;
   revenueTarget?: number | null;
   mrrTarget?: number | null;
@@ -93,6 +94,7 @@ export function getTeamGoalTargets(goal?: GoalTargetRecord | null): TeamGoalTarg
     approaches: goal?.approachesTarget ?? null,
     interests: goal?.interestsTarget ?? null,
     meetings: goal?.meetingsTarget ?? null,
+    proposalsSent: goal?.proposalsSentTarget ?? null,
     sales: goal?.salesTarget ?? null,
     revenue: goal?.revenueTarget ?? null,
     mrr: goal?.mrrTarget ?? null,
@@ -108,6 +110,7 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
   const member = (id: string) => personal[id] ??= emptyResults();
   let mrr = 0;
   let followUpsCompleted = 0;
+  let proposalsSent = 0;
   for (const lead of leads) {
     followUpsCompleted += lead.followUps.filter((followUp) => followUp.state === 'COMPLETED' && followUp.completedAt && inRange(followUp.completedAt, range)).length;
     for (const activity of lead.activities) {
@@ -116,13 +119,14 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
     const history = lead.stageHistory?.length ? lead.stageHistory : (lead.activities ?? []).flatMap((activity) => {
       if (activity.type && activity.type !== 'STAGE_CHANGE') return [];
       // Untyped legacy records are accepted only with the system's exact transition note.
-      const match = activity.note?.match(/^Etapa alterada para (INTEREST|IN_CONVERSATION|QUALIFIED|MEETING|FOLLOW_UP)\.$/);
+      const match = activity.note?.match(/^Etapa alterada para (INTEREST|IN_CONVERSATION|QUALIFIED|PROPOSAL|MEETING|FOLLOW_UP)\.$/);
       return match ? [{ actorId: activity.actorId, toStage: match[1] as LeadStage, createdAt: activity.createdAt }] : [];
     });
     for (const event of history) {
       if (!inRange(event.createdAt, range)) continue;
       if (isInterestStage(event.toStage)) member(event.actorId).interests += 1;
       if (isMeetingStage(event.toStage)) member(event.actorId).meetings += 1;
+      if (event.toStage === 'PROPOSAL') proposalsSent += 1;
     }
     for (const sale of lead.saleEvents ?? []) {
       if (sale.reversedAt || !inRange(sale.occurredAt, range)) continue;
@@ -144,11 +148,11 @@ function resultsFor(leads: MetricLead[], range: DashboardRange) {
     sales: total.sales + result.sales,
     won: total.won + result.won
   }), emptyResults());
-  return { personal, team, mrr, followUpsCompleted };
+  return { personal, team, mrr, followUpsCompleted, proposalsSent };
 }
 
 export function getDashboardMetrics(leads: MetricLead[], range: DashboardRange): DashboardMetrics {
-  const { personal: personalResults, team: teamResults, mrr, followUpsCompleted } = resultsFor(leads, range);
+  const { personal: personalResults, team: teamResults, mrr, followUpsCompleted, proposalsSent } = resultsFor(leads, range);
   const now = range.now ?? new Date();
   const todayEnd = getLocalDayWindow(now).end;
   const pendingFollowUps = leads.flatMap((lead) => lead.followUps.filter((followUp) => followUp.state === 'PENDING'));
@@ -164,6 +168,7 @@ export function getDashboardMetrics(leads: MetricLead[], range: DashboardRange):
       approaches: teamResults.approaches,
       interests: teamResults.interests,
       meetings: teamResults.meetings,
+      proposalsSent,
       sales: teamResults.won,
       revenue: teamResults.sales,
       mrr,
@@ -253,6 +258,7 @@ export async function upsertTeamGoal(
     approachesTarget: targets.approaches,
     interestsTarget: targets.interests,
     meetingsTarget: targets.meetings,
+    proposalsSentTarget: targets.proposalsSent,
     salesTarget: targets.sales,
     revenueTarget: targets.revenue,
     mrrTarget: targets.mrr,
