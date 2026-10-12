@@ -1,4 +1,4 @@
-import { customGoalIcons, customGoalGroupKeys, type CustomGoalGroup, type CustomGoalIcon, type CustomGoalMetric } from './custom-goals';
+import { customGoalIcons, customGoalGroupKeys, getCustomGoalGroup, type CustomGoalGroup, type CustomGoalIcon, type CustomGoalMetric } from './custom-goals';
 import type { GoalMetricKey } from './metrics';
 
 export type ReviewedGoalSuggestion = {
@@ -14,6 +14,32 @@ export type ReviewedGoalSuggestion = {
 
 export function removePdfImportedCustomGoals(customGoals: CustomGoalMetric[]) {
   return customGoals.filter((goal) => goal.origin !== 'pdf');
+}
+
+const redundantGoalAliases = new Set([
+  'propostas enviadas', 'proposta enviada', 'vendas fechadas', 'conversoes em vendas', 'conversao em vendas'
+]);
+const uselessGoalPrefixes = [
+  'respostas recebidas', 'cadastros completos', 'execucao de novas abordagens'
+];
+
+function normalizeImportedGoalName(name: string) {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/\s*\((?:personalizado|quantidade)\)\s*$/i, '')
+    .replace(/\s*[—–-]\s*.*$/, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+/** Removes legacy PDF rows that duplicate native metrics or were explicitly rejected as useless. */
+export function removeRedundantCustomGoals(customGoals: CustomGoalMetric[]) {
+  return customGoals.filter((goal) => {
+    const name = normalizeImportedGoalName(goal.name);
+    return !redundantGoalAliases.has(name) && !uselessGoalPrefixes.some((prefix) => name === prefix || name.startsWith(`${prefix} `) || name.startsWith(`${prefix}(`));
+  });
+}
+
+export function removeCustomGoalsByGroup(customGoals: CustomGoalMetric[], group: CustomGoalGroup) {
+  return customGoals.filter((goal) => getCustomGoalGroup(goal) !== group);
 }
 
 export function createGoalSaveFormData(
@@ -36,7 +62,7 @@ export function applyGoalSuggestions(
   suggestions: ReviewedGoalSuggestion[]
 ) {
   const targets = { ...currentTargets };
-  const customGoals = removePdfImportedCustomGoals(currentCustomGoals);
+  const customGoals = removeRedundantCustomGoals(removePdfImportedCustomGoals(currentCustomGoals));
 
   for (const suggestion of suggestions) {
     const target = Number(suggestion.target.replace(',', '.'));
@@ -69,5 +95,5 @@ export function applyGoalSuggestions(
     else customGoals[existingIndex] = customGoal;
   }
 
-  return { targets, customGoals };
+  return { targets, customGoals: removeRedundantCustomGoals(customGoals) };
 }

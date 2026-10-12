@@ -1,13 +1,13 @@
 'use client';
 
-import { useActionState, useState } from 'react';
-import { ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, TargetIcon, WrenchIcon, XIcon } from '@phosphor-icons/react';
+import { useActionState, useEffect, useRef, useState } from 'react';
+import { ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, TargetIcon, TrashIcon, WrenchIcon, XIcon } from '@phosphor-icons/react';
 
-import { applyGoalSuggestions, createGoalSaveFormData, removePdfImportedCustomGoals } from '@/lib/goal-import-state';
+import { applyGoalSuggestions, createGoalSaveFormData, removeCustomGoalsByGroup, removePdfImportedCustomGoals, removeRedundantCustomGoals } from '@/lib/goal-import-state';
 import { customGoalGroupKeys, customGoalGroups, getCustomGoalGroup, groupCustomGoals, inferCustomGoalGroup, updateCustomGoalDraft, type CustomGoalGroup, type CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
-import { removeImportedPdfGoals, saveCustomGoalsForCycle, saveMonthlyGoal, saveWeeklyGoal } from './actions';
+import { removeImportedPdfGoals, removeRedundantGoalsFromCycle, saveCustomGoalsForCycle, saveMonthlyGoal, saveWeeklyGoal } from './actions';
 import { initialGoalActionState, type GoalActionState } from './goal-form-state';
 import { CustomGoalMetricRow } from './custom-goal-metrics';
 import { GoalImporter } from './goal-importer';
@@ -123,7 +123,7 @@ export function GoalForm({
   const action = kind === 'WEEKLY' ? saveWeeklyGoal : saveMonthlyGoal;
   const [state, formAction, pending] = useActionState<GoalActionState, FormData>(action, initialGoalActionState);
   const [draft, setDraft] = useState(() => goalDraftFromRecord(goal));
-  const [customGoals, setCustomGoals] = useState(() => goal?.customGoals ?? []);
+  const [customGoals, setCustomGoals] = useState(() => removeRedundantCustomGoals(goal?.customGoals ?? []));
   const [editingField, setEditingField] = useState<GoalTargetField | null>(null);
   const [editingCustomGoalId, setEditingCustomGoalId] = useState<string | null>(null);
   const [importPending, setImportPending] = useState(false);
@@ -133,6 +133,8 @@ export function GoalForm({
   const [importerRevision, setImporterRevision] = useState(0);
   const [goalNotice, setGoalNotice] = useState<GoalActionState | null>(null);
   const [monthlyStartDayDraft, setMonthlyStartDayDraft] = useState(String(monthlyStartDay));
+  const legacyRedundantGoals = Boolean(goal && removeRedundantCustomGoals(goal.customGoals).length < goal.customGoals.length);
+  const cleanupStarted = useRef(false);
   const numericStartDay = Number(monthlyStartDayDraft);
   const displayedPeriod = kind === 'MONTHLY' && Number.isInteger(numericStartDay) && numericStartDay >= 1 && numericStartDay <= 31
     ? getGoalPeriodWindow('MONTHLY', now, numericStartDay, period.start)
@@ -141,6 +143,12 @@ export function GoalForm({
   const endLabel = inclusiveEnd(displayedPeriod);
   const daysLabel = progress.daysLeft === 1 ? '1 dia restante' : `${progress.daysLeft} dias restantes`;
   const panelTitle = kind === 'WEEKLY' ? 'Metas semanais da equipe' : 'Metas mensais da equipe';
+
+  useEffect(() => {
+    if (!legacyRedundantGoals || cleanupStarted.current) return;
+    cleanupStarted.current = true;
+    void removeRedundantGoalsFromCycle(kind).then(setGoalNotice);
+  }, [kind, legacyRedundantGoals]);
 
   async function persistCustomGoalList(nextCustomGoals: CustomGoalMetric[]): Promise<GoalActionState> {
     setCustomGoalSavePending(true);
@@ -251,6 +259,21 @@ export function GoalForm({
     if (result.status === 'saved') {
       setCustomGoals(nextCustomGoals);
       setEditingCustomGoalId((current) => current === id ? null : current);
+    }
+  }
+
+  async function removeCustomGoalSession(group: CustomGoalGroup, label: string) {
+    if (pending || importPending || importerBusy || customGoalSavePending) return;
+    const sessionGoals = customGoals.filter((goal) => getCustomGoalGroup(goal) === group);
+    if (sessionGoals.length === 0) return;
+    const confirmed = window.confirm(`Excluir a sessão “${label}” e os ${sessionGoals.length} indicadores personalizados dela neste ciclo? Essa ação não apaga as metas padrão.`);
+    if (!confirmed) return;
+
+    const nextCustomGoals = removeCustomGoalsByGroup(customGoals, group);
+    const result = await persistCustomGoalList(nextCustomGoals);
+    if (result.status === 'saved') {
+      setCustomGoals(nextCustomGoals);
+      setEditingCustomGoalId((current) => sessionGoals.some((goal) => goal.id === current) ? null : current);
     }
   }
 
@@ -430,9 +453,14 @@ export function GoalForm({
         const { label, description } = customGoalGroups[groupKey];
         const GroupIcon = metricGroupIcons[groupKey];
         return <DashboardMotionSection key={groupKey} aria-labelledby={`${groupKey}-heading`} className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#11171b] p-4 sm:p-5">
-          <div className="flex items-start gap-3 border-b border-white/[0.07] pb-4">
+          <div className="flex items-start justify-between gap-3 border-b border-white/[0.07] pb-4">
+            <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><GroupIcon size={20} weight="regular" /></span>
             <div><h3 id={`${groupKey}-heading`} className="font-semibold text-white/90">{label}</h3><p className="mt-1 text-xs leading-5 text-white/45">{description}</p></div>
+            </div>
+            <button type="button" aria-label={`Excluir sessão ${label}`} title={`Excluir todos os indicadores personalizados de ${label}`} disabled={pending || importPending || importerBusy || customGoalSavePending} onClick={() => void removeCustomGoalSession(groupKey, label)} className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-md border border-red-300/15 px-2 text-[10px] font-medium text-white/45 transition hover:border-red-300/35 hover:bg-red-300/[0.06] hover:text-red-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-300 disabled:cursor-wait disabled:opacity-50">
+              <TrashIcon size={13} aria-hidden="true" /> Excluir sessão
+            </button>
           </div>
           <div className="divide-y divide-white/[0.06]">
             {customGoalsByGroup[groupKey].map((customGoal, index) => <CustomGoalMetricRow

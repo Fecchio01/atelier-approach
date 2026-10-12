@@ -5,7 +5,7 @@ import type { Prisma } from '@prisma/client';
 
 import { getCurrentUser } from '@/lib/auth';
 import { parseCustomGoalMetrics } from '@/lib/custom-goals';
-import { removePdfImportedCustomGoals } from '@/lib/goal-import-state';
+import { removePdfImportedCustomGoals, removeRedundantCustomGoals } from '@/lib/goal-import-state';
 import { parseGoalTargets, type GoalTargetFormValues } from '@/lib/goal-input';
 import { getGoalPeriodWindow } from '@/lib/goal-periods';
 import { saveMonthlyStartDay, upsertTeamGoal, type GoalMetricKey } from '@/lib/metrics';
@@ -21,7 +21,8 @@ function targetsFromForm(formData: FormData): GoalTargetFormValues {
 
 function customGoalsFromForm(formData: FormData) {
   if (!formData.has('customGoals')) return { ok: true as const, goals: undefined };
-  return parseCustomGoalMetrics(formData.get('customGoals')?.toString() ?? '');
+  const parsed = parseCustomGoalMetrics(formData.get('customGoals')?.toString() ?? '');
+  return parsed.ok ? { ...parsed, goals: removeRedundantCustomGoals(parsed.goals) } : parsed;
 }
 
 async function revalidateGoals() {
@@ -104,6 +105,7 @@ export async function saveCustomGoalsForCycle(kind: 'WEEKLY' | 'MONTHLY', custom
 
     const parsedCustomGoals = parseCustomGoalMetrics(customGoalsJson);
     if (!parsedCustomGoals.ok) return { status: 'error', message: parsedCustomGoals.message };
+    const cleanCustomGoals = removeRedundantCustomGoals(parsedCustomGoals.goals);
 
     const now = new Date();
     let period = getGoalPeriodWindow('WEEKLY', now, 1);
@@ -126,14 +128,44 @@ export async function saveCustomGoalsForCycle(kind: 'WEEKLY' | 'MONTHLY', custom
     const unique = { ownerId: teamOwnerId, periodKind: kind, periodStart: period.start };
     await prisma.goal.upsert({
       where: { ownerId_periodKind_periodStart: unique },
-      create: { ...unique, periodEnd: period.end, customGoals: parsedCustomGoals.goals as Prisma.InputJsonValue },
-      update: { customGoals: parsedCustomGoals.goals as Prisma.InputJsonValue }
+      create: { ...unique, periodEnd: period.end, customGoals: cleanCustomGoals as Prisma.InputJsonValue },
+      update: { customGoals: cleanCustomGoals as Prisma.InputJsonValue }
     });
 
     await revalidateGoals();
     return { status: 'saved', message: 'Indicador salvo automaticamente neste ciclo.' };
   } catch {
     return { status: 'error', message: 'Não foi possível salvar o indicador agora. Ele continua no formulário; tente novamente.' };
+  }
+}
+
+export async function removeRedundantGoalsFromCycle(kind: 'WEEKLY' | 'MONTHLY'): Promise<GoalActionState> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { status: 'error', message: 'Entre no sistema para ajustar as metas.' };
+    if (kind !== 'WEEKLY' && kind !== 'MONTHLY') return { status: 'error', message: 'Escolha um ciclo válido para ajustar as metas.' };
+
+    const now = new Date();
+    const activeGoal = kind === 'WEEKLY'
+      ? await prisma.goal.findFirst({
+        where: { ownerId: teamOwnerId, periodKind: 'WEEKLY', periodStart: getGoalPeriodWindow('WEEKLY', now, 1).start }
+      })
+      : await prisma.goal.findFirst({
+        where: { ownerId: teamOwnerId, periodKind: 'MONTHLY', periodStart: { lte: now }, periodEnd: { gt: now } },
+        orderBy: { periodStart: 'desc' }
+      });
+
+    if (!activeGoal) return { status: 'saved', message: 'Este ciclo não tem indicadores personalizados redundantes.' };
+    const parsed = parseCustomGoalMetrics(activeGoal.customGoals);
+    if (!parsed.ok) return { status: 'error', message: parsed.message };
+    const cleaned = removeRedundantCustomGoals(parsed.goals);
+    if (cleaned.length === parsed.goals.length) return { status: 'saved', message: 'Os indicadores deste ciclo já estão organizados.' };
+
+    await prisma.goal.update({ where: { id: activeGoal.id }, data: { customGoals: cleaned as Prisma.InputJsonValue } });
+    await revalidateGoals();
+    return { status: 'saved', message: 'Indicadores redundantes removidos; os demais e as metas padrão foram preservados.' };
+  } catch {
+    return { status: 'error', message: 'Não foi possível limpar os indicadores redundantes agora.' };
   }
 }
 

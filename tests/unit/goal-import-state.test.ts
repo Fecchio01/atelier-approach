@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { applyGoalSuggestions, createGoalSaveFormData, removePdfImportedCustomGoals, type ReviewedGoalSuggestion } from '../../lib/goal-import-state';
+import { applyGoalSuggestions, createGoalSaveFormData, removeCustomGoalsByGroup, removePdfImportedCustomGoals, removeRedundantCustomGoals, type ReviewedGoalSuggestion } from '../../lib/goal-import-state';
 
 describe('reviewed goal suggestions', () => {
   test('saves the reviewer-selected thematic group with a custom PDF metric', () => {
@@ -63,6 +63,31 @@ describe('reviewed goal suggestions', () => {
     ])).toEqual([
       { id: 'manual', name: 'Parcerias', target: 5, current: 1, origin: 'manual' },
       { id: 'legacy', name: 'Indicador antigo', target: 2, current: 0 }
+    ]);
+  });
+
+  test('cleans legacy imported metrics that duplicate native goals or have no business value', () => {
+    expect(removeRedundantCustomGoals([
+      { id: 'answers', name: 'Respostas recebidas (personalizado)', target: 24, current: 0 },
+      { id: 'proposals', name: 'Propostas enviadas (personalizado)', target: 5, current: 0 },
+      { id: 'sales', name: 'Conversões em vendas — quantidade (personalizado)', target: 1, current: 0 },
+      { id: 'registrations', name: 'Cadastros completos (personalizado)', target: 120, current: 0 },
+      { id: 'extra-approaches', name: 'Execução de novas abordagens por dia útil', target: 30, current: 0 },
+      { id: 'valid-followups', name: 'Follow-ups vencidos concluídos (%)', target: 100, current: 0 },
+      { id: 'valid-service', name: 'Serviços concluídos', target: 8, current: 0 }
+    ])).toEqual([
+      { id: 'valid-followups', name: 'Follow-ups vencidos concluídos (%)', target: 100, current: 0 },
+      { id: 'valid-service', name: 'Serviços concluídos', target: 8, current: 0 }
+    ]);
+  });
+
+  test('removes every custom indicator in one session without touching other sessions', () => {
+    expect(removeCustomGoalsByGroup([
+      { id: 'service-one', name: 'Serviços concluídos', target: 8, current: 0, group: 'operations' },
+      { id: 'service-two', name: 'Reparos concluídos', target: 5, current: 0, group: 'operations' },
+      { id: 'vehicles', name: 'Carros entregues', target: 4, current: 0, group: 'vehicles' }
+    ], 'operations')).toEqual([
+      { id: 'vehicles', name: 'Carros entregues', target: 4, current: 0, group: 'vehicles' }
     ]);
   });
   test('merges reviewed fixed targets and appends custom metrics without losing existing values', () => {
