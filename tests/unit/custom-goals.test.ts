@@ -4,7 +4,7 @@ import { getCustomGoalCurrent, getCustomGoalGroup, getCustomGoalIcon, inferCusto
 import * as goalGrouping from '../../lib/custom-goals';
 
 describe('custom team goals', () => {
-  const actuals = { approaches: 20, interests: 4, meetings: 3, sales: 2, revenue: 500, mrr: 100, followUpsCompleted: 6, conversionRate: 10 };
+  const actuals = { approaches: 20, interests: 4, meetings: 3, proposalsSent: 0, sales: 2, revenue: 500, mrr: 100, followUpsCompleted: 6, conversionRate: 10 };
 
   test.each([
     ['Carros entregues', undefined, 'car'],

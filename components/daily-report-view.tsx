@@ -82,6 +82,7 @@ export function DailyReportView({
           <Metric label="Abordagens" value={summary!.approaches} />
           <Metric label="Interesses" value={summary!.interests} />
           <Metric label="Reuniões" value={summary!.meetings} />
+          <Metric label="Propostas enviadas" value={summary!.proposalsSent} />
           <Metric label="Vendas" value={summary!.sales} />
           <Metric label="Receita vendida" value={money(summary!.revenue)} />
           <Metric label="MRR" value={money(summary!.mrr)} />

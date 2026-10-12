@@ -18,6 +18,7 @@ type HistoryBatch = {
 const metricOptions: Array<{ key: GoalMetricKey; label: string }> = [
   { key: 'approaches', label: 'Abordagens' }, { key: 'interests', label: 'Interesses / qualificados' },
   { key: 'meetings', label: 'Reuniões' }, { key: 'sales', label: 'Vendas fechadas' },
+  { key: 'proposalsSent', label: 'Propostas enviadas' },
   { key: 'revenue', label: 'Receita' }, { key: 'mrr', label: 'MRR' },
   { key: 'followUpsCompleted', label: 'Follow-ups concluídos' }, { key: 'conversionRate', label: 'Taxa de conversão' }
 ];

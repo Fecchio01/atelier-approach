@@ -29,6 +29,37 @@ const post = (reportRouteModule as unknown as Record<string, unknown>).POST as C
 const deleteReport = (reportRouteModule as unknown as Record<string, unknown>).DELETE as ReopenDelete | undefined;
 const originalPrismaTransaction = prisma.$transaction;
 
+describe('daily proposal reporting', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  test('counts only proposal stage-history events included in the closed daily window', async () => {
+    expect(builder).toBeTypeOf('function');
+    if (!builder) return;
+    const from = new Date('2026-09-29T03:00:00.000Z');
+    const to = new Date('2026-09-30T03:00:00.000Z');
+    const tx = {
+      lead: { findMany: vi.fn().mockResolvedValue([]) },
+      activity: { findMany: vi.fn().mockResolvedValue([]) },
+      followUp: { findMany: vi.fn().mockResolvedValue([]) },
+      saleEvent: { findMany: vi.fn().mockResolvedValue([]) },
+      stageHistory: { findMany: vi.fn().mockResolvedValue([{ actorId: 'ana', toStage: 'PROPOSAL' }]) },
+      metricImportBatch: { findMany: vi.fn().mockResolvedValue([]) },
+      memberProfile: { findMany: vi.fn().mockResolvedValue([]) }
+    };
+    vi.spyOn(prisma, '$transaction').mockImplementation((async (...args: unknown[]) => {
+      const [callback] = args as [(client: typeof prisma) => Promise<unknown>];
+      return callback(tx as unknown as typeof prisma);
+    }) as typeof prisma.$transaction);
+
+    const snapshot = await builder({ from, to, closedAt: new Date('2026-09-29T13:00:00.000Z') });
+
+    expect(snapshot.summary.proposalsSent).toBe(1);
+    expect(tx.stageHistory.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { createdAt: { gte: from, lt: to, lte: new Date('2026-09-29T13:00:00.000Z') } }
+    }));
+  });
+});
+
 describe('daily report snapshots', () => {
   afterEach(() => {
     vi.restoreAllMocks();

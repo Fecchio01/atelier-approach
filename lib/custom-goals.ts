@@ -12,7 +12,7 @@ export type CustomGoalSource = 'manual' | GoalMetricKey;
 export type CustomGoalOrigin = 'manual' | 'pdf';
 export const customGoalSourceLabels: Record<CustomGoalSource, string> = {
   manual: 'Manual', approaches: 'Abordagens', interests: 'Interesses', meetings: 'Reuniões',
-  followUpsCompleted: 'Follow-ups concluídos', sales: 'Vendas', revenue: 'Receita', mrr: 'MRR', conversionRate: 'Conversão'
+  proposalsSent: 'Propostas enviadas', followUpsCompleted: 'Follow-ups concluídos', sales: 'Vendas', revenue: 'Receita', mrr: 'MRR', conversionRate: 'Conversão'
 };
 
 export type CustomGoalIcon = typeof customGoalIcons[number];

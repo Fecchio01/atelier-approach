@@ -41,11 +41,12 @@ const activityLabels: Record<ActivityType, string> = {
 const teamOwnerId = '__team__';
 const goalSelect = {
   approachesTarget: true, interestsTarget: true, meetingsTarget: true,
+  proposalsSentTarget: true,
   salesTarget: true, revenueTarget: true, mrrTarget: true,
   followUpsCompletedTarget: true, conversionRateTarget: true
 } as const;
 const metricLabels: Record<GoalMetricKey, string> = {
-  approaches: 'Abordagens', interests: 'Interesses', meetings: 'Reuniões e retornos', sales: 'Vendas',
+  approaches: 'Abordagens', interests: 'Interesses', meetings: 'Reuniões e retornos', proposalsSent: 'Propostas enviadas', sales: 'Vendas',
   revenue: 'Receita vendida', mrr: 'MRR', followUpsCompleted: 'Follow-ups concluídos', conversionRate: 'Conversão'
 };
 

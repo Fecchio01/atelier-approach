@@ -58,10 +58,12 @@ describe('meeting and follow-up projections without database writes', () => {
 
     history.mockResolvedValue([
       { actorId: 'ana', toStage: 'FOLLOW_UP' },
-      { actorId: 'bia', toStage: 'MEETING' }
+      { actorId: 'bia', toStage: 'MEETING' },
+      { actorId: 'bia', toStage: 'PROPOSAL', createdAt: new Date('2026-09-10T12:00:00Z') }
     ] as never);
     const report = await buildReport(range);
-    expect(report.goalActuals).toMatchObject({ meetings: 1, followUpsCompleted: 1 });
+    expect(report.goalActuals).toMatchObject({ meetings: 1, proposalsSent: 1, followUpsCompleted: 1 });
+    expect(history).toHaveBeenLastCalledWith(expect.objectContaining({ where: { createdAt: { gte: range.from, lt: range.to } } }));
     expect(report.members).toEqual([{ memberId: 'bia', approaches: 0, interests: 0, meetings: 1, wins: 0, sales: 0, mrr: 0 }]);
   });
 
@@ -241,7 +243,7 @@ describe('commercial reports', () => {
   test('recommends reducing overdue follow-ups from the measured report, without a predictive claim', () => {
     const report = {
       conversion: { approaches: 3, wins: 1, rate: 0.33 },
-      goalActuals: { approaches: 3, interests: 0, meetings: 0, sales: 1, revenue: 1200, mrr: 297, followUpsCompleted: 0, conversionRate: 33 },
+      goalActuals: { approaches: 3, interests: 0, meetings: 0, proposalsSent: 0, sales: 1, revenue: 1200, mrr: 297, followUpsCompleted: 0, conversionRate: 33 },
       imports: { batchIds: [], batchCount: 0 },
       revenue: { sales: 1200, mrr: 297 },
       channels: [], funnel: [], members: [], followUps: { pending: 2, completed: 0, cancelled: 0, overdue: 1 }, notes: { total: 1, recent: ['Retornar amanhã.'] },
@@ -366,7 +368,7 @@ describe('commercial reports', () => {
 
     expect(lead.id).toBeTruthy();
     expect(report.goalActuals).toEqual({
-      approaches: 1, interests: 1, meetings: 1, sales: 1,
+      approaches: 1, interests: 1, meetings: 1, proposalsSent: 0, sales: 1,
       revenue: 1200, mrr: 297, followUpsCompleted: 1, conversionRate: 100
     });
   });

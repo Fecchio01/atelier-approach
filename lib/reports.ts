@@ -46,6 +46,7 @@ export type DailyReportSnapshot = {
     approaches: number;
     interests: number;
     meetings: number;
+    proposalsSent: number;
     sales: number;
     revenue: number;
     mrr: number;
@@ -128,6 +129,7 @@ export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: D
     const approaches = activities.filter((activity) => activity.type === 'CONTACT' || !activity.type);
     const interests = stageHistory.filter((event) => isInterestStage(event.toStage)).length;
     const meetings = stageHistory.filter((event) => isMeetingStage(event.toStage)).length;
+    const proposalsSent = stageHistory.filter((event) => event.toStage === 'PROPOSAL').length;
     const completedFollowUps = followUps.length;
     const winLeadIds = [...new Set(effectiveWins.map((sale) => sale.leadId))];
     const latestWinAt = effectiveWins.reduce<Date | null>((latest, sale) => !latest || sale.occurredAt > latest ? sale.occurredAt : latest, null);
@@ -173,6 +175,7 @@ export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: D
       approaches: approaches.length,
       interests,
       meetings,
+      proposalsSent,
       sales: effectiveWins.length,
       revenue,
       mrr,
@@ -193,6 +196,7 @@ export async function buildDailyReportSnapshot({ from, to, closedAt }: { from: D
         approaches: goalActuals.approaches,
         interests: goalActuals.interests,
         meetings: goalActuals.meetings,
+        proposalsSent: goalActuals.proposalsSent,
         sales: goalActuals.sales,
         revenue: goalActuals.revenue,
         mrr: goalActuals.mrr,
@@ -243,6 +247,7 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
   const approaches = activities.filter((activity) => activity.type === 'CONTACT' || !activity.type);
   const interests = stageHistory.filter((event) => isInterestStage(event.toStage)).length;
   const meetings = stageHistory.filter((event) => isMeetingStage(event.toStage)).length;
+  const proposalsSent = stageHistory.filter((event) => event.toStage === 'PROPOSAL').length;
   const legacyCandidates = leads.filter((lead) => lead.stage === 'WON' && lead.wonAt && inRange(lead.wonAt, range));
   const historicalEventLeadIds = legacyCandidates.length ? new Set((await prisma.saleEvent.findMany({
     where: { leadId: { in: legacyCandidates.map((lead) => lead.id) } },
@@ -293,6 +298,7 @@ export async function buildReport(range: ReportRange): Promise<WeeklyMonthlyRepo
     approaches: approaches.length,
     interests,
     meetings,
+    proposalsSent,
     sales: effectiveWins.length,
     revenue: effectiveWins.reduce((total, lead) => total + Number(lead.saleValue ?? 0), 0),
     mrr: effectiveWins.reduce((total, lead) => total + Number(lead.mrr ?? 0), 0),

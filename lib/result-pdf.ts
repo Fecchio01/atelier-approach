@@ -18,6 +18,7 @@ const aliases: Record<string, GoalMetricKey> = {
   'interesse': 'interests', 'interesses': 'interests', 'qualificado': 'interests', 'qualificados': 'interests',
   'empresas qualificadas': 'interests', 'leads qualificados': 'interests',
   'reuniao': 'meetings', 'reunioes': 'meetings', 'reuniao realizada': 'meetings', 'reunioes realizadas': 'meetings',
+  'proposta': 'proposalsSent', 'propostas': 'proposalsSent', 'proposta enviada': 'proposalsSent', 'propostas enviadas': 'proposalsSent',
   'venda': 'sales', 'vendas': 'sales', 'vendas fechadas': 'sales', 'venda fechada': 'sales', 'negocios fechados': 'sales',
   'receita': 'revenue', 'receita de vendas': 'revenue', 'receita vendida': 'revenue', 'faturamento': 'revenue',
   'mrr': 'mrr', 'receita recorrente mensal': 'mrr',

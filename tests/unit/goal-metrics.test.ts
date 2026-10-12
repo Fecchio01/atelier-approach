@@ -3,11 +3,12 @@ import { describe, expect, test } from 'vitest';
 import { getTeamGoalProgress, type GoalMetricActuals, type TeamGoalTargets } from '../../lib/metrics';
 
 describe('team goal progress', () => {
-  test('compares all eight actuals to their configured targets', () => {
+  test('compares all nine actuals to their configured targets', () => {
     const actuals: GoalMetricActuals = {
       approaches: 3,
       interests: 2,
       meetings: 1,
+      proposalsSent: 1,
       sales: 1,
       revenue: 750,
       mrr: 99,
@@ -18,6 +19,7 @@ describe('team goal progress', () => {
       approaches: 10,
       interests: 4,
       meetings: 2,
+      proposalsSent: 2,
       sales: 2,
       revenue: 1000,
       mrr: 200,
@@ -29,6 +31,7 @@ describe('team goal progress', () => {
       approaches: { actual: 3, target: 10, ratio: 0.3 },
       interests: { actual: 2, target: 4, ratio: 0.5 },
       meetings: { actual: 1, target: 2, ratio: 0.5 },
+      proposalsSent: { actual: 1, target: 2, ratio: 0.5 },
       sales: { actual: 1, target: 2, ratio: 0.5 },
       revenue: { actual: 750, target: 1000, ratio: 0.75 },
       mrr: { actual: 99, target: 200, ratio: 0.5 },
@@ -39,11 +42,11 @@ describe('team goal progress', () => {
 
   test('shows realized values without an artificial progress ratio when no target is set', () => {
     const actuals: GoalMetricActuals = {
-      approaches: 0, interests: 0, meetings: 0, sales: 0,
+      approaches: 0, interests: 0, meetings: 0, proposalsSent: 0, sales: 0,
       revenue: 0, mrr: 0, followUpsCompleted: 0, conversionRate: 0
     };
     const targets: TeamGoalTargets = {
-      approaches: null, interests: null, meetings: null, sales: null,
+      approaches: null, interests: null, meetings: null, proposalsSent: null, sales: null,
       revenue: null, mrr: null, followUpsCompleted: null, conversionRate: null
     };
 
@@ -53,11 +56,11 @@ describe('team goal progress', () => {
 
   test('keeps zero production at zero progress and guards invalid zero targets', () => {
     const actuals: GoalMetricActuals = {
-      approaches: 0, interests: 0, meetings: 0, sales: 0,
+      approaches: 0, interests: 0, meetings: 0, proposalsSent: 0, sales: 0,
       revenue: 0, mrr: 0, followUpsCompleted: 0, conversionRate: 0
     };
     const targets = {
-      approaches: 10, interests: 10, meetings: 10, sales: 10,
+      approaches: 10, interests: 10, meetings: 10, proposalsSent: 10, sales: 10,
       revenue: 100, mrr: 100, followUpsCompleted: 10, conversionRate: 0
     } as unknown as TeamGoalTargets;
 
@@ -67,11 +70,11 @@ describe('team goal progress', () => {
 
   test('shows no conversion ratio when there were no approaches in the period', () => {
     const actuals: GoalMetricActuals = {
-      approaches: 0, interests: 0, meetings: 0, sales: 0,
+      approaches: 0, interests: 0, meetings: 0, proposalsSent: 0, sales: 0,
       revenue: 0, mrr: 0, followUpsCompleted: 0, conversionRate: 0
     };
     const targets: TeamGoalTargets = {
-      approaches: null, interests: null, meetings: null, sales: null,
+      approaches: null, interests: null, meetings: null, proposalsSent: null, sales: null,
       revenue: null, mrr: null, followUpsCompleted: null, conversionRate: 25
     };
 
@@ -80,12 +83,12 @@ describe('team goal progress', () => {
 
   test('uses a directly reported conversion rate even when the report has no approach count', () => {
     const actuals: GoalMetricActuals = {
-      approaches: 0, interests: 0, meetings: 0, sales: 0,
+      approaches: 0, interests: 0, meetings: 0, proposalsSent: 0, sales: 0,
       revenue: 0, mrr: 0, followUpsCompleted: 0, conversionRate: 27.5,
       conversionRateReported: true
     };
     const targets: TeamGoalTargets = {
-      approaches: null, interests: null, meetings: null, sales: null,
+      approaches: null, interests: null, meetings: null, proposalsSent: null, sales: null,
       revenue: null, mrr: null, followUpsCompleted: null, conversionRate: 50
     };
 

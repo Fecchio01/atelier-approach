@@ -1,10 +1,49 @@
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { prisma } from '../../lib/db';
 import { getTeamGoalActualsByPeriod } from '../../lib/metrics';
+import { addImportedMetricTotals, createMetricImport } from '../../lib/metric-imports';
 
 const periodStart = new Date('2026-09-07T03:00:00.000Z');
 const periodEnd = new Date('2026-09-14T03:00:00.000Z');
+
+describe('proposal metric result imports', () => {
+  test('accepts and persists proposals sent as a fixed result metric', async () => {
+    const persistedBatch = {
+      id: 'proposal-import', ownerId: '__team__', actorId: 'ana', fileName: 'resultado.pdf',
+      contentHash: 'a'.repeat(64), periodStart, periodEnd, createdAt: new Date(),
+      rows: [{ metricKey: 'proposalsSent', customGoalId: null, label: 'Propostas enviadas', unit: null, value: 4 }]
+    };
+    const transaction = {
+      metricImportBatch: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue(persistedBatch)
+      }
+    };
+    const database = {
+      goal: { findMany: vi.fn().mockResolvedValue([]) },
+      $transaction: (callback: (tx: unknown) => Promise<unknown>) => callback(transaction)
+    } as never;
+
+    const result = await createMetricImport({
+      fileName: 'resultado.pdf', periodStart, periodEnd, actorId: 'ana',
+      rows: [{ metricKey: 'proposalsSent', customGoalId: null, label: 'Propostas enviadas', unit: null, value: 4 }]
+    }, database);
+
+    expect(result.batch.rows[0]).toMatchObject({ metricKey: 'proposalsSent', label: 'Propostas enviadas' });
+    expect(transaction.metricImportBatch.create).toHaveBeenCalled();
+  });
+
+  test('adds imported proposals to the CRM proposal actual instead of replacing it', () => {
+    const combined = addImportedMetricTotals(
+      { approaches: 0, interests: 0, meetings: 2, proposalsSent: 1, sales: 0, revenue: 0, mrr: 0, followUpsCompleted: 0, conversionRate: 0 },
+      { totals: { proposalsSent: 4 }, customTotals: {}, batchIds: ['batch'], batchCount: 1, conversionRateSource: null, conversionComponents: null }
+    );
+
+    expect(combined.proposalsSent).toBe(5);
+  });
+});
 
 type MetricImportService = typeof import('../../lib/metric-imports');
 

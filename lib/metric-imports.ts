@@ -12,7 +12,7 @@ const MAX_LABEL_LENGTH = 80;
 const MAX_UNIT_LENGTH = 24;
 const MAX_DECIMAL_VALUE = new Prisma.Decimal('9999999999.9999');
 const metricKeys = new Set<GoalMetricKey>([
-  'approaches', 'interests', 'meetings', 'sales', 'revenue', 'mrr', 'followUpsCompleted', 'conversionRate'
+  'approaches', 'interests', 'meetings', 'proposalsSent', 'sales', 'revenue', 'mrr', 'followUpsCompleted', 'conversionRate'
 ]);
 
 export type MetricImportRowInput = {
