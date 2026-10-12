@@ -12,7 +12,7 @@ describe('custom goal imported progress', () => {
     const html = renderToStaticMarkup(<CustomGoalMetricRow
       goal={{ id: 'approved-cars', name: 'Carros aprovados', unit: 'carros', target: 20, current: 1, icon: 'car', group: 'vehicles', source: 'manual' }}
       index={0}
-      actuals={{ approaches: 0, interests: 0, meetings: 0, sales: 0, revenue: 0, mrr: 0, followUpsCompleted: 0, conversionRate: 0 } satisfies GoalMetricActuals}
+      actuals={{ approaches: 0, interests: 0, meetings: 0, proposalsSent: 0, sales: 0, revenue: 0, mrr: 0, followUpsCompleted: 0, conversionRate: 0 } satisfies GoalMetricActuals}
       importedCurrent={3}
       isEditing={false}
       onToggle={() => undefined}
@@ -24,5 +24,6 @@ describe('custom goal imported progress', () => {
     expect(html).toContain('Carros aprovados: 4 carros de 20 carros');
     expect(html).toContain('inclui resultado do PDF');
     expect(html).toContain('Meta</span><span class="block truncate text-sm font-semibold leading-5 text-white/85">20 carros');
+    expect(html).not.toContain('text-[var(--atelier-green)]/80');
   });
 });

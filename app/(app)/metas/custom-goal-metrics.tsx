@@ -1,11 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import {
-  ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, ChartLineUpIcon, CheckSquareOffsetIcon,
-  CurrencyCircleDollarIcon, HandshakeIcon, PaperPlaneTiltIcon, PencilSimpleIcon, StarIcon, TargetIcon,
-  TrashIcon, TrophyIcon, UsersThreeIcon, WrenchIcon, XIcon
-} from '@phosphor-icons/react';
+import { PencilSimpleIcon, TrashIcon, XIcon } from '@phosphor-icons/react';
 
 import {
   customGoalGroupKeys, customGoalGroups, customGoalIconLabels, customGoalIcons, customGoalSourceLabels,
@@ -13,22 +9,6 @@ import {
   type CustomGoalGroup, type CustomGoalIcon, type CustomGoalMetric, type CustomGoalSource
 } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
-
-const iconComponents: Record<CustomGoalIcon, typeof TargetIcon> = {
-  target: TargetIcon,
-  prospecting: PaperPlaneTiltIcon,
-  progress: ArrowsClockwiseIcon,
-  car: CarProfileIcon,
-  users: UsersThreeIcon,
-  currency: CurrencyCircleDollarIcon,
-  chart: ChartLineUpIcon,
-  checklist: CheckSquareOffsetIcon,
-  star: StarIcon,
-  handshake: HandshakeIcon,
-  calendar: CalendarBlankIcon,
-  wrench: WrenchIcon,
-  trophy: TrophyIcon
-};
 
 function formatValue(value: number, unit?: string) {
   if (!Number.isFinite(value)) return '—';
@@ -60,7 +40,6 @@ export function CustomGoalMetricRow({
   onRemove: () => void;
 }) {
   const icon = getCustomGoalIcon(goal);
-  const Icon = iconComponents[icon];
   const group = getCustomGoalGroup(goal);
   const source = goal.source ?? 'manual';
   const current = getCustomGoalCurrent(goal, actuals) + importedCurrent;
@@ -100,7 +79,6 @@ export function CustomGoalMetricRow({
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(132px,152px)] items-center gap-3">
       <div className="min-w-0">
         <span title={goalLabel} className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-white/85">
-          <Icon size={15} weight="regular" className="shrink-0 text-[var(--atelier-green)]/80" aria-hidden="true" />
           <span className="truncate">{goalLabel}</span>
         </span>
         <p aria-label={`${goalLabel}: ${formatValue(current, goal.unit)} de ${formatValue(goal.target, goal.unit)}`} className="mt-1.5 flex min-w-0 items-baseline gap-1.5 text-sm font-semibold tabular-nums">
