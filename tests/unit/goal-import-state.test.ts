@@ -38,6 +38,23 @@ describe('reviewed goal suggestions', () => {
     ]);
   });
 
+  test('reimport replaces prior PDF-only suggestions while preserving manual custom goals', () => {
+    const saved = [
+      { id: 'manual', name: 'Indicações recebidas', target: 8, current: 3, source: 'manual' as const },
+      { id: 'old-pdf', name: 'Carros aprovados', target: 12, current: 5, origin: 'pdf' as const }
+    ];
+
+    const result = applyGoalSuggestions({ proposalsSent: '6' }, saved, [
+      { id: 'new-pdf', name: 'Serviços executados', target: '9', current: '2', destination: 'custom', icon: 'wrench', group: 'operations' }
+    ]);
+
+    expect(result.targets).toEqual({ proposalsSent: '6' });
+    expect(result.customGoals).toEqual([
+      saved[0],
+      { id: 'new-pdf', name: 'Serviços executados', target: 9, current: 2, icon: 'wrench', group: 'operations', source: 'manual', origin: 'pdf' }
+    ]);
+  });
+
   test('removes PDF-imported goals while preserving manual and legacy custom goals', () => {
     expect(removePdfImportedCustomGoals([
       { id: 'manual', name: 'Parcerias', target: 5, current: 1, origin: 'manual' },
