@@ -13,18 +13,18 @@ const metricAliases: Record<GoalMetricKey, string[]> = {
   interests: ['interesses', 'interesse'],
   meetings: ['reunioes e retornos', 'reunioes', 'reuniao'],
   proposalsSent: ['propostas enviadas', 'proposta enviada'],
-  sales: ['vendas fechadas', 'vendas', 'venda'],
+  sales: ['vendas fechadas', 'conversoes em vendas', 'conversao em vendas', 'vendas', 'venda'],
   revenue: ['receita de vendas', 'receita', 'faturamento'],
   mrr: ['mrr', 'receita mensal recorrente'],
   followUpsCompleted: ['follow ups concluidos', 'followup concluidos', 'retornos concluidos'],
   conversionRate: ['taxa de conversao', 'conversion rate']
 };
 
-const ignoredMetricLabels = new Set([
+const ignoredMetricLabelPrefixes = [
   'respostas recebidas',
   'cadastros completos',
   'execucao de novas abordagens'
-]);
+];
 
 const numberSource = String.raw`(?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?)`;
 const signedNumberSource = String.raw`[-−+]?${numberSource}`;
@@ -36,11 +36,17 @@ function normalizeLabel(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function isGoalTableHeader(cells: string[]) {
-  const first = normalizeLabel(cells[0] ?? '');
-  const second = normalizeLabel(cells[1] ?? '');
-  return /^(indicador|metrica|metric|goal|objetivo)$/.test(first)
-    && /^(meta|alvo|objetivo|target|goal)$/.test(second);
+function tableHeader(cells: string[]): { labelIndex: number; targetIndex: number } | 'ignore' | undefined {
+  const normalized = cells.map(normalizeLabel);
+  const labelIndex = normalized.findIndex((cell) => /^(indicador|metrica|metric|goal|objetivo)$/.test(cell));
+  const targetIndex = normalized.findIndex((cell, index) => index !== labelIndex && /^(meta|alvo|objetivo|target|goal)(?:\s|$)/.test(cell));
+  if (labelIndex >= 0 && targetIndex >= 0) return { labelIndex, targetIndex };
+
+  const headerText = normalized.join(' ');
+  if (labelIndex >= 0 && /o que contar|por que nao fixar meta|formula para o sistema|campos minimos/.test(headerText)) return 'ignore';
+  if (/^(grupo(?:\s*\/\s*tela)?|data|indicador(?: personalizado)?)$/.test(normalized[0] ?? '')
+    && /indicador|meta|alvo|formula|tarefa do dia/.test(headerText)) return 'ignore';
+  return undefined;
 }
 
 function isPlainGoalValue(value: string) {
@@ -89,14 +95,24 @@ function metricLabel(line: string, firstNumber: PdfNumber) {
   return normalizeLabel(label);
 }
 
+function canonicalMetricLabel(label: string) {
+  return normalizeLabel(label
+    .replace(/\s*\((?:personalizado|quantidade)\)\s*$/i, '')
+    .replace(/\s+[—–-]\s+.*$/, ''));
+}
+
 function matchingMetric(line: string, firstNumber: PdfNumber): GoalMetricKey | null | undefined {
-  const normalized = metricLabel(line, firstNumber);
+  const normalized = canonicalMetricLabel(metricLabel(line, firstNumber));
   const matches = (Object.entries(metricAliases) as Array<[GoalMetricKey, string[]]>).flatMap(([key, aliases]) =>
     aliases.filter((alias) => alias === normalized).map((alias) => ({ key, alias }))
   );
   if (!matches.length) return undefined;
   const mostSpecific = matches.filter((match) => match.alias.length === matches[0].alias.length);
   return new Set(mostSpecific.map((match) => match.key)).size > 1 ? null : matches[0].key;
+}
+
+function isIgnoredMetricLabel(label: string) {
+  return ignoredMetricLabelPrefixes.some((prefix) => label === prefix || label.startsWith(`${prefix} `) || label.startsWith(`${prefix}(`));
 }
 
 function customName(line: string, firstNumber: PdfNumber) {
@@ -135,30 +151,46 @@ export function parseGoalDocumentText(text: string): GoalPdfDraft {
   const draft: GoalPdfDraft = { targets: {}, customGoals: [] };
   const conflictingMetrics = new Set<GoalMetricKey>();
   const sourceLines: string[] = [];
-  let readingGoalTable = false;
+  let activeTable: { labelIndex: number; targetIndex: number } | 'ignore' | undefined;
+  let pendingCustomLabel = '';
 
   for (const rawLine of text.split(/\r?\n/)) {
     const cells = rawLine.split('\t').map((cell) => cell.trim());
-    if (cells.length >= 2 && isGoalTableHeader(cells)) {
-      readingGoalTable = true;
+    const header = cells.length >= 2 ? tableHeader(cells) : undefined;
+    if (header) {
+      activeTable = header;
       continue;
     }
-    if (!readingGoalTable) {
+    if (activeTable === 'ignore') {
+      if (!rawLine.includes('\t') && /^(importante:|no sistema,|metas da semana$)/i.test(rawLine.trim())) activeTable = undefined;
+      else continue;
+    }
+    if (typeof activeTable === 'object' && activeTable !== null) {
+      if (rawLine.includes('\t')) {
+        if (pendingCustomLabel && isPlainGoalValue(cells[0] ?? '')) {
+          sourceLines.push(`${pendingCustomLabel}: meta ${cells[0]}`);
+          pendingCustomLabel = '';
+          continue;
+        }
+        const label = cells[activeTable.labelIndex] ?? '';
+        const target = cells[activeTable.targetIndex] ?? '';
+        if (label && isPlainGoalValue(target)) sourceLines.push(`${label}: meta ${target}`);
+      } else if (/^(indicadores da tela|metas da semana|importante:|distribuicao diaria|regras de qualidade|observacoes)/i.test(normalizeLabel(rawLine.trim()))) {
+        activeTable = 'ignore';
+        pendingCustomLabel = '';
+      } else if (/^(?:.+?\s+)?personalizado\s+(.+)$/i.test(rawLine.trim())) {
+        pendingCustomLabel = rawLine.trim().replace(/^(?:.+?\s+)?personalizado\s+/i, '').trim();
+      } else if (pendingCustomLabel && /^\(%\)$/.test(rawLine.trim())) {
+        pendingCustomLabel += ' (%)';
+      } else {
+        continue;
+      }
+      continue;
+    }
+    if (!activeTable) {
       sourceLines.push(rawLine);
       continue;
     }
-    if (!rawLine.includes('\t') && /^(distribuicao diaria|regras de qualidade|observacoes)$/i.test(normalizeLabel(rawLine))) {
-      readingGoalTable = false;
-      continue;
-    }
-    if (cells.length >= 2 && rawLine.includes('\t')) {
-      const label = cells[0];
-      const target = cells[1];
-      if (label && isPlainGoalValue(target)) sourceLines.push(`${label}: meta ${target}`);
-      continue;
-    }
-    // Wrapped descriptions inside a table are not goal rows. Ignore them so
-    // numbers in criteria cannot be mistaken for targets.
   }
 
   for (const line of sourceLines.map((value) => value.trim()).filter(Boolean)) {
@@ -169,7 +201,7 @@ export function parseGoalDocumentText(text: string): GoalPdfDraft {
     const target = hasUnambiguousTarget(numbers, explicitTarget, explicitCurrent);
     if (!target) continue;
 
-    if (ignoredMetricLabels.has(metricLabel(line, numbers[0]))) continue;
+    if (isIgnoredMetricLabel(metricLabel(line, numbers[0]))) continue;
     const metric = matchingMetric(line, numbers[0]);
     if (metric === null) continue;
     if (metric) {
@@ -186,7 +218,7 @@ export function parseGoalDocumentText(text: string): GoalPdfDraft {
     }
 
     const name = customName(line, numbers[0]);
-    const hasExplicitLabel = /:\s*[^:]+/.test(line) || Boolean(explicitTarget) || numbers[0].start === 0 && numbers[0].end < line.length;
+    const hasExplicitLabel = line.slice(0, numbers[0].start).includes(':') || Boolean(explicitTarget) || numbers[0].start === 0 && numbers[0].end < line.length;
     if (!name || !hasExplicitLabel || name.length > 80) continue;
 
     draft.customGoals.push({

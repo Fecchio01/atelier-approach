@@ -26,4 +26,20 @@ describe('custom goal imported progress', () => {
     expect(html).toContain('Meta</span><span class="block truncate text-sm font-semibold leading-5 text-white/85">20 carros');
     expect(html).not.toContain('text-[var(--atelier-green)]/80');
   });
+
+  test('makes the persistent custom-indicator delete action explicit', () => {
+    const html = renderToStaticMarkup(<CustomGoalMetricRow
+      goal={{ id: 'extra-metric', name: 'Conversas humanas', target: 10, current: 2, icon: 'target', source: 'manual' }}
+      index={0}
+      actuals={{ approaches: 0, interests: 0, meetings: 0, proposalsSent: 0, sales: 0, revenue: 0, mrr: 0, followUpsCompleted: 0, conversionRate: 0 } satisfies GoalMetricActuals}
+      isEditing={false}
+      onToggle={() => undefined}
+      onChange={() => undefined}
+      onCommit={() => undefined}
+      onRemove={() => undefined}
+    />);
+
+    expect(html).toContain('>Excluir</span></button>');
+    expect(html).toContain('aria-label="Excluir indicador Conversas humanas"');
+  });
 });

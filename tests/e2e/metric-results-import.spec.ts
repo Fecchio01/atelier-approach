@@ -43,13 +43,16 @@ test('reviews local PDF totals, persists them without uploading the PDF, and all
     await page.getByRole('button', { name: 'Entrar' }).click();
     await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
     await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Metas' }).click();
+    await expect(page.getByRole('heading', { name: 'Importar resultados (PDF)' })).toHaveCount(0);
+    await page.getByRole('navigation', { name: 'Navegação principal' }).first().getByRole('link', { name: 'Relatórios' }).click();
 
-    const weeklyPanel = page.locator('#goal-panel-weekly');
-    await weeklyPanel.getByLabel('Importar resultados de PDF').setInputFiles({ name: fileName, mimeType: 'application/pdf', buffer: pdfBuffer });
-    await expect(weeklyPanel.getByLabel('Valor realizado 1')).toHaveValue('17');
-    await expect(weeklyPanel.getByLabel('Início do período dos resultados')).toHaveValue(localToday().iso);
-    await weeklyPanel.getByRole('button', { name: 'Salvar resultados revisados' }).click();
-    await expect(weeklyPanel.getByRole('status')).toContainText('Resultados importados e salvos', { timeout: 15_000 });
+    const resultsPanel = page.getByRole('region', { name: 'Importar resultados (PDF)' });
+    await expect(resultsPanel).toBeVisible();
+    await resultsPanel.getByLabel('Importar resultados de PDF').setInputFiles({ name: fileName, mimeType: 'application/pdf', buffer: pdfBuffer });
+    await expect(resultsPanel.getByLabel('Valor realizado 1')).toHaveValue('17');
+    await expect(resultsPanel.getByLabel('Início do período dos resultados')).toHaveValue(localToday().iso);
+    await resultsPanel.getByRole('button', { name: 'Salvar resultados revisados' }).click();
+    await expect(resultsPanel.getByRole('status')).toContainText('Resultados importados e salvos', { timeout: 15_000 });
 
     expect(requestBody).toBeDefined();
     expect(requestBody).not.toHaveProperty('pdf');
@@ -60,7 +63,7 @@ test('reviews local PDF totals, persists them without uploading the PDF, and all
     savedBatchId = batch?.id;
 
     await page.reload();
-    const reloadedPanel = page.locator('#goal-panel-weekly');
+    const reloadedPanel = page.getByRole('region', { name: 'Importar resultados (PDF)' });
     await expect(reloadedPanel.getByText(fileName, { exact: false })).toBeVisible();
     page.once('dialog', (dialog) => dialog.accept());
     await reloadedPanel.getByRole('button', { name: 'Remover lote' }).click();

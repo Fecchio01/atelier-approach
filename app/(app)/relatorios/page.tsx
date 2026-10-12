@@ -7,6 +7,8 @@ import { ReportPdfDownload } from '@/components/report-pdf-download';
 import { ReportPeriodNavigation } from '@/components/report-period-navigation';
 import { PageHeading } from '@/components/ui';
 import { ReportsMotionCard, ReportsMotionSurface } from '@/components/reports-motion-surface';
+import { ResultImporter } from '../metas/result-importer';
+import { parseCustomGoalMetrics } from '@/lib/custom-goals';
 import { getDailyReportForDate, listRecentDailyReports } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { normalizeFunnelStage, stageLabels } from '@/lib/funnel';
@@ -68,9 +70,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const start = parsePeriodStart(requestedStart);
   const goalSelect = {
     periodKind: true, periodStart: true, periodEnd: true,
-    approachesTarget: true, interestsTarget: true, meetingsTarget: true,
+    approachesTarget: true, interestsTarget: true, meetingsTarget: true, proposalsSentTarget: true,
     salesTarget: true, revenueTarget: true, mrrTarget: true,
-    followUpsCompletedTarget: true, conversionRateTarget: true
+    followUpsCompletedTarget: true, conversionRateTarget: true, customGoals: true
   } as const;
   const [settings, activeGoal, requestedGoal] = await Promise.all([
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
@@ -108,6 +110,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const recommendations = buildRecommendations(report);
   const nameFor = (memberId: string) => profiles.find((profile) => profile.id === memberId)?.name ?? memberId;
   const progress = getTeamGoalProgress(report.goalActuals, getTeamGoalTargets(selectedGoal));
+  const parsedCustomGoals = parseCustomGoalMetrics(selectedGoal?.customGoals);
+  const customGoals = parsedCustomGoals.ok ? parsedCustomGoals.goals : [];
   const viewingCurrent = selectedWindow.start.getTime() === activeWindow.start.getTime();
   const pdfHref = `/api/reports?format=pdf&period=${period}&from=${encodeURIComponent(selectedWindow.start.toISOString())}&to=${encodeURIComponent(selectedWindow.end.toISOString())}`;
 
@@ -123,6 +127,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     {start && !requestedGoal ? <p role="status" className="mt-5 text-sm text-amber-200">Esse ciclo salvo não foi encontrado. Exibindo o período atual.</p> : null}
     <p className="mt-5 text-sm text-white/65">Período analisado: <strong className="text-white">{dateRangeLabel(selectedWindow)}</strong>{selectedGoal ? ' · meta salva' : ' · sem meta configurada'}</p>
     {report.imports.batchCount > 0 && <p role="status" className="mt-2 text-xs text-[var(--atelier-green)]">Totais da equipe incluem {report.imports.batchCount} lote{report.imports.batchCount === 1 ? '' : 's'} de resultados importados neste intervalo. Os valores não são atribuídos a membros ou canais.</p>}
+    <div className="mt-5"><ResultImporter customGoals={customGoals} /></div>
 
     <ReportsMotionCard as="section" aria-labelledby="goal-comparison-title" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 id="goal-comparison-title" className="text-xl font-semibold">Meta da equipe · realizado x alvo</h2><p className="mt-1 text-sm text-white/60">{period === 'week' ? 'Semana de segunda a domingo' : `Ciclo iniciado no dia ${monthlyStartDay}`}</p></div><Link href="/metas" className="text-sm text-[var(--atelier-green)]">Editar metas</Link></div>

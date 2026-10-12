@@ -51,6 +51,36 @@ describe('PDF goal text suggestions', () => {
     });
   });
 
+  test('ignores decorated redundant labels and maps sales conversions to the existing sales target', () => {
+    expect(parseGoalDocumentText([
+      'INDICADOR\tMETA',
+      'Vendas fechadas\t1',
+      'Conversões em vendas — quantidade (personalizado)\t1',
+      'Respostas recebidas (por pessoa)\t24',
+      'Cadastros completos (%)\t100%',
+      'Execução de novas abordagens por dia útil\t30'
+    ].join('\n'))).toEqual({
+      targets: { sales: 1 },
+      customGoals: []
+    });
+  });
+
+  test('reads grouped indicator tables but ignores criteria and daily execution rules', () => {
+    expect(parseGoalDocumentText([
+      'GRUPO / TELA\tINDICADOR\tMETA DA SEMANA UNIDADE / REGRA',
+      'Prospecção\tAbordagens\t120\tEmpresas únicas abordadas',
+      'Prospecção · personalizado\tExecução de novas abordagens por dia útil\t30\tNão somar novamente',
+      'Prospecção · personalizado\tCadastros completos (%)\t100%\tCampos mínimos ÷ abordagens',
+      'Avanço · personalizado\tFollow-ups vencidos concluídos (%)\t100%\tFollow-ups da semana',
+      'GRUPO\tINDICADOR\tO QUE CONTAR / POR QUE NÃO FIXAR META AGORA',
+      'Avanço\tReuniões\tSem meta nesta semana; observar os resultados',
+      'Dia abaixo de 30: registrar o realizado real e a diferença.'
+    ].join('\n'))).toEqual({
+      targets: { approaches: 120 },
+      customGoals: [{ name: 'Follow-ups vencidos concluídos (%)', unit: '%', target: 100, current: 0 }]
+    });
+  });
+
   test('extracts custom goals with units and an explicitly labeled current value', () => {
     expect(parseGoalDocumentText('Carros: atual 1, meta 3 carros\nClientes atendidos: 20 clientes')).toEqual({
       targets: {},
