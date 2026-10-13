@@ -65,6 +65,41 @@ describe('PDF goal text suggestions', () => {
     });
   });
 
+  test('routes equivalent wording to native metrics and never creates duplicate custom goals', () => {
+    expect(parseGoalDocumentText([
+      'Empresas abordadas: meta 120',
+      'Abordagens únicas: meta 120',
+      'Propostas comerciais enviadas: meta 5',
+      'Propostas enviadas: meta 5',
+      'Conversão em vendas: meta 2',
+      'Vendas fechadas: meta 2',
+      'Taxa de conversão: meta 10%',
+      'Serviços concluídos: meta 8 serviços',
+      'Serviços executados na semana: meta 8 serviços',
+      'Serviços contratados: meta 3 serviços'
+    ].join('\n'))).toEqual({
+      targets: { approaches: 120, proposalsSent: 5, sales: 2, conversionRate: 10 },
+      customGoals: [
+        { name: 'Serviços concluídos', unit: 'serviços', target: 8, current: 0 },
+        { name: 'Serviços contratados', unit: 'serviços', target: 3, current: 0 }
+      ]
+    });
+  });
+
+  test('does not choose between conflicting targets for equivalent native-metric labels', () => {
+    expect(parseGoalDocumentText([
+      'Empresas abordadas: meta 120',
+      'Abordagens únicas: meta 90'
+    ].join('\n'))).toEqual({ targets: {}, customGoals: [] });
+  });
+
+  test('drops a repeated custom metric when similar labels disagree on the target', () => {
+    expect(parseGoalDocumentText([
+      'Chamadas realizadas: meta 20 chamadas',
+      'Chamadas concluídas na semana: meta 25 chamadas'
+    ].join('\n'))).toEqual({ targets: {}, customGoals: [] });
+  });
+
   test('reads grouped indicator tables but ignores criteria and daily execution rules', () => {
     expect(parseGoalDocumentText([
       'GRUPO / TELA\tINDICADOR\tMETA DA SEMANA UNIDADE / REGRA',

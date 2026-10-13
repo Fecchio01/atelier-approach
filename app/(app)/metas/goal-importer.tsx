@@ -7,7 +7,7 @@ import { customGoalGroupKeys, customGoalGroups, customGoalIconLabels, customGoal
 import type { GoalMetricKey } from '@/lib/metrics';
 import { parseGoalDocumentText } from '@/lib/goal-pdf';
 import { readGoalPdfText } from '@/lib/read-goal-pdf';
-import type { ReviewedGoalSuggestion } from '@/lib/goal-import-state';
+import { shouldReviewGoalSuggestions, type ReviewedGoalSuggestion } from '@/lib/goal-import-state';
 import type { GoalActionState } from './goal-form-state';
 
 const metrics: Array<{ key: GoalMetricKey; label: string; unit?: string }> = [
@@ -67,6 +67,12 @@ export function GoalImporter({ onApply, disabled = false, onActivityChange }: {
       const suggestions = makeRows(draft.targets, draft.customGoals);
       if (!suggestions.length) {
         setError('Não encontrei metas reconhecíveis neste PDF. Você pode continuar preenchendo manualmente.');
+        return;
+      }
+      if (shouldReviewGoalSuggestions(suggestions)) {
+        setRows(suggestions);
+        setReviewOpen(true);
+        setNotice('Encontrei indicadores personalizados. Confira se são únicos e escolha o grupo antes de salvar.');
         return;
       }
       setNotice('');
@@ -148,7 +154,7 @@ export function GoalImporter({ onApply, disabled = false, onActivityChange }: {
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.09] text-[var(--atelier-green)]"><FilePdfIcon size={19} aria-hidden="true" /></span>
         <div>
           <h3 id="goal-import-heading" className="font-semibold text-white/90">Importar metas de PDF</h3>
-          <p className="mt-1 max-w-2xl text-xs leading-5 text-white/50">O arquivo é lido no seu navegador e não é enviado. As metas reconhecidas são aplicadas e salvas automaticamente; depois você pode ajustá-las nos indicadores.</p>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-white/50">O arquivo é lido no seu navegador e não é enviado. Metas conhecidas são associadas ao indicador padrão; qualquer indicador personalizado precisa ser revisado antes de salvar.</p>
         </div>
       </div>
       <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--atelier-green)]/40 px-3.5 py-2 text-xs font-semibold text-[var(--atelier-green)] transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[var(--atelier-green)]/[0.08] active:scale-[0.98] has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-3 has-[:focus-visible]:outline-[var(--atelier-green)] has-[:disabled]:cursor-wait has-[:disabled]:opacity-55">
@@ -166,7 +172,7 @@ export function GoalImporter({ onApply, disabled = false, onActivityChange }: {
     {error && <p role="alert" className="mt-4 rounded-lg border border-red-300/25 bg-[#281a1e] p-3 text-sm leading-6 text-red-300">{error}</p>}
 
     {rows.length > 0 && reviewOpen && <fieldset disabled={interactionDisabled} className="mt-4 min-w-0 space-y-3 disabled:opacity-60">
-      <p className="text-xs font-medium text-white/65">O salvamento automático falhou. Corrija nome, alvo, progresso, destino ou grupo e tente novamente.</p>
+      <p className="text-xs font-medium text-white/65">Confira nome, alvo, destino e grupo. Sugestões personalizadas só entram nas metas depois que você confirmar.</p>
       <div className="grid gap-3 lg:grid-cols-2">
         {rows.map((row, index) => <article key={row.id} className="grid min-w-0 gap-3 rounded-xl border border-white/[0.08] bg-[#11161b] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(128px,0.75fr)]">
           <div className="grid min-w-0 gap-2">

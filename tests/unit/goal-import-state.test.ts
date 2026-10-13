@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { applyGoalSuggestions, createGoalSaveFormData, removeCustomGoalsByGroup, removePdfImportedCustomGoals, removeRedundantCustomGoals, type ReviewedGoalSuggestion } from '../../lib/goal-import-state';
+import { applyGoalSuggestions, createGoalSaveFormData, removeCustomGoalsByGroup, removePdfImportedCustomGoals, removeRedundantCustomGoals, shouldReviewGoalSuggestions, type ReviewedGoalSuggestion } from '../../lib/goal-import-state';
 
 describe('reviewed goal suggestions', () => {
   test('saves the reviewer-selected thematic group with a custom PDF metric', () => {
@@ -55,6 +55,27 @@ describe('reviewed goal suggestions', () => {
     ]);
   });
 
+  test('updates an existing custom indicator when the PDF uses an equivalent label instead of adding a duplicate', () => {
+    const result = applyGoalSuggestions({}, [
+      { id: 'service-count', name: 'Serviços concluídos', unit: 'serviços', target: 4, current: 1, group: 'operations', source: 'manual', origin: 'manual' }
+    ], [
+      { id: 'pdf-service', name: 'Serviços executados na semana', unit: 'serviços', target: '8', current: '0', destination: 'custom', icon: 'wrench', group: 'operations' }
+    ]);
+
+    expect(result.customGoals).toEqual([
+      { id: 'service-count', name: 'Serviços concluídos', unit: 'serviços', target: 8, current: 0, group: 'operations', source: 'manual', origin: 'manual' }
+    ]);
+  });
+
+  test('requires confirmation before saving any suggestion that would create a custom indicator', () => {
+    expect(shouldReviewGoalSuggestions([
+      { id: 'fixed', name: 'Abordagens', target: '10', current: '0', destination: 'approaches', icon: 'prospecting' }
+    ])).toBe(false);
+    expect(shouldReviewGoalSuggestions([
+      { id: 'custom', name: 'Serviços concluídos', target: '8', current: '0', destination: 'custom', icon: 'wrench' }
+    ])).toBe(true);
+  });
+
   test('removes PDF-imported goals while preserving manual and legacy custom goals', () => {
     expect(removePdfImportedCustomGoals([
       { id: 'manual', name: 'Parcerias', target: 5, current: 1, origin: 'manual' },
@@ -78,6 +99,19 @@ describe('reviewed goal suggestions', () => {
     ])).toEqual([
       { id: 'valid-followups', name: 'Follow-ups vencidos concluídos (%)', target: 100, current: 0 },
       { id: 'valid-service', name: 'Serviços concluídos', target: 8, current: 0 }
+    ]);
+  });
+
+  test('collapses imported custom duplicates and drops conflicting imported copies while preserving manual goals', () => {
+    expect(removeRedundantCustomGoals([
+      { id: 'manual', name: 'Serviços concluídos', unit: 'serviços', target: 4, current: 1, origin: 'manual' },
+      { id: 'pdf-same-a', name: 'Chamadas realizadas', unit: 'chamadas', target: 20, current: 0, origin: 'pdf' },
+      { id: 'pdf-same-b', name: 'Chamadas concluídas na semana', unit: 'chamadas', target: 20, current: 0, origin: 'pdf' },
+      { id: 'pdf-conflict-a', name: 'Serviços concluídos', unit: 'serviços', target: 8, current: 0, origin: 'pdf' },
+      { id: 'pdf-conflict-b', name: 'Serviços executados na semana', unit: 'serviços', target: 9, current: 0, origin: 'pdf' }
+    ])).toEqual([
+      { id: 'manual', name: 'Serviços concluídos', unit: 'serviços', target: 4, current: 1, origin: 'manual' },
+      { id: 'pdf-same-a', name: 'Chamadas realizadas', unit: 'chamadas', target: 20, current: 0, origin: 'pdf' }
     ]);
   });
 

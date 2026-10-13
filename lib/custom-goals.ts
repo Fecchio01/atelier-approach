@@ -47,6 +47,32 @@ function normalizeGoalText(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
+export function customGoalIdentity(name: string) {
+  return normalizeGoalText(name)
+    .replace(/\b(?:por dia util|diariamente|semanalmente|na semana|da semana|no ciclo|neste ciclo)\b/g, ' ')
+    .replace(/\b(?:executad\w*|realizad\w*|concluid\w*|finalizad\w*|complet\w*|entregu\w*|feit\w*)\b/g, ' concluido ')
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word && !['meta', 'alvo', 'indicador', 'personalizado', 'quantidade', 'por', 'na', 'no', 'da', 'do', 'de', 'em', 'dia', 'dias', 'util', 'semana', 'semanal', 'semanais', 'diario', 'diaria', 'mensal', 'mensais', 'ciclo'].includes(word))
+    .map((word) => word.length > 3 ? word.replace(/s$/, '') : word)
+    .sort()
+    .join(' ');
+}
+
+export function areEquivalentCustomGoals(
+  first: Pick<CustomGoalMetric, 'name' | 'unit'>,
+  second: Pick<CustomGoalMetric, 'name' | 'unit'>
+) {
+  const firstUnit = normalizeGoalText(first.unit ?? '').trim();
+  const secondUnit = normalizeGoalText(second.unit ?? '').trim();
+  if (customGoalIdentity(first.name) !== customGoalIdentity(second.name)) return false;
+  if (firstUnit && secondUnit) return firstUnit === secondUnit;
+  const knownUnit = firstUnit || secondUnit;
+  if (!knownUnit) return true;
+  if (knownUnit === '%' || knownUnit.includes('r$')) return false;
+  const unitIdentity = customGoalIdentity(knownUnit);
+  return Boolean(unitIdentity) && customGoalIdentity(first.name).split(' ').includes(unitIdentity);
+}
+
 export function inferCustomGoalIcon(label: string, metricUnit?: string): CustomGoalIcon {
   const normalized = normalizeGoalText(`${label} ${metricUnit ?? ''}`);
   if (/r\$|\breais?\b|receita|faturamento|faturar|\bmrr\b|valor/.test(normalized)) return 'currency';

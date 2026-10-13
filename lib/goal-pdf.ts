@@ -1,5 +1,5 @@
 import type { GoalMetricKey } from './metrics';
-import type { CustomGoalMetric } from './custom-goals';
+import { areEquivalentCustomGoals, type CustomGoalMetric } from './custom-goals';
 
 export type GoalPdfDraft = {
   targets: Partial<Record<GoalMetricKey, number>>;
@@ -9,11 +9,11 @@ export type GoalPdfDraft = {
 type PdfNumber = { value: number; start: number; end: number; raw: string };
 
 const metricAliases: Record<GoalMetricKey, string[]> = {
-  approaches: ['abordagens', 'abordagem'],
+  approaches: ['abordagens', 'abordagem', 'abordagens unicas', 'abordagem unica', 'empresas abordadas', 'empresa abordada', 'empresas novas abordadas'],
   interests: ['interesses', 'interesse'],
-  meetings: ['reunioes e retornos', 'reunioes', 'reuniao'],
-  proposalsSent: ['propostas enviadas', 'proposta enviada'],
-  sales: ['vendas fechadas', 'conversoes em vendas', 'conversao em vendas', 'vendas', 'venda'],
+  meetings: ['reunioes e retornos', 'reunioes realizadas', 'reuniao realizada', 'reunioes', 'reuniao'],
+  proposalsSent: ['propostas comerciais enviadas', 'proposta comercial enviada', 'propostas enviadas', 'proposta enviada'],
+  sales: ['vendas fechadas', 'conversoes em vendas', 'conversao em vendas', 'vendas confirmadas', 'venda confirmada', 'negocios fechados', 'negocio fechado', 'vendas', 'venda'],
   revenue: ['receita de vendas', 'receita', 'faturamento'],
   mrr: ['mrr', 'receita mensal recorrente'],
   followUpsCompleted: ['follow ups concluidos', 'followup concluidos', 'retornos concluidos'],
@@ -97,8 +97,9 @@ function metricLabel(line: string, firstNumber: PdfNumber) {
 
 function canonicalMetricLabel(label: string) {
   return normalizeLabel(label
-    .replace(/\s*\((?:personalizado|quantidade)\)\s*$/i, '')
-    .replace(/\s+[—–-]\s+.*$/, ''));
+    .replace(/\s*\((?:personalizado|quantidade|semanal|diario|%)\)\s*$/i, '')
+    .replace(/\s+[—–-]\s+.*$/, '')
+    .replace(/\s+(?:por dia util|diariamente|semanalmente|na semana|da semana)$/i, ''));
 }
 
 function matchingMetric(line: string, firstNumber: PdfNumber): GoalMetricKey | null | undefined {
@@ -106,9 +107,20 @@ function matchingMetric(line: string, firstNumber: PdfNumber): GoalMetricKey | n
   const matches = (Object.entries(metricAliases) as Array<[GoalMetricKey, string[]]>).flatMap(([key, aliases]) =>
     aliases.filter((alias) => alias === normalized).map((alias) => ({ key, alias }))
   );
-  if (!matches.length) return undefined;
-  const mostSpecific = matches.filter((match) => match.alias.length === matches[0].alias.length);
-  return new Set(mostSpecific.map((match) => match.key)).size > 1 ? null : matches[0].key;
+  if (matches.length) {
+    const longestAlias = Math.max(...matches.map((match) => match.alias.length));
+    const mostSpecific = matches.filter((match) => match.alias.length === longestAlias);
+    const keys = new Set(mostSpecific.map((match) => match.key));
+    return keys.size > 1 ? null : mostSpecific[0].key;
+  }
+
+  // Recognize common wording variants only when the action is unambiguous.
+  if (/\btaxa de conversao\b/.test(normalized)) return 'conversionRate';
+  if (/\bpropost\w*\b/.test(normalized) && /\benviad\w*\b/.test(normalized)) return 'proposalsSent';
+  if (/\b(abordag\w*|abordad\w*)\b/.test(normalized)) return 'approaches';
+  if (/\bempres\w*\b/.test(normalized) && /\b(abordad\w*|prospectad\w*)\b/.test(normalized)) return 'approaches';
+  if (/\b(convers\w*\s+em\s+vendas?|vendas?\s+(?:fechad\w*|confirmad\w*)|negocios?\s+fechad\w*)\b/.test(normalized)) return 'sales';
+  return undefined;
 }
 
 function isIgnoredMetricLabel(label: string) {
@@ -136,6 +148,26 @@ function customUnit(line: string, target: PdfNumber) {
   const suffix = line.slice(target.end).replace(/^\s*[:=\-–—,;]+\s*/, '').trim();
   const unit = suffix.replace(/\b(?:atual|realizado|progresso|meta|alvo|objetivo)\b.*$/i, '').trim();
   return unit && unit.length <= 24 && /^[\p{L}][\p{L}\s-]*$/u.test(unit) ? unit : undefined;
+}
+
+function deduplicateCustomMetrics(goals: GoalPdfDraft['customGoals']) {
+  const pending = [...goals];
+  const deduplicated: GoalPdfDraft['customGoals'] = [];
+  while (pending.length) {
+    const first = pending.shift()!;
+    const matches = [first, ...pending.filter((goal) => areEquivalentCustomGoals(first, goal))];
+    for (let index = pending.length - 1; index >= 0; index -= 1) {
+      if (areEquivalentCustomGoals(first, pending[index])) pending.splice(index, 1);
+    }
+    if (matches.length === 1) {
+      deduplicated.push(first);
+      continue;
+    }
+    const targets = new Set(matches.map((goal) => goal.target));
+    // Conflicting copies are ambiguous: don't silently pick a quota.
+    if (targets.size === 1) deduplicated.push(first);
+  }
+  return deduplicated;
 }
 
 function hasUnambiguousTarget(numbers: PdfNumber[], target: PdfNumber | undefined, current: PdfNumber | undefined) {
@@ -229,5 +261,6 @@ export function parseGoalDocumentText(text: string): GoalPdfDraft {
     });
   }
 
+  draft.customGoals = deduplicateCustomMetrics(draft.customGoals);
   return draft;
 }
