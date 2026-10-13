@@ -103,26 +103,45 @@ export function CommercialSettingsForm({ services: initialServices, followUpDela
     {message ? <p role="status" className="mt-4 rounded-lg bg-[var(--atelier-green)]/10 px-4 py-3 text-sm text-[var(--atelier-green)]">{message}</p> : null}
     <div className="mt-6 grid min-w-0 items-start gap-7 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <div className="min-w-0">
-        <h3 className="font-semibold">Catálogo de serviços</h3>
-        <form onSubmit={saveService} className="mt-4 grid gap-4">
-          <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
-            <legend className="sr-only">{editingId ? 'Editar serviço' : 'Novo serviço'}</legend>
-            <label className="grid min-w-0 gap-2 text-sm sm:col-span-2">Nome do serviço<input ref={nameRef} required value={name} onChange={(event) => setName(event.target.value)} className={inputClass} /></label>
-            <label className="grid min-w-0 gap-2 text-sm">Preço<input aria-label="Preço" aria-describedby="service-price-hint" type="number" required min="0" max="9999999999.99" step="0.01" inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} className={inputClass} /><span id="service-price-hint" className="text-xs text-white/45">Em reais (R$). Para mensal, informe o valor por mês.</span></label>
-            <label className="grid min-w-0 gap-2 self-start text-sm">Cobrança<select value={billingType} onChange={(event) => setBillingType(event.target.value as CommercialServiceOption['billingType'])} className={inputClass}><option value="ONE_TIME">Cobrança única</option><option value="MONTHLY">Mensal</option></select></label>
-          </fieldset>
-          <div className="grid gap-2 sm:flex sm:flex-wrap">
-            <button disabled={busy} className={`${buttonClass} border-transparent bg-[var(--atelier-green)] text-black`}>{busy ? 'Salvando…' : editingId ? 'Salvar serviço' : 'Adicionar serviço'}</button>
-            {editingId ? <button type="button" disabled={busy} onClick={resetService} className={buttonClass}>Cancelar edição</button> : null}
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div><h3 className="font-semibold">Catálogo de serviços</h3><p className="mt-1 text-xs text-white/50">Gerencie os serviços oferecidos no processo comercial.</p></div>
+          <span className="text-xs text-white/45">{services.filter((service) => service.isActive).length} ativos</span>
+        </div>
+        <div role="table" aria-label="Serviços do catálogo" className="mt-4 overflow-hidden rounded-lg border border-white/10">
+          <div role="rowgroup" className="hidden sm:block">
+            <div role="row" className="grid grid-cols-[minmax(0,1.35fr)_minmax(7rem,.8fr)_minmax(7rem,.9fr)_5rem_auto] items-center gap-3 bg-white/[0.035] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.09em] text-white/50">
+              <span role="columnheader">Nome</span><span role="columnheader">Preço</span><span role="columnheader">Cobrança</span><span role="columnheader">Status</span><span role="columnheader" className="text-right">Ações</span>
+            </div>
           </div>
-        </form>
-        <ul aria-label="Serviços do catálogo" className="mt-6 grid gap-3">
-          {services.map((service) => <li key={service.id} className="grid min-w-0 gap-3 rounded-lg border border-white/10 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <div className="min-w-0"><p className="break-words font-medium">{service.name}</p><p className="mt-1 text-sm text-white/55">{currency.format(Number(service.price))} · {service.billingType === 'MONTHLY' ? 'Mensal' : 'Cobrança única'}</p>{!service.isActive ? <p className="mt-1 text-xs text-white/45">Arquivado</p> : null}</div>
-            <div className="grid grid-cols-2 gap-2"><button type="button" disabled={busy} aria-label={`Editar ${service.name}`} onClick={() => editService(service)} className={buttonClass}>Editar</button>{service.isActive ? <button type="button" disabled={busy} aria-label={`Arquivar ${service.name}`} onClick={() => archiveService(service)} className={`${buttonClass} text-red-200`}>Arquivar</button> : null}</div>
-          </li>)}
-        </ul>
-        {!services.length ? <p className="mt-4 text-sm text-white/50">Nenhum serviço cadastrado.</p> : null}
+          <ul role="rowgroup" className="divide-y divide-white/10">
+            {services.map((service) => <li role="row" key={service.id} className="grid min-w-0 gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(7rem,.8fr)_minmax(7rem,.9fr)_5rem_auto] sm:items-center">
+              <span role="cell" className="min-w-0 break-words text-sm font-medium">{service.name}</span>
+              <span role="cell" className="text-sm text-white/75">{currency.format(Number(service.price))}</span>
+              <span role="cell" className="text-sm text-white/55">{service.billingType === 'MONTHLY' ? 'Mensal' : 'Cobrança única'}</span>
+              <span role="cell"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${service.isActive ? 'bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]' : 'bg-white/[0.07] text-white/50'}`}>{service.isActive ? 'Ativo' : 'Arquivado'}</span></span>
+              <div role="cell" className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+                <button type="button" disabled={busy} aria-label={`Editar ${service.name}`} onClick={() => editService(service)} className={`${buttonClass} min-h-9 px-3`}>Editar</button>
+                {service.isActive ? <button type="button" disabled={busy} aria-label={`Arquivar ${service.name}`} onClick={() => archiveService(service)} className={`${buttonClass} min-h-9 px-3 text-red-200`}>Arquivar</button> : null}
+              </div>
+            </li>)}
+          </ul>
+          {!services.length ? <p className="px-4 py-5 text-sm text-white/50">Nenhum serviço cadastrado.</p> : null}
+        </div>
+        <div className="mt-4 rounded-lg border border-[var(--atelier-green)]/20 bg-white/[0.02] p-4">
+          <div className="border-l-2 border-[var(--atelier-green)] pl-3"><h4 className="font-semibold">{editingId ? 'Editar serviço' : 'Novo serviço'}</h4><p className="mt-1 text-xs text-white/50">{editingId ? 'Atualize os dados deste serviço.' : 'Adicione um serviço ao seu catálogo.'}</p></div>
+          <form onSubmit={saveService} className="mt-4 grid gap-3">
+            <fieldset disabled={busy} className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1.25fr)_minmax(8rem,.8fr)_minmax(9rem,1fr)]">
+            <legend className="sr-only">{editingId ? 'Editar serviço' : 'Novo serviço'}</legend>
+              <label className="grid min-w-0 gap-2 text-xs text-white/75">Nome<input ref={nameRef} required value={name} onChange={(event) => setName(event.target.value)} className={inputClass} /></label>
+              <label className="grid min-w-0 gap-2 text-xs text-white/75">Preço<input aria-label="Preço" aria-describedby="service-price-hint" type="number" required min="0" max="9999999999.99" step="0.01" inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} className={inputClass} /><span id="service-price-hint" className="sr-only">Em reais (R$). Para mensal, informe o valor por mês.</span></label>
+              <label className="grid min-w-0 gap-2 text-xs text-white/75">Cobrança<select value={billingType} onChange={(event) => setBillingType(event.target.value as CommercialServiceOption['billingType'])} className={inputClass}><option value="ONE_TIME">Cobrança única</option><option value="MONTHLY">Mensal</option></select></label>
+            </fieldset>
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
+              <button disabled={busy} className={`${buttonClass} border-transparent bg-[var(--atelier-green)] text-black`}>{busy ? 'Salvando…' : editingId ? 'Salvar serviço' : 'Adicionar serviço'}</button>
+              {editingId ? <button type="button" disabled={busy} onClick={resetService} className={buttonClass}>Cancelar edição</button> : null}
+            </div>
+          </form>
+        </div>
       </div>
       <form onSubmit={saveDelay} className="grid min-w-0 gap-4 border-t border-white/10 pt-6 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
         <h3 className="font-semibold">Prazo de retorno</h3>
