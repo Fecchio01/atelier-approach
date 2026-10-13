@@ -11,9 +11,9 @@ import {
   SignOutIcon,
   SquaresFourIcon,
   TargetIcon,
-  UserCircleIcon,
   XIcon
 } from '@phosphor-icons/react';
+import { ProfileAvatar } from './profile-avatar';
 
 export const appRoutes = [
   { href: '/', label: 'Painel', Icon: SquaresFourIcon },
@@ -35,15 +35,13 @@ export function MobileNavigation({
   brandLogo
 }: {
   pathname: string;
-  user: { name: string; email: string };
+  user: { name: string; email: string; image?: string | null };
   onSignOut: () => Promise<void>;
   onNavigationStart: (href: string, label: string, event: MouseEvent<HTMLAnchorElement>) => boolean;
   brandLogo: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const initials = user.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'AA';
-
   function closeDrawer() {
     if (dialogRef.current?.open) dialogRef.current.close();
     setIsOpen(false);
@@ -82,7 +80,7 @@ export function MobileNavigation({
             {isOpen ? <XIcon size={22} aria-hidden="true" /> : <ListIcon size={22} aria-hidden="true" />}
           </button>
           <AppNavigationLink href="/configuracoes" label="Meu perfil" onNavigationStart={onNavigationStart} aria-label="Meu perfil" className="flex size-11 items-center justify-center rounded-lg text-[var(--atelier-green)] hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
-            <UserCircleIcon size={23} aria-hidden="true" />
+            <ProfileAvatar name={user.name} src={user.image} className="size-8 rounded-lg" />
           </AppNavigationLink>
         </div>
       </div>
@@ -133,7 +131,7 @@ export function MobileNavigation({
 
           <div className="mt-auto border-t border-white/[0.08] pt-4">
             <AppNavigationLink href="/configuracoes" label="Meu perfil" onNavigationStart={onNavigationStart} onClick={closeOnNavigate} aria-current={pathname.startsWith('/configuracoes') ? 'page' : undefined} className="flex min-h-14 items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/[0.05]">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--atelier-green)]/15 text-sm font-semibold text-[var(--atelier-green)]">{initials}</span>
+              <ProfileAvatar name={user.name} src={user.image} className="rounded-full" />
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{user.name}</span><span className="block truncate text-xs text-white/45">Meu perfil · {user.email}</span></span>
             </AppNavigationLink>
             <form action={onSignOut}>

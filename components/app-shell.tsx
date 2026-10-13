@@ -9,12 +9,14 @@ import { AppNavigationLink } from './app-navigation-link';
 import { appRoutes as routes, MobileNavigation } from './mobile-navigation';
 import { ReportPeriodNavigationProvider } from './report-period-navigation-state';
 import { BrandLogo } from './brand-logo';
+import { ProfileAvatar } from './profile-avatar';
 
-export function AppShell({ children, user, onSignOut }: { children: React.ReactNode; user: { name: string; email: string }; onSignOut: () => Promise<void> }) {
+export function AppShell({ children, user, onSignOut }: { children: React.ReactNode; user: { name: string; email: string; image?: string | null }; onSignOut: () => Promise<void> }) {
   const pathname = usePathname();
   const [pendingNavigation, setPendingNavigation] = useState<{ href: string; label: string } | null>(null);
   const pendingNavigationRef = useRef<string | null>(null);
   const rememberSearchPosition = (href: string, label: string, event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (href.split('?')[0] === '/configuracoes') window.dispatchEvent(new Event('atelier:open-settings'));
     if (pendingNavigationRef.current === href) {
       event.preventDefault();
       return false;
@@ -41,8 +43,6 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
     return () => window.removeEventListener('atelier:navigation-error', clearPending);
   }, []);
 
-  const initials = user.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'AA';
-
   return <MotionConfig reducedMotion="user"><>
     {pendingNavigation && <div role="status" aria-label="Navegação em andamento" aria-live="polite" className="fixed right-4 top-20 z-[60] inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-[var(--atelier-floating-surface)] px-3.5 text-xs font-medium text-white/75 shadow-lg backdrop-blur-xl backdrop-saturate-150 md:right-6 md:top-5">
       <CircleNotchIcon size={15} className="animate-spin text-[var(--atelier-green)] motion-reduce:animate-none" aria-hidden="true" />
@@ -65,7 +65,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
       </nav>
       <div className="mt-auto border-t border-white/10 pt-5">
         <AppNavigationLink href="/configuracoes" label="Meu perfil" onNavigationStart={rememberSearchPosition} aria-current={pathname.startsWith('/configuracoes') ? 'page' : undefined} className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-white/[0.06]">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/15 text-sm font-semibold text-[var(--atelier-green)]">{initials}</span>
+          <ProfileAvatar name={user.name} src={user.image} />
           <span className="min-w-0"><span className="block truncate text-sm font-semibold text-white">{user.name}</span><span className="block truncate text-xs text-white/45">Meu perfil</span></span>
         </AppNavigationLink>
         <form action={onSignOut}><button type="submit" className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-white/45 hover:bg-white/[0.045] hover:text-white"><SignOutIcon size={16} /> Sair da conta</button></form>

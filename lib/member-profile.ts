@@ -15,6 +15,10 @@ export async function upsertMemberProfile(input: MemberProfileInput) {
   });
 }
 
+export async function updateMemberProfileAvatar(id: string, avatarUrl: string) {
+  return prisma.memberProfile.update({ where: { id }, data: { avatarUrl } });
+}
+
 export async function ensureMemberProfile(input: Omit<MemberProfileInput, 'avatarUrl'>) {
   return prisma.memberProfile.upsert({
     where: { id: input.id },

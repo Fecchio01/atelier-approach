@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { LockKeyIcon, StorefrontIcon, UserCircleIcon } from '@phosphor-icons/react';
+import type { SettingsTab } from '@/lib/settings-tabs';
 
 const tabs = [
   { id: 'account', label: 'Conta', description: 'Dados pessoais', Icon: UserCircleIcon },
@@ -9,10 +10,8 @@ const tabs = [
   { id: 'commercial', label: 'Comercial', description: 'Serviços e retorno', Icon: StorefrontIcon }
 ] as const;
 
-type SettingsTab = typeof tabs[number]['id'];
-
 export function SettingsTabs({
-  initialTab = 'commercial',
+  initialTab = 'account',
   accountPanel,
   securityPanel,
   commercialPanel,
@@ -32,6 +31,12 @@ export function SettingsTabs({
 }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  useEffect(() => {
+    const openSettings = () => setActiveTab('account');
+    window.addEventListener('atelier:open-settings', openSettings);
+    return () => window.removeEventListener('atelier:open-settings', openSettings);
+  }, []);
 
   function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     const currentIndex = tabs.findIndex((tab) => tab.id === activeTab);

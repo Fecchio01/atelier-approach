@@ -12,5 +12,9 @@ export default async function AppLayout({ children }: Readonly<{ children: React
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  return <AppShell user={{ name: user.name || 'Membro', email: user.email || '' }} onSignOut={logout}>{children}</AppShell>;
+  const avatar = user.image?.startsWith('data:image/')
+    ? `/api/profile/avatar/${user.imageVersion}`
+    : user.image;
+
+  return <AppShell user={{ name: user.name || 'Membro', email: user.email || '', image: avatar }} onSignOut={logout}>{children}</AppShell>;
 }

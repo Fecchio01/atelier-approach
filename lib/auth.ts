@@ -40,5 +40,5 @@ export const getCurrentUser = cache(async function getCurrentUser() {
       email: session.user.email || `${session.user.id}@atelier.local`
     });
 
-  return { ...session.user, name: profile.name, email: profile.email, image: profile.avatarUrl };
+  return { ...session.user, name: profile.name, email: profile.email, image: profile.avatarUrl, imageVersion: profile.updatedAt.getTime() };
 });

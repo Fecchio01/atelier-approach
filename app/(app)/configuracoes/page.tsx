@@ -8,6 +8,7 @@ import { ProfileForm } from '@/components/profile-form';
 import { CommercialSettingsForm } from '@/components/commercial-settings-form';
 import { PasswordSettingsPanel } from '@/components/password-settings-panel';
 import { SettingsTabs } from '@/components/settings-tabs';
+import { getSettingsInitialTab } from '@/lib/settings-tabs';
 import { getFollowUpDelayDays } from '@/lib/commercial-settings';
 import { prisma } from '@/lib/db';
 
@@ -45,7 +46,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     getFollowUpDelayDays()
   ]);
   if (!user) redirect('/login');
-  const initialTab = params.password && passwordErrors[params.password] ? 'security' : 'commercial';
+  const initialTab = getSettingsInitialTab(params.password);
 
   return <section className="mx-auto max-w-6xl px-5 pb-20 pt-9 md:px-8 md:pt-12">
     <Link href="/" className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-[var(--atelier-green)]"><ArrowLeftIcon size={16} /> Voltar ao painel</Link>
