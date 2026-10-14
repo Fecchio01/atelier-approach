@@ -5,6 +5,7 @@ import { getFollowUpDelayDays } from '../../../../lib/commercial-settings';
 import { prisma } from '../../../../lib/db';
 import { getStageLifecycleUpdate, isPostFollowUpCooldownActive } from '../../../../lib/lead-lifecycle';
 import { getFollowUpDueDate } from '../../../../lib/follow-up-scheduling';
+import { parseMeetingAt } from '../../../../lib/meeting-scheduling';
 import { priceInCents, summarizeServiceItems } from '../../../../lib/service-sales';
 
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
@@ -12,6 +13,7 @@ type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
 type CrmUpdate = {
   stage?: unknown;
   followUpAt?: unknown;
+  meetingAt?: unknown;
   followUpAction?: unknown;
   followUpId?: unknown;
   saleValue?: unknown;
@@ -58,6 +60,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       ...lead,
       saleValue: lead.saleValue?.toString() ?? null,
       mrr: lead.mrr?.toString() ?? null,
+      meetingAt: lead.meetingAt?.toISOString() ?? null,
       activities: lead.activities.map((activity) => ({ ...activity, createdAt: activity.createdAt.toISOString() })),
       followUps: lead.followUps.map((followUp) => ({ ...followUp, dueDate: followUp.dueDate.toISOString() })),
       detailsLoaded: true
@@ -132,6 +135,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ error: 'Informe a data e hora do follow-up.' }, { status: 400 });
   }
 
+  let meetingAt: Date | null | undefined;
+  try {
+    meetingAt = parseMeetingAt(body.meetingAt);
+  } catch {
+    return Response.json({ error: 'Data e hora da reunião inválidas.' }, { status: 400 });
+  }
+  const hasMeetingAt = Object.prototype.hasOwnProperty.call(body, 'meetingAt');
+
   const activityNote = optionalText(body.activity?.note);
   const activityChannel = typeof body.activity?.channel === 'string' && Object.values(Channel).includes(body.activity.channel as Channel)
     ? body.activity.channel as Channel
@@ -140,7 +151,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ error: 'Informe canal e nota da atividade.' }, { status: 400 });
   }
 
-  if (!stage && !followUpAction && !body.activity && !hasFinancials) {
+  if (!stage && !followUpAction && !body.activity && !hasFinancials && !hasMeetingAt) {
     return Response.json({ error: 'Informe uma atualização para o lead.' }, { status: 400 });
   }
 
@@ -153,6 +164,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!lead) throw new Error('LEAD_NOT_FOUND');
     if (stage === 'WON' && lead.stage === 'WON') throw new Error('ALREADY_WON');
     if (stage === 'FOLLOW_UP' && lead.stage === 'WON') throw new Error('WON_CANNOT_SCHEDULE_FOLLOW_UP');
+    if (hasMeetingAt && (stage ?? lead.stage) !== 'MEETING') throw new Error('MEETING_DATE_REQUIRES_MEETING_STAGE');
     const now = new Date();
     if (stage === 'FOLLOW_UP' && stage !== lead.stage && isPostFollowUpCooldownActive(lead.postFollowUpAt, now)) {
       throw new Error('POST_FOLLOW_UP_COOLDOWN');
@@ -162,6 +174,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (stage && stage !== lead.stage) {
       const leadData: Prisma.LeadUpdateInput = { stage, ...getStageLifecycleUpdate(stage, now) };
+      if (stage === 'MEETING') leadData.meetingAt = hasMeetingAt ? meetingAt ?? null : null;
+      else if (lead.stage === 'MEETING') leadData.meetingAt = null;
       let selectedServices: { id: string; name: string; price: Prisma.Decimal; billingType: 'ONE_TIME' | 'MONTHLY' }[] = [];
       if (stage === 'WON') {
         if (serviceSelection?.length) {
@@ -248,6 +262,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     }
 
+    if (hasMeetingAt && (!stage || stage === lead.stage)) {
+      updated = await tx.lead.update({ where: { id }, data: { meetingAt: meetingAt ?? null } });
+    }
+
     if (hasFinancials && lead.stage === 'WON' && !stage) {
       const sale = await tx.saleEvent.findFirst({ where: { leadId: id, reversedAt: null }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] });
       const previousSaleValue = Number(sale?.saleValue ?? lead.saleValue ?? 0);
@@ -313,7 +331,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return updated;
   }).catch((error: unknown) => {
-    if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'WON_CANNOT_SCHEDULE_FOLLOW_UP', 'FINANCIALS_REQUIRE_WON', 'INVALID_SERVICE_SELECTION', 'POST_FOLLOW_UP_COOLDOWN'].includes(error.message)) return error.message;
+    if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'WON_CANNOT_SCHEDULE_FOLLOW_UP', 'FINANCIALS_REQUIRE_WON', 'INVALID_SERVICE_SELECTION', 'POST_FOLLOW_UP_COOLDOWN', 'MEETING_DATE_REQUIRES_MEETING_STAGE'].includes(error.message)) return error.message;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_FOUND') return null;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_PENDING') return false;
     throw error;
@@ -325,6 +343,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (updatedLead === 'FINANCIALS_REQUIRE_WON') return Response.json({ error: 'Os valores financeiros só podem ser alterados em um negócio ganho.' }, { status: 400 });
   if (updatedLead === 'INVALID_SERVICE_SELECTION') return Response.json({ error: 'Um ou mais serviços não existem ou estão arquivados. Nenhuma alteração foi salva.' }, { status: 400 });
   if (updatedLead === 'POST_FOLLOW_UP_COOLDOWN') return Response.json({ error: 'Aguarde o encerramento do prazo pós-follow-up antes de agendar outro retorno.' }, { status: 409 });
+  if (updatedLead === 'MEETING_DATE_REQUIRES_MEETING_STAGE') return Response.json({ error: 'A data da reunião só pode ser informada quando o lead estiver na etapa Reunião.' }, { status: 409 });
   if (updatedLead === null) return Response.json({ error: 'Follow-up não encontrado para este lead.' }, { status: 404 });
   if (updatedLead === false) return Response.json({ error: 'Este follow-up já foi encerrado.' }, { status: 409 });
   return Response.json({ lead: updatedLead });

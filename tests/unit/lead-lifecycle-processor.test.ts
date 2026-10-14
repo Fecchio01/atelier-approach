@@ -29,6 +29,7 @@ function makeDatabase(seed: {
         const dueClause = where.stageEnteredAt as { lte?: Date } | undefined;
         const postClause = where.postFollowUpAt as { lte?: Date } | undefined;
         return leads.filter((lead) => {
+          if (typeof where.stage === 'string' && where.stage !== lead.stage) return false;
           if (stageClause?.in && !stageClause.in.includes(lead.stage)) return false;
           if (dueClause?.lte && lead.stageEnteredAt > dueClause.lte) return false;
           if (Object.prototype.hasOwnProperty.call(where, 'postFollowUpAt') && where.postFollowUpAt === null && lead.postFollowUpAt !== null) return false;
@@ -72,9 +73,34 @@ const at = (value: string) => new Date(value);
 const now = at('2026-09-10T10:00:00.000Z');
 
 describe('lead lifecycle processor without database', () => {
+  test('automatically follows up only Abordado after two days and Proposal after five days', async () => {
+    const fixture = makeDatabase({ leads: [
+      { id: 'contacted-due', stage: 'CONTACTED', stageEnteredAt: at('2026-09-08T10:00:00Z'), postFollowUpAt: null, discardedAt: null },
+      { id: 'conversation-stale', stage: 'IN_CONVERSATION', stageEnteredAt: at('2026-09-01T10:00:00Z'), postFollowUpAt: null, discardedAt: null },
+      { id: 'qualified-stale', stage: 'QUALIFIED', stageEnteredAt: at('2026-09-01T10:00:00Z'), postFollowUpAt: null, discardedAt: null },
+      { id: 'proposal-not-due', stage: 'PROPOSAL', stageEnteredAt: at('2026-09-06T10:00:01Z'), postFollowUpAt: null, discardedAt: null },
+      { id: 'meeting-stale', stage: 'MEETING', stageEnteredAt: at('2026-09-01T10:00:00Z'), postFollowUpAt: null, discardedAt: null }
+    ] });
+
+    await expect(processLeadLifecycle(fixture.db, now)).resolves.toEqual({ movedToFollowUp: 1, discardedForInactivity: 0, permanentlyDeleted: 0 });
+    expect(fixture.leads.map(({ id, stage }) => [id, stage])).toEqual([
+      ['contacted-due', 'FOLLOW_UP'], ['conversation-stale', 'IN_CONVERSATION'], ['qualified-stale', 'QUALIFIED'],
+      ['proposal-not-due', 'PROPOSAL'], ['meeting-stale', 'MEETING']
+    ]);
+  });
+
+  test('moves a proposal to follow-up only at the exact five-day boundary', async () => {
+    const fixture = makeDatabase({ leads: [
+      { id: 'proposal-due', stage: 'PROPOSAL', stageEnteredAt: at('2026-09-05T10:00:00Z'), postFollowUpAt: null, discardedAt: null }
+    ] });
+
+    await expect(processLeadLifecycle(fixture.db, now)).resolves.toEqual({ movedToFollowUp: 1, discardedForInactivity: 0, permanentlyDeleted: 0 });
+    expect(fixture.followUps[0]).toMatchObject({ leadId: 'proposal-due', dueDate: now, returnStage: 'PROPOSAL' });
+  });
+
   test('moves a due active lead to follow-up with exact due time, origin, and latest actor', async () => {
     const fixture = makeDatabase({
-      leads: [{ id: 'due', stage: 'PROPOSAL', stageEnteredAt: at('2026-09-08T10:00:00Z'), postFollowUpAt: null, discardedAt: null }],
+      leads: [{ id: 'due', stage: 'PROPOSAL', stageEnteredAt: at('2026-09-05T10:00:00Z'), postFollowUpAt: null, discardedAt: null }],
       actors: { due: 'member-2' },
       pendingFollowUps: ['due']
     });
@@ -135,7 +161,7 @@ describe('lead lifecycle processor without database', () => {
   });
 
   test('a manual stage move between selection and guarded write prevents stale processing', async () => {
-    const fixture = makeDatabase({ leads: [{ id: 'raced', stage: 'PROPOSAL', stageEnteredAt: at('2026-09-08T10:00:00Z'), postFollowUpAt: null, discardedAt: null }] });
+    const fixture = makeDatabase({ leads: [{ id: 'raced', stage: 'CONTACTED', stageEnteredAt: at('2026-09-08T10:00:00Z'), postFollowUpAt: null, discardedAt: null }] });
     const originalFindMany = fixture.db.lead.findMany;
     fixture.db.lead.findMany = async (args) => {
       const candidates = await originalFindMany(args);

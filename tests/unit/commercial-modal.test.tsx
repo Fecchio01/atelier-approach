@@ -18,7 +18,7 @@ const lead: CrmLead = {
   longitude: null, stage: 'CONTACTED', saleValue: null, mrr: null, activities: [], followUps: []
 };
 
-function render(overrides: Partial<CrmLead> = {}) {
+function render(overrides: Partial<CrmLead> & { meetingAt?: string | null } = {}) {
   vi.stubGlobal('React', React);
   return renderToStaticMarkup(React.createElement(LeadDetailModal, {
     lead: { ...lead, ...overrides }, onClose: () => {}, onUpdated: () => {}, onDeleted: () => {},
@@ -45,6 +45,13 @@ describe('commercial lead controls', () => {
     const html = render({ stage: 'IN_CONVERSATION' });
 
     expect(html).toContain('Agendar follow-up');
+  });
+
+  it('offers a date and time for the meeting stage and shows the saved São Paulo time', () => {
+    const html = render({ stage: 'MEETING', meetingAt: '2026-10-15T12:00:00.000Z' });
+
+    expect(html).toContain('Data e hora da reunião');
+    expect(html).toContain('value="2026-10-15T09:00"');
   });
 
   it('explains automatic scheduling and displays the pending follow-up date', () => {

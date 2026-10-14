@@ -18,6 +18,7 @@ export function getCrmBoardLeads(database: Prisma.TransactionClient | typeof pri
       longitude: true,
       stage: true,
       stageEnteredAt: true,
+      meetingAt: true,
       postFollowUpAt: true,
       discardedAt: true,
       saleValue: true,

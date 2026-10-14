@@ -1,9 +1,11 @@
-import { getFollowUpDelayDays } from './commercial-settings';
 import { getFollowUpDueAt, isPurgeEligible, type LifecycleProcessingResult } from './lead-lifecycle';
 
 const teamOwnerId = '__team__';
-const activeStages = ['NEW', 'CONTACTED', 'INTEREST', 'IN_CONVERSATION', 'QUALIFIED', 'PROPOSAL', 'MEETING'] as const;
-const postFollowUpExpiryStages = [...activeStages, 'FOLLOW_UP', 'NO_RESPONSE'] as const;
+const postFollowUpExpiryStages = ['NEW', 'CONTACTED', 'INTEREST', 'IN_CONVERSATION', 'QUALIFIED', 'PROPOSAL', 'MEETING', 'FOLLOW_UP', 'NO_RESPONSE'] as const;
+const automaticFollowUpRules = [
+  { stage: 'CONTACTED', delayDays: 2 },
+  { stage: 'PROPOSAL', delayDays: 5 }
+] as const;
 const systemNote = 'Atualização automática por inatividade.';
 
 type LifecycleLead = {
@@ -54,8 +56,6 @@ function snapshotWhere(lead: LifecycleLead): LeadWhere {
 
 export async function processLeadLifecycle(database: LifecycleDatabase, now: Date): Promise<LifecycleProcessingResult> {
   assertValidNow(now);
-  const delayDays = await getFollowUpDelayDays(database);
-  const followUpCutoff = new Date(now.valueOf() - delayDays * 24 * 60 * 60 * 1000);
   const discardCutoff = new Date(now.valueOf() - 5 * 24 * 60 * 60 * 1000);
   const purgeCutoff = new Date(now.valueOf() - 7 * 24 * 60 * 60 * 1000);
   let movedToFollowUp = 0;
@@ -83,45 +83,44 @@ export async function processLeadLifecycle(database: LifecycleDatabase, now: Dat
     if (discarded) discardedForInactivity += 1;
   }
 
-  const dueCandidates = await database.lead.findMany({
-    where: {
-      stage: { in: activeStages },
-      stageEnteredAt: { lte: followUpCutoff },
-      postFollowUpAt: null
-    },
-    select: { id: true, stage: true, stageEnteredAt: true, postFollowUpAt: true, discardedAt: true }
-  });
-  for (const candidate of dueCandidates) {
-    const moved = await database.$transaction(async (tx) => {
-      const dueAt = getFollowUpDueAt(candidate.stageEnteredAt, delayDays);
-      if (dueAt > now) return false;
-      const changed = await tx.lead.updateMany({
-        where: snapshotWhere(candidate),
-        data: { stage: 'FOLLOW_UP', stageEnteredAt: now, postFollowUpAt: null, discardedAt: null }
-      });
-      if (changed.count !== 1) return false;
-      const latestActivity = await tx.activity.findFirst({
-        where: { leadId: candidate.id },
-        orderBy: { createdAt: 'desc' },
-        select: { actorId: true }
-      });
-      const actorId = latestActivity?.actorId || teamOwnerId;
-      await tx.followUp.updateMany({
-        where: { leadId: candidate.id, state: 'PENDING' },
-        data: { state: 'CANCELLED', cancelledAt: now, cancelledById: teamOwnerId }
-      });
-      await tx.followUp.create({ data: {
-        leadId: candidate.id,
-        dueDate: dueAt,
-        ownerId: actorId,
-        returnStage: candidate.stage,
-        note: 'Retorno agendado automaticamente por inatividade.'
-      } });
-      await tx.stageHistory.create({ data: { leadId: candidate.id, actorId: teamOwnerId, fromStage: candidate.stage, toStage: 'FOLLOW_UP' } });
-      await tx.activity.create({ data: { leadId: candidate.id, actorId: teamOwnerId, type: 'FOLLOW_UP_SCHEDULED', note: systemNote } });
-      return true;
+  for (const rule of automaticFollowUpRules) {
+    const followUpCutoff = new Date(now.valueOf() - rule.delayDays * 24 * 60 * 60 * 1000);
+    const dueCandidates = await database.lead.findMany({
+      where: { stage: rule.stage, stageEnteredAt: { lte: followUpCutoff }, postFollowUpAt: null },
+      select: { id: true, stage: true, stageEnteredAt: true, postFollowUpAt: true, discardedAt: true }
     });
-    if (moved) movedToFollowUp += 1;
+    for (const candidate of dueCandidates) {
+      const moved = await database.$transaction(async (tx) => {
+        const dueAt = getFollowUpDueAt(candidate.stageEnteredAt, rule.delayDays);
+        if (dueAt > now) return false;
+        const changed = await tx.lead.updateMany({
+          where: snapshotWhere(candidate),
+          data: { stage: 'FOLLOW_UP', stageEnteredAt: now, postFollowUpAt: null, discardedAt: null }
+        });
+        if (changed.count !== 1) return false;
+        const latestActivity = await tx.activity.findFirst({
+          where: { leadId: candidate.id },
+          orderBy: { createdAt: 'desc' },
+          select: { actorId: true }
+        });
+        const actorId = latestActivity?.actorId || teamOwnerId;
+        await tx.followUp.updateMany({
+          where: { leadId: candidate.id, state: 'PENDING' },
+          data: { state: 'CANCELLED', cancelledAt: now, cancelledById: teamOwnerId }
+        });
+        await tx.followUp.create({ data: {
+          leadId: candidate.id,
+          dueDate: dueAt,
+          ownerId: actorId,
+          returnStage: candidate.stage,
+          note: 'Retorno agendado automaticamente por inatividade.'
+        } });
+        await tx.stageHistory.create({ data: { leadId: candidate.id, actorId: teamOwnerId, fromStage: candidate.stage, toStage: 'FOLLOW_UP' } });
+        await tx.activity.create({ data: { leadId: candidate.id, actorId: teamOwnerId, type: 'FOLLOW_UP_SCHEDULED', note: systemNote } });
+        return true;
+      });
+      if (moved) movedToFollowUp += 1;
+    }
   }
 
   const eligibleDiscarded = await database.lead.findMany({

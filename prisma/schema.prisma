@@ -74,6 +74,7 @@ model Lead {
   syncedAt       DateTime?
   stage          LeadStage      @default(CONTACTED)
   stageEnteredAt DateTime       @default(now())
+  meetingAt      DateTime?
   postFollowUpAt DateTime?
   discardedAt    DateTime?
   saleValue      Decimal?

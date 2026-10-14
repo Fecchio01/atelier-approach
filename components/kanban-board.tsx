@@ -27,6 +27,7 @@ export type CrmLead = {
   longitude: number | null;
   stage: LeadStage;
   stageEnteredAt?: string;
+  meetingAt?: string | null;
   postFollowUpAt?: string | null;
   discardedAt?: string | null;
   followUpOriginStage?: LeadStage | null;

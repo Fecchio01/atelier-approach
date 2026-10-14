@@ -20,6 +20,7 @@ import { DailyCloseControl } from '@/components/daily-close-control';
 import { DashboardTrendChart } from '@/components/dashboard-trend-chart';
 import { DashboardMotionArticle, DashboardMotionSection } from '@/components/dashboard-motion-card';
 import { DashboardLifecycleWarnings } from '@/components/dashboard-lifecycle-warnings';
+import { DashboardPendingActions } from '@/components/dashboard-pending-actions';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getDailyReportForDate } from '@/lib/daily-reports';
@@ -27,6 +28,7 @@ import { getMemberProfiles } from '@/lib/member-profile';
 import { getDashboardTrend } from '@/lib/dashboard-trend';
 import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
 import { getDashboardLifecycleWarnings } from '@/lib/dashboard-lifecycle-warnings';
+import { getDashboardPendingActions } from '@/lib/dashboard-pending-actions';
 import { processCrmLifecycleForPageRequest } from '@/lib/crm-lifecycle-page-request';
 import { addImportedMetricTotals, getImportedMetricTotalsForExactRange } from '@/lib/metric-imports';
 import { getDashboardDataFetchWindow, getGoalPeriodWindow, getLocalDayWindow, selectDashboardWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
@@ -82,8 +84,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
   const today = getLocalDayWindow(now);
   const fetchWindow = getDashboardDataFetchWindow(now);
+  const pendingActionsCutoff = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+  const meetingReminderCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   await processCrmLifecycleForPageRequest(undefined, now);
-  const [user, settings, profiles, dailyReport, goals, leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps, lifecycleWarnings] = await Promise.all([
+  const [user, settings, profiles, dailyReport, goals, leads, activities, stageHistory, saleEvents, followUps, upcomingFollowUps, lifecycleWarnings, actionLeads] = await Promise.all([
     getCurrentUser(),
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
     getMemberProfiles(),
@@ -121,7 +125,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       take: 5,
       select: { id: true, leadId: true, dueDate: true, completedAt: true, ownerId: true, state: true, lead: { select: { id: true, name: true } } }
     }),
-    getDashboardLifecycleWarnings(now)
+    getDashboardLifecycleWarnings(now),
+    prisma.lead.findMany({
+      where: {
+        postFollowUpAt: null,
+        OR: [
+          { stage: { in: ['IN_CONVERSATION', 'QUALIFIED'] }, stageEnteredAt: { lte: pendingActionsCutoff } },
+          { stage: 'MEETING', OR: [{ meetingAt: null }, { meetingAt: { lte: meetingReminderCutoff } }] }
+        ]
+      },
+      orderBy: [{ stageEnteredAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, name: true, stage: true, stageEnteredAt: true, meetingAt: true, postFollowUpAt: true }
+    })
   ]);
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
@@ -176,6 +191,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
   if (user) names.set(user.id, user.name || user.id);
   const nameFor = (id: string) => names.get(id) ?? id;
+  const dashboardActions = getDashboardPendingActions(actionLeads, now);
   const teamRows = Object.entries(selectedMetrics.personalResults).sort(([first], [second]) => nameFor(first).localeCompare(nameFor(second)));
   const funnel = [...mainFunnelStages, ...auxiliaryFunnelStages].map((stage) => ({
     label: stageLabels[stage],
@@ -284,6 +300,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
             <FollowUps followUps={selectedMetrics.upcoming} empty="Nenhum retorno futuro pendente." nameFor={nameFor} upcoming />
           </section>
         </div>
+      </DashboardMotionSection>
+
+      <DashboardMotionSection className="min-w-0">
+        <DashboardPendingActions actions={dashboardActions} />
       </DashboardMotionSection>
 
       <DashboardMotionSection className="min-w-0 rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">

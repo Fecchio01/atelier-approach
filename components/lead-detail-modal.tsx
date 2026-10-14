@@ -12,6 +12,7 @@ import { MotionPanel } from './motion-primitives';
 import { getSelectedServiceSummary, type CommercialServiceOption } from '@/lib/commercial-ui';
 import { priceInCents } from '@/lib/service-sales';
 import { formatReportNote } from '@/lib/report-notes';
+import { formatMeetingDateTimeLocal } from '@/lib/meeting-scheduling';
 
 type Stage = FunnelStage;
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
@@ -50,6 +51,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   const [confirmingReturn, setConfirmingReturn] = useState(false);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [followUpAt, setFollowUpAt] = useState<Record<string, string>>({});
+  const [meetingAtInput, setMeetingAtInput] = useState(formatMeetingDateTimeLocal(lead.meetingAt));
   const [saleValues, setSaleValues] = useState<Record<string, string>>({});
   const [mrrValues, setMrrValues] = useState<Record<string, string>>({});
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
@@ -95,6 +97,10 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   }, [lead.id, lead.stage]);
 
   useEffect(() => {
+    setMeetingAtInput(formatMeetingDateTimeLocal(lead.meetingAt));
+  }, [lead.id, lead.meetingAt]);
+
+  useEffect(() => {
     if (confirmingReturn || confirmingDiscard) {
       confirmCancelRef.current?.focus();
       wasConfirmingRef.current = true;
@@ -124,13 +130,15 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
     }
   }
 
-  function moveLead(id: string, stage: Stage) {
-    return updateLead(id, { stage });
-  }
-
   async function saveStageChange(id: string) {
-    if (stageDraft === 'WON' || stageDraft === normalizeFunnelStage(lead.stage)) return;
-    await moveLead(id, stageDraft);
+    if (stageDraft === 'WON') return;
+    const stageChanged = stageDraft !== normalizeFunnelStage(lead.stage);
+    const meetingDateChanged = meetingAtInput !== formatMeetingDateTimeLocal(lead.meetingAt);
+    if (!stageChanged && !(stageDraft === 'MEETING' && meetingDateChanged)) return;
+    const details: Record<string, unknown> = {};
+    if (stageChanged) details.stage = stageDraft;
+    if (stageDraft === 'MEETING') details.meetingAt = meetingAtInput ? new Date(meetingAtInput).toISOString() : null;
+    await updateLead(id, details);
   }
 
   async function scheduleFollowUp(lead: CrmLead) {
@@ -220,6 +228,8 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
     const invalidManualValues = saleMode === 'MANUAL' && [saleValues[lead.id], mrrValues[lead.id]].some((value) => {
       try { priceInCents(value ?? ''); return false; } catch { return true; }
     });
+    const stageChanged = stageDraft !== normalizeFunnelStage(lead.stage);
+    const meetingDateChanged = meetingAtInput !== formatMeetingDateTimeLocal(lead.meetingAt);
     return (
       <div className="grid items-start gap-5">
         <nav className="flex flex-wrap gap-x-6 gap-y-1 border-b border-white/[0.11]" aria-label="Seções do lead">
@@ -238,7 +248,10 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
                     {[...columns, { stage: 'NO_RESPONSE' as Stage, title: 'Sem resposta' }, ...(lead.stage === 'DISCARDED' ? [{ stage: 'DISCARDED' as Stage, title: 'Descartado' }] : [])].map(({ stage, title }) => <option key={stage} value={stage}>{title}</option>)}
                   </select>
                 </label>
-                <button type="button" disabled={savingId === lead.id || stageDraft === 'WON' || stageDraft === normalizeFunnelStage(lead.stage)} onClick={() => saveStageChange(lead.id)} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">Salvar alterações</button>
+                {stageDraft === 'MEETING' ? <label className="grid min-w-0 gap-2 text-xs font-medium text-white/55">Data e hora da reunião
+                  <input aria-label="Data e hora da reunião" type="datetime-local" value={meetingAtInput} onChange={(event) => setMeetingAtInput(event.target.value)} className="min-h-12 w-full min-w-0 rounded-lg border border-white/[0.14] bg-[#11171c] px-3 text-sm text-white" />
+                </label> : null}
+                <button type="button" disabled={savingId === lead.id || stageDraft === 'WON' || (!stageChanged && !(stageDraft === 'MEETING' && meetingDateChanged))} onClick={() => saveStageChange(lead.id)} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">{stageDraft === 'MEETING' && !stageChanged && meetingDateChanged ? 'Salvar data da reunião' : 'Salvar alterações'}</button>
               </div>
               {showFollowUpCard ? <div className="grid min-w-0 content-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
                 <p className="text-xs leading-5 text-white/55">Ao entrar em Follow-up, o retorno é agendado automaticamente em {followUpDelayDays} {followUpDelayDays === 1 ? 'dia' : 'dias'}.</p>
