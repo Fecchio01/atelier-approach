@@ -72,7 +72,7 @@ export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): 
   return businesses.map((business, index) => {
     const fields = enriched.get(index);
     if (!fields || !isBusinessIdentityVerified(business, fields)) {
-      return { ...business, website: null, phone: null, phoneSource: null, whatsapp: null, instagram: null, imageUrl: null };
+      return { ...business, phone: null, phoneSource: null, whatsapp: null };
     }
 
     const phoneConflict = Boolean(business.phone && fields.phone && !samePhone(business.phone, fields.phone));

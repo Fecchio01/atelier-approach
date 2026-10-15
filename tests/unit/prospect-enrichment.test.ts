@@ -100,15 +100,17 @@ test('does not trust website contacts without structured identity and location v
 
   const [business] = await enrichOvertureBusinesses([{
     osmId: 'overture/1', name: 'Oficina Real', category: 'automotive_repair',
-    source: 'Overture', website: 'https://realoficina.example', phone: null, whatsapp: null, instagram: null
+    source: 'Overture', website: 'https://realoficina.example', phone: '+5521991112222',
+    whatsapp: 'https://wa.me/5521991112222', instagram: 'https://instagram.com/realoficina'
   }]);
 
   expect(business).toMatchObject({
-    name: 'Oficina Real', website: null, phone: null, whatsapp: null, instagram: null
+    name: 'Oficina Real', website: 'https://realoficina.example', phone: null,
+    whatsapp: null, instagram: 'https://instagram.com/realoficina'
   });
 });
 
-test('rejects phone and social contacts when the official website belongs to another business', async () => {
+test('suppresses phone and WhatsApp when the website identity does not match the business', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
     '<script type="application/ld+json">{"@type":"LocalBusiness","name":"Oficina Vizinha","telephone":"+55 21 98888-7777","address":{"@type":"PostalAddress","addressLocality":"Niterói","addressRegion":"RJ"}}</script><a href="https://wa.me/5521988887777">WhatsApp</a>',
     { status: 200 }
@@ -123,6 +125,8 @@ test('rejects phone and social contacts when the official website belongs to ano
   expect(business.phone).toBeNull();
   expect(business.whatsapp).toBeNull();
   expect(business.phoneSource).toBeNull();
+  expect(business.website).toBe('https://realoficina.example');
+  expect(business.instagram).toBeNull();
 });
 
 test('accepts phone only when official-site name and location match the Overture business', async () => {
@@ -179,8 +183,8 @@ test('checks every Overture website in the returned batch, including after the t
 
   const enriched = await enrichOvertureBusinesses(businesses);
 
-  expect(enriched[0].website).toBeNull();
-  expect(enriched[10].website).toBeNull();
+  expect(enriched[0].website).toBe('https://working-0.example');
+  expect(enriched[10].website).toBe('https://eleventh-broken.example');
   expect(fetchMock).toHaveBeenCalledTimes(11);
 });
 
@@ -216,6 +220,6 @@ test('does not assign another brand profile image to an Overture business', asyn
 
   const enriched = await enrichOvertureBusinesses(businesses);
 
-  expect(enriched[0].imageUrl).toBeNull();
-  expect(enriched[1].imageUrl).toBeNull();
+  expect(enriched[0].imageUrl).toBeUndefined();
+  expect(enriched[1].imageUrl).toBeUndefined();
 });

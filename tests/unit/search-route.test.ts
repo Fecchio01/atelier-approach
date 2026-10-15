@@ -102,9 +102,11 @@ describe('GET /api/search', () => {
     expect(mocks.continueSearch).not.toHaveBeenCalled();
   });
 
-  test('never returns an Overture phone unless the official site verified it', async () => {
+  test('keeps the prospect and its Instagram when no phone number can be verified', async () => {
     mocks.searchOvertureArea.mockResolvedValue({
-      businesses: [business('unverified', 'Oficina sem telefone validado', { phone: '+5524999999999' })],
+      businesses: [business('unverified', 'Oficina sem telefone validado', {
+        phone: '+5524999999999', instagram: 'https://instagram.com/oficina-unverified'
+      })],
       hitLimit: false
     });
     mocks.enrichOvertureBusinesses.mockImplementationOnce(async (businesses: ExternalBusiness[]) => businesses.map((business) => ({
@@ -113,7 +115,16 @@ describe('GET /api/search', () => {
 
     const response = await GET(request());
 
-    await expect(response.json()).resolves.toMatchObject({ businesses: [] });
+    await expect(response.json()).resolves.toMatchObject({
+      businesses: [{
+        osmId: 'overture/unverified',
+        phone: null,
+        whatsapp: null,
+        instagram: 'https://instagram.com/oficina-unverified',
+        latitude: -22.5,
+        longitude: -44.07
+      }]
+    });
   });
 
   test('does not disguise Overture failures by returning OpenStreetMap businesses', async () => {
@@ -195,12 +206,12 @@ describe('GET /api/search', () => {
     const second = await (await GET(request(`searchId=${first.searchId}`))).json() as typeof first;
     const third = await (await GET(request(`searchId=${first.searchId}`))).json() as typeof first;
 
-    expect(first.businesses).toHaveLength(10);
-    expect(second.businesses).toHaveLength(10);
-    expect(third.businesses).toHaveLength(10);
-    expect([...first.businesses, ...second.businesses, ...third.businesses].every(({ source, phoneSource }) => source === 'Overture' && phoneSource === 'site oficial verificado')).toBe(true);
-    expect(new Set([...first.businesses, ...second.businesses, ...third.businesses].map(({ osmId }) => osmId)).size).toBe(30);
-    expect(third.hasMore).toBe(true);
+    expect(first.businesses).toHaveLength(60);
+    expect(second.businesses).toHaveLength(5);
+    expect(third.businesses).toHaveLength(7);
+    expect([...first.businesses, ...second.businesses, ...third.businesses].every(({ source }) => source === 'Overture')).toBe(true);
+    expect(new Set([...first.businesses, ...second.businesses, ...third.businesses].map(({ osmId }) => osmId)).size).toBe(72);
+    expect(third.hasMore).toBe(false);
     expect(mocks.startSearch).not.toHaveBeenCalled();
   });
 
@@ -220,7 +231,7 @@ describe('GET /api/search', () => {
     `;
 
     expect(persisted).toEqual([{ ownerId }]);
-    expect(first.businesses).toHaveLength(10);
+    expect(first.businesses).toHaveLength(60);
 
     mocks.getCurrentUser.mockResolvedValue({ id: 'different-owner' });
     const otherUserResponse = await GET(request(`searchId=${first.searchId}`));

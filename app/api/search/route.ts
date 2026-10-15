@@ -27,7 +27,6 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const SEARCH_FILTER_TTL_MS = 15 * 60_000;
 const INITIAL_RESULTS_PER_PAGE = 60;
 const MAX_OVERTURE_AREAS_PER_REQUEST = 4;
-const MAX_CONTACT_VERIFICATION_CANDIDATES = 30;
 const searchAttemptsByUser = new Map<string, number[]>();
 // OpenStreetMap is used only to resolve state/city bounds. Prospect records
 // always come from Overture; this route never falls back to OSM business data.
@@ -157,21 +156,14 @@ async function consumeOverturePage(savedSearch: SavedSearch) {
   let queriedAreas = 0;
   let successfulAreaQueries = 0;
   let failedAreaQueries = 0;
-  let contactVerificationAttempts = 0;
 
   while (
     businesses.length < MIN_PROGRESSIVE_SEARCH_RESULTS
     && businesses.length < INITIAL_RESULTS_PER_PAGE
-    && contactVerificationAttempts < MAX_CONTACT_VERIFICATION_CANDIDATES
     && hasMoreOvertureAreas(savedSearch)
   ) {
     if (savedSearch.overtureQueue.length) {
-      const candidates = savedSearch.overtureQueue.splice(0, Math.min(
-        10,
-        INITIAL_RESULTS_PER_PAGE - businesses.length,
-        MAX_CONTACT_VERIFICATION_CANDIDATES - contactVerificationAttempts
-      ));
-      contactVerificationAttempts += candidates.length;
+      const candidates = savedSearch.overtureQueue.splice(0, INITIAL_RESULTS_PER_PAGE - businesses.length);
       const verifiedCandidates = await enrichOvertureBusinesses(candidates);
       businesses.push(...await filterBusinessesForResponse(verifiedCandidates, savedSearch.filters));
       continue;
@@ -294,8 +286,7 @@ function unavailableResponse(message = UNAVAILABLE_MESSAGE) {
 }
 
 async function filterBusinessesForResponse(businesses: ExternalBusiness[], filters: ResearchFilters) {
-  const filteredBusinesses = businesses.filter((business) => Boolean(business.phone && business.phoneSource === 'site oficial verificado')
-    && hasVerifiableName(business.name)
+  const filteredBusinesses = businesses.filter((business) => hasVerifiableName(business.name)
     && matchesOvertureSearch(business, filters)
     && matchesResearchFilters(business, filters));
   const existingLeads = await prisma.lead.findMany({
