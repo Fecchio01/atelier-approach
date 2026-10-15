@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   ]).has(name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()),
   searchOvertureArea: vi.fn(),
   planOvertureSearchAreas: vi.fn(),
-  splitOvertureSearchArea: vi.fn()
+  splitOvertureSearchArea: vi.fn(),
+  enrichOvertureBusinesses: vi.fn()
 }));
 
 vi.mock('../../lib/auth', () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -34,6 +35,7 @@ vi.mock('../../lib/overture', async (importOriginal) => ({
   planOvertureSearchAreas: mocks.planOvertureSearchAreas,
   splitOvertureSearchArea: mocks.splitOvertureSearchArea
 }));
+vi.mock('../../lib/prospect-enrichment', () => ({ enrichOvertureBusinesses: mocks.enrichOvertureBusinesses }));
 
 import { GET } from '../../app/api/search/route';
 import { prisma } from '../../lib/db';
@@ -74,6 +76,11 @@ describe('GET /api/search', () => {
     mocks.continueSearch.mockReset();
     mocks.resolveSearchBounds.mockReset().mockResolvedValue(DEFAULT_BOUNDS);
     mocks.searchOvertureArea.mockReset().mockResolvedValue({ businesses: [], hitLimit: false });
+    mocks.enrichOvertureBusinesses.mockReset().mockImplementation(async (businesses: ExternalBusiness[]) => businesses.map((business) => ({
+      ...business,
+      phone: business.phone ?? '+5511999999999',
+      phoneSource: 'site oficial verificado'
+    })));
     mocks.planOvertureSearchAreas.mockReset().mockReturnValue([FIRST_AREA]);
     mocks.splitOvertureSearchArea.mockReset().mockReturnValue([]);
   });
@@ -93,6 +100,20 @@ describe('GET /api/search', () => {
     });
     expect(mocks.startSearch).not.toHaveBeenCalled();
     expect(mocks.continueSearch).not.toHaveBeenCalled();
+  });
+
+  test('never returns an Overture phone unless the official site verified it', async () => {
+    mocks.searchOvertureArea.mockResolvedValue({
+      businesses: [business('unverified', 'Oficina sem telefone validado', { phone: '+5524999999999' })],
+      hitLimit: false
+    });
+    mocks.enrichOvertureBusinesses.mockImplementationOnce(async (businesses: ExternalBusiness[]) => businesses.map((business) => ({
+      ...business, phone: null, phoneSource: null, whatsapp: null
+    })));
+
+    const response = await GET(request());
+
+    await expect(response.json()).resolves.toMatchObject({ businesses: [] });
   });
 
   test('does not disguise Overture failures by returning OpenStreetMap businesses', async () => {
@@ -174,12 +195,12 @@ describe('GET /api/search', () => {
     const second = await (await GET(request(`searchId=${first.searchId}`))).json() as typeof first;
     const third = await (await GET(request(`searchId=${first.searchId}`))).json() as typeof first;
 
-    expect(first.businesses).toHaveLength(60);
-    expect(second.businesses).toHaveLength(5);
-    expect(third.businesses).toHaveLength(7);
-    expect([...first.businesses, ...second.businesses, ...third.businesses].every(({ source }) => source === 'Overture')).toBe(true);
-    expect(new Set([...first.businesses, ...second.businesses, ...third.businesses].map(({ osmId }) => osmId)).size).toBe(72);
-    expect(third.hasMore).toBe(false);
+    expect(first.businesses).toHaveLength(10);
+    expect(second.businesses).toHaveLength(10);
+    expect(third.businesses).toHaveLength(10);
+    expect([...first.businesses, ...second.businesses, ...third.businesses].every(({ source, phoneSource }) => source === 'Overture' && phoneSource === 'site oficial verificado')).toBe(true);
+    expect(new Set([...first.businesses, ...second.businesses, ...third.businesses].map(({ osmId }) => osmId)).size).toBe(30);
+    expect(third.hasMore).toBe(true);
     expect(mocks.startSearch).not.toHaveBeenCalled();
   });
 
@@ -199,7 +220,7 @@ describe('GET /api/search', () => {
     `;
 
     expect(persisted).toEqual([{ ownerId }]);
-    expect(first.businesses).toHaveLength(60);
+    expect(first.businesses).toHaveLength(10);
 
     mocks.getCurrentUser.mockResolvedValue({ id: 'different-owner' });
     const otherUserResponse = await GET(request(`searchId=${first.searchId}`));

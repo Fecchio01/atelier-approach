@@ -24,7 +24,11 @@ test('extracts public WhatsApp, Instagram, telephone and Open Graph image links'
     whatsapp: 'https://wa.me/5519999990000',
     instagram: 'https://instagram.com/oficina',
     phone: '+551932035110',
-    imageUrl: 'https://img.example/cover.jpg'
+    imageUrl: 'https://img.example/cover.jpg',
+    structuredBusinessName: null,
+    structuredStreetAddress: null,
+    structuredLocality: null,
+    structuredRegion: null
   });
 });
 
@@ -79,12 +83,16 @@ test('ignores unsafe links and returns empty fields when the official site fails
     whatsapp: null,
     instagram: null,
     phone: null,
-    imageUrl: null
+    imageUrl: null,
+    structuredBusinessName: null,
+    structuredStreetAddress: null,
+    structuredLocality: null,
+    structuredRegion: null
   });
   await expect(enrichFromOfficialWebsite('https://broken-dns.example')).resolves.toMatchObject({ website: null });
 });
 
-test('enriches Overture prospects from a reachable official website without replacing the source name', async () => {
+test('does not trust website contacts without structured identity and location verification', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
     '<a href="https://wa.me/5521999990000">WhatsApp</a><a href="https://instagram.com/realoficina">Instagram</a>',
     { status: 200 }
@@ -96,9 +104,58 @@ test('enriches Overture prospects from a reachable official website without repl
   }]);
 
   expect(business).toMatchObject({
-    name: 'Oficina Real', website: 'https://realoficina.example/',
-    whatsapp: 'https://wa.me/5521999990000', instagram: 'https://instagram.com/realoficina'
+    name: 'Oficina Real', website: null, phone: null, whatsapp: null, instagram: null
   });
+});
+
+test('rejects phone and social contacts when the official website belongs to another business', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    '<script type="application/ld+json">{"@type":"LocalBusiness","name":"Oficina Vizinha","telephone":"+55 21 98888-7777","address":{"@type":"PostalAddress","addressLocality":"Niterói","addressRegion":"RJ"}}</script><a href="https://wa.me/5521988887777">WhatsApp</a>',
+    { status: 200 }
+  )));
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/real', name: 'Oficina Real', category: 'automotive_repair',
+    source: 'Overture', website: 'https://realoficina.example', phone: '+5521991112222', whatsapp: null, instagram: null,
+    address: 'Rua das Flores, 45, Volta Redonda, RJ'
+  }]);
+
+  expect(business.phone).toBeNull();
+  expect(business.whatsapp).toBeNull();
+  expect(business.phoneSource).toBeNull();
+});
+
+test('accepts phone only when official-site name and location match the Overture business', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    '<script type="application/ld+json">{"@type":"LocalBusiness","name":"Oficina Real","telephone":"+55 24 3333-4444","address":{"@type":"PostalAddress","streetAddress":"Rua das Flores, 45","addressLocality":"Volta Redonda","addressRegion":"RJ"}}</script><a href="https://wa.me/552433334444">WhatsApp</a>',
+    { status: 200 }
+  )));
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/real-match', name: 'Oficina Real', category: 'automotive_repair',
+    source: 'Overture', website: 'https://real-match.example', phone: null, whatsapp: null, instagram: null,
+    address: 'Rua das Flores, 45, Volta Redonda, RJ'
+  }]);
+
+  expect(business).toMatchObject({
+    phone: '+552433334444', whatsapp: 'https://wa.me/552433334444', phoneSource: 'site oficial verificado'
+  });
+});
+
+test('rejects a conflicting Overture phone even when the official website identity matches', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    '<script type="application/ld+json">{"@type":"LocalBusiness","name":"Oficina Real","telephone":"+55 24 3333-4444","address":{"@type":"PostalAddress","addressLocality":"Volta Redonda","addressRegion":"RJ"}}</script>',
+    { status: 200 }
+  )));
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/real-conflict', name: 'Oficina Real', category: 'automotive_repair',
+    source: 'Overture', website: 'https://real-conflict.example', phone: '+5521991112222', whatsapp: null, instagram: null,
+    address: 'Rua das Flores, 45, Volta Redonda, RJ'
+  }]);
+
+  expect(business.phone).toBeNull();
+  expect(business.phoneSource).toBeNull();
 });
 
 test('does not present a missing website as a working site', async () => {
@@ -108,11 +165,12 @@ test('does not present a missing website as a working site', async () => {
 });
 
 test('checks every Overture website in the returned batch, including after the tenth', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) =>
+  const fetchMock = vi.fn().mockImplementation((url: string) =>
     url.includes('eleventh-broken')
       ? Promise.reject(new Error('getaddrinfo ENOTFOUND'))
       : Promise.resolve(new Response('<html>OK</html>', { status: 200 }))
-  ));
+  );
+  vi.stubGlobal('fetch', fetchMock);
   const businesses = Array.from({ length: 11 }, (_, index) => ({
     osmId: `overture/${index}`, name: `Oficina ${index}`, source: 'Overture' as const,
     website: `https://${index === 10 ? 'eleventh-broken' : `working-${index}`}.example`,
@@ -121,8 +179,9 @@ test('checks every Overture website in the returned batch, including after the t
 
   const enriched = await enrichOvertureBusinesses(businesses);
 
-  expect(enriched[0].website).toBe('https://working-0.example/');
+  expect(enriched[0].website).toBeNull();
   expect(enriched[10].website).toBeNull();
+  expect(fetchMock).toHaveBeenCalledTimes(11);
 });
 
 test('keeps images from different profiles on the same host separate', async () => {
@@ -158,5 +217,5 @@ test('does not assign another brand profile image to an Overture business', asyn
   const enriched = await enrichOvertureBusinesses(businesses);
 
   expect(enriched[0].imageUrl).toBeNull();
-  expect(enriched[1].imageUrl).toBe('https://img.example/multimarcas.jpg');
+  expect(enriched[1].imageUrl).toBeNull();
 });

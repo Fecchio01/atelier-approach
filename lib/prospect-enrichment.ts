@@ -6,7 +6,11 @@ const EMPTY_FIELDS: EnrichedContactFields = {
   whatsapp: null,
   instagram: null,
   phone: null,
-  imageUrl: null
+  imageUrl: null,
+  structuredBusinessName: null,
+  structuredStreetAddress: null,
+  structuredLocality: null,
+  structuredRegion: null
 };
 
 type CachedFields = { expiresAt: number; value: EnrichedContactFields };
@@ -18,6 +22,10 @@ export type EnrichedContactFields = {
   instagram: string | null;
   phone: string | null;
   imageUrl: string | null;
+  structuredBusinessName: string | null;
+  structuredStreetAddress: string | null;
+  structuredLocality: string | null;
+  structuredRegion: string | null;
 };
 
 const cache = new Map<string, CachedFields>();
@@ -63,15 +71,86 @@ export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): 
   }
   return businesses.map((business, index) => {
     const fields = enriched.get(index);
-    return fields ? {
+    if (!fields || !isBusinessIdentityVerified(business, fields)) {
+      return { ...business, website: null, phone: null, phoneSource: null, whatsapp: null, instagram: null, imageUrl: null };
+    }
+
+    const phoneConflict = Boolean(business.phone && fields.phone && !samePhone(business.phone, fields.phone));
+    const phone = phoneConflict ? null : fields.phone;
+    const whatsappPhone = fields.whatsapp ? whatsappPhoneNumber(fields.whatsapp) : null;
+    const whatsapp = phone && whatsappPhone && samePhone(phone, whatsappPhone) ? fields.whatsapp : null;
+    return {
       ...business,
       website: fields.website,
-      phone: business.phone ?? fields.phone,
-      whatsapp: business.whatsapp ?? fields.whatsapp,
-      instagram: business.instagram ?? fields.instagram,
-      imageUrl: business.imageUrl ?? (imageMatchesBusiness(business.name, fields.name) ? fields.imageUrl : null)
-    } : business;
+      phone,
+      phoneSource: phone ? 'site oficial verificado' as const : null,
+      whatsapp,
+      instagram: fields.instagram,
+      imageUrl: business.imageUrl ?? fields.imageUrl
+    };
   });
+}
+
+function isBusinessIdentityVerified(business: ExternalBusiness, fields: EnrichedContactFields) {
+  if (!fields.structuredBusinessName || !fields.structuredLocality || !business.address) return false;
+  if (!businessNamesMatch(business.name, fields.structuredBusinessName)) return false;
+
+  const addressParts = business.address.split(',').map(normalizeIdentityText).filter(Boolean);
+  const pageLocality = normalizeIdentityText(fields.structuredLocality);
+  const pageStreet = normalizeIdentityText(fields.structuredStreetAddress ?? '');
+  const localityMatches = addressParts.some((part) => part === pageLocality);
+  const streetMatches = Boolean(pageStreet && addressParts.some((part) => part === pageStreet || part.includes(pageStreet)));
+  if (!localityMatches && !streetMatches) return false;
+
+  if (fields.structuredRegion) {
+    const sourceRegion = addressParts.find((part) => /^[a-z]{2}$/.test(part));
+    if (sourceRegion && normalizeRegion(sourceRegion) !== normalizeRegion(fields.structuredRegion)) return false;
+  }
+  return true;
+}
+
+function businessNamesMatch(businessName: string, officialName: string) {
+  const tokens = (value: string) => normalizeIdentityText(value).split(' ')
+    .filter((token) => token.length > 2 && !/^(oficina|auto|automotiva|automotivo|servicos|servico|empresa|oficial|brasil|ltda|me)$/.test(token));
+  const businessTokens = [...new Set(tokens(businessName))];
+  const officialTokens = new Set(tokens(officialName));
+  return businessTokens.length > 0 && businessTokens.every((token) => officialTokens.has(token));
+}
+
+function normalizeIdentityText(value: string) {
+  return value.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeRegion(value: string) {
+  const normalized = normalizeIdentityText(value);
+  const regions: Record<string, string> = {
+    acre: 'ac', alagoas: 'al', amapa: 'ap', amazonas: 'am', bahia: 'ba', ceara: 'ce',
+    'distrito federal': 'df', 'espirito santo': 'es', goias: 'go', maranhao: 'ma',
+    'mato grosso': 'mt', 'mato grosso do sul': 'ms', 'minas gerais': 'mg', para: 'pa',
+    paraiba: 'pb', parana: 'pr', pernambuco: 'pe', piaui: 'pi', 'rio de janeiro': 'rj',
+    'rio grande do norte': 'rn', 'rio grande do sul': 'rs', rondonia: 'ro', roraima: 'rr',
+    'santa catarina': 'sc', 'sao paulo': 'sp', sergipe: 'se', tocantins: 'to'
+  };
+  return regions[normalized] ?? normalized.toUpperCase();
+}
+
+function samePhone(first: string, second: string) {
+  const digits = (value: string) => value.replace(/\D/g, '').replace(/^0+/, '');
+  const firstDigits = digits(first);
+  const secondDigits = digits(second);
+  return Boolean(firstDigits && firstDigits === secondDigits);
+}
+
+function whatsappPhoneNumber(value: string) {
+  try {
+    const url = new URL(value);
+    return url.hostname.toLowerCase() === 'wa.me'
+      ? url.pathname.replace(/\D/g, '') || null
+      : url.searchParams.get('phone')?.replace(/\D/g, '') || null;
+  } catch {
+    return null;
+  }
 }
 
 function cacheResult(cacheKey: string, value: EnrichedContactFields) {
@@ -119,28 +198,26 @@ function extractFields(html: string, website: string): EnrichedContactFields {
 
   return {
     website,
-    name: structured.name ?? metaContent(html, 'og:title') ?? metaContent(html, 'og:site_name') ?? metaContent(html, 'twitter:title'),
+    name: structured.businessName ?? metaContent(html, 'og:title') ?? metaContent(html, 'og:site_name') ?? metaContent(html, 'twitter:title'),
     whatsapp,
     instagram,
-    phone: normalizePhone(rawPhone?.slice(4) ?? structured.telephone),
-    imageUrl: safeHttpUrl(imageUrl ?? '', website)
+    phone: rawPhone && structured.telephone && !samePhone(rawPhone.slice(4), structured.telephone)
+      ? null
+      : normalizePhone(rawPhone?.slice(4) ?? structured.telephone),
+    imageUrl: safeHttpUrl(imageUrl ?? '', website),
+    structuredBusinessName: structured.name,
+    structuredStreetAddress: structured.streetAddress,
+    structuredLocality: structured.locality,
+    structuredRegion: structured.region
   };
 }
 
-function imageMatchesBusiness(businessName: string, pageName: string | null) {
-  if (!pageName) return false;
-  const distinctiveTokens = (value: string) => new Set(value.toLocaleLowerCase('pt-BR')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/auto\s+mecanica/g, 'automecanica')
-    .split(/[^a-z0-9]+/)
-    .filter((token) => token.length > 2 && !/^(auto|car|wash|oficina|mecanica|servicos|automotivos|automotiva|oficial|official|instagram|facebook|linktree|pecas)$/.test(token)));
-  const businessTokens = distinctiveTokens(businessName);
-  const pageTokens = distinctiveTokens(pageName);
-  return [...businessTokens].some((token) => pageTokens.has(token));
-}
-
 function extractStructuredData(html: string) {
-  const output = { name: null as string | null, telephone: null as string | null, sameAs: [] as string[] };
+  const output = {
+    name: null as string | null, businessName: null as string | null,
+    telephone: null as string | null, sameAs: [] as string[],
+    streetAddress: null as string | null, locality: null as string | null, region: null as string | null
+  };
   const blocks = [...html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
 
   for (const [, rawJson] of blocks) {
@@ -154,7 +231,7 @@ function extractStructuredData(html: string) {
   return output;
 }
 
-function visitStructuredData(value: unknown, output: { name: string | null; telephone: string | null; sameAs: string[] }) {
+function visitStructuredData(value: unknown, output: { name: string | null; businessName: string | null; telephone: string | null; sameAs: string[]; streetAddress: string | null; locality: string | null; region: string | null }) {
   if (Array.isArray(value)) {
     value.forEach((item) => visitStructuredData(item, output));
     return;
@@ -165,8 +242,20 @@ function visitStructuredData(value: unknown, output: { name: string | null; tele
   const types = Array.isArray(record['@type']) ? record['@type'] : [record['@type']];
   const businessType = types.some((type) => typeof type === 'string' && /localbusiness|organization|autorepair|autobodyshop|automotivebusiness/i.test(type));
   if (businessType) {
-    if (!output.name && typeof record.name === 'string') output.name = record.name.trim() || null;
+    if (!output.businessName && typeof record.name === 'string') output.businessName = record.name.trim() || null;
     if (!output.telephone && typeof record.telephone === 'string') output.telephone = record.telephone;
+    const address = typeof record.address === 'string' ? { streetAddress: record.address } : record.address;
+    if (!output.name && typeof record.name === 'string' && address && typeof address === 'object' && !Array.isArray(address)) {
+      const postalAddress = address as Record<string, unknown>;
+      const locality = typeof postalAddress.addressLocality === 'string' ? postalAddress.addressLocality.trim() : '';
+      if (locality) {
+        output.name = record.name.trim() || null;
+        output.streetAddress = typeof postalAddress.streetAddress === 'string' ? postalAddress.streetAddress.trim() || null : null;
+        output.locality = locality;
+        output.region = typeof postalAddress.addressRegion === 'string' ? postalAddress.addressRegion.trim() || null : null;
+        output.telephone = typeof record.telephone === 'string' ? record.telephone : null;
+      }
+    }
     if (Array.isArray(record.sameAs)) output.sameAs.push(...record.sameAs.filter((link): link is string => typeof link === 'string'));
     else if (typeof record.sameAs === 'string') output.sameAs.push(record.sameAs);
   }

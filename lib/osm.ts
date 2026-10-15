@@ -55,6 +55,7 @@ export type ExternalBusiness = {
   osmId: string;
   name: string;
   phone: string | null;
+  phoneSource?: 'site oficial verificado' | null;
   website: string | null;
   instagram: string | null;
   whatsapp?: string | null;
