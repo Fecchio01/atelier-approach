@@ -41,10 +41,9 @@ describe('dashboard pending actions', () => {
     expect(html).toContain('/crm?lead=meeting');
   });
 
-  test('keeps the card visible with a clear empty state', () => {
+  test('does not render an empty card that leaves a hole in the dashboard layout', () => {
     const html = renderToStaticMarkup(React.createElement(DashboardPendingActions, { actions: [] }));
 
-    expect(html).toContain('Ações pendentes');
-    expect(html).toContain('Nenhuma ação pendente.');
+    expect(html).toBe('');
   });
 });

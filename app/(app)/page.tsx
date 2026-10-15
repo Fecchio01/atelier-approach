@@ -278,6 +278,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     </div>
 
     <div className="mt-6 grid items-stretch gap-4 xl:grid-cols-2">
+      {dashboardActions.length > 0 && <DashboardMotionSection className="min-w-0 xl:col-span-2">
+        <DashboardPendingActions actions={dashboardActions} />
+      </DashboardMotionSection>}
+
       <DashboardMotionSection className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -300,10 +304,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
             <FollowUps followUps={selectedMetrics.upcoming} empty="Nenhum retorno futuro pendente." nameFor={nameFor} upcoming />
           </section>
         </div>
-      </DashboardMotionSection>
-
-      <DashboardMotionSection className="min-w-0">
-        <DashboardPendingActions actions={dashboardActions} />
       </DashboardMotionSection>
 
       <DashboardMotionSection className="min-w-0 rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">

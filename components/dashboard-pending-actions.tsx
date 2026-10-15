@@ -8,6 +8,8 @@ function tone(kind: DashboardPendingAction['kind']) {
 }
 
 export function DashboardPendingActions({ actions }: { actions: DashboardPendingAction[] }) {
+  if (actions.length === 0) return null;
+
   return <section aria-labelledby="dashboard-pending-actions-title" className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-start gap-3">
@@ -19,7 +21,7 @@ export function DashboardPendingActions({ actions }: { actions: DashboardPending
       </div>
       <span className="rounded-lg border border-white/[0.07] px-2.5 py-1.5 text-xs tabular-nums text-white/60">{actions.length}</span>
     </div>
-    {actions.length ? <ul className="mt-3 divide-y divide-white/[0.07]">
+    <ul className="mt-3 divide-y divide-white/[0.07]">
       {actions.map((action) => <li key={`${action.leadId}:${action.kind}`}>
         <Link href={`/crm?lead=${encodeURIComponent(action.leadId)}`} className="group flex min-h-16 items-center justify-between gap-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-[var(--atelier-green)]">
           <span className="min-w-0">
@@ -30,6 +32,6 @@ export function DashboardPendingActions({ actions }: { actions: DashboardPending
           <span className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-medium ${tone(action.kind)}`}>Abrir</span>
         </Link>
       </li>)}
-    </ul> : <p className="mt-3 border-t border-white/[0.07] pt-3 text-sm text-white/50">Nenhuma ação pendente.</p>}
+    </ul>
   </section>;
 }
