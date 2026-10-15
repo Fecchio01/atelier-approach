@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'motion/react';
-import { StorefrontIcon } from '@phosphor-icons/react';
 
 import type { Channel } from '@prisma/client';
 import type { ExternalBusiness } from '@/lib/osm';
@@ -11,6 +10,7 @@ import type { BusinessScore } from '@/lib/lead-score';
 import { displayCompanyName } from '@/lib/display-name';
 import { googleMapsSearchUrl } from '@/lib/google-maps-url';
 import { possibleWhatsAppHref } from '@/lib/contact-links';
+import { getCompanyBrandImage } from '@/lib/company-branding';
 import { getDashboardCardMotionProps } from './motion-primitives';
 
 type LeadCardProps = {
@@ -33,6 +33,7 @@ export function LeadCard({ business, result, onApproached }: LeadCardProps) {
   const googleMapsHref = googleMapsSearchUrl({ name: business.name, address: business.address, category: business.category, latitude: business.latitude, longitude: business.longitude });
   const displayName = displayCompanyName(business.name);
   const displayCategory = business.category ? formatBusinessCategory(business.category) : null;
+  const fallbackImageUrl = getCompanyBrandImage(displayName);
 
   async function saveApproach() {
     setError(null);
@@ -61,16 +62,19 @@ export function LeadCard({ business, result, onApproached }: LeadCardProps) {
 
   return (
     <motion.article {...getDashboardCardMotionProps(prefersReducedMotion)} className="group flex flex-col gap-5 rounded-2xl border border-white/[0.09] bg-[#111411] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)]">
-      {business.imageUrl ? (
-        // External Open Graph images are not part of a configured, trusted image host list.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={business.imageUrl} alt={`Foto pública de ${displayName}`} className="h-40 w-full rounded-xl object-cover" />
-      ) : (
-        <div className="flex h-40 flex-col items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.045] to-transparent text-white/35" aria-label={`Sem foto pública de ${displayName}`}>
-          <StorefrontIcon size={32} weight="thin" aria-hidden="true" />
-          <span className="text-xs">Sem foto pública</span>
-        </div>
-      )}
+      {/* External image hosts are not fixed; the local SVG keeps cards polished when photos are missing or fail. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={business.imageUrl || fallbackImageUrl}
+        alt={business.imageUrl ? `Foto pública de ${displayName}` : `Identidade visual de ${displayName}`}
+        onError={business.imageUrl ? (event) => {
+          if (event.currentTarget.dataset.fallbackApplied) return;
+          event.currentTarget.dataset.fallbackApplied = 'true';
+          event.currentTarget.alt = `Identidade visual de ${displayName}`;
+          event.currentTarget.src = fallbackImageUrl;
+        } : undefined}
+        className="h-40 w-full rounded-xl object-cover"
+      />
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">

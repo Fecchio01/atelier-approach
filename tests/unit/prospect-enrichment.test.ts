@@ -28,6 +28,18 @@ test('extracts public WhatsApp, Instagram, telephone and Open Graph image links'
   });
 });
 
+test('uses the official Twitter image when a site has no Open Graph image', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    '<meta name="twitter:title" content="Oficina Horizonte"><meta name="twitter:image" content="https://img.example/horizonte.jpg">',
+    { status: 200 }
+  )));
+
+  await expect(enrichFromOfficialWebsite('https://horizonte.example')).resolves.toMatchObject({
+    name: 'Oficina Horizonte',
+    imageUrl: 'https://img.example/horizonte.jpg'
+  });
+});
+
 test('extracts the public company name, phone and social links from official metadata', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
     '<meta property="og:site_name" content="Auto Brilho Premium"><script type="application/ld+json">{"@type":"AutoRepair","name":"Auto Brilho Premium","telephone":"+55 11 3333-0000","sameAs":["https://instagram.com/autobrilho"]}</script>',

@@ -112,16 +112,18 @@ function extractFields(html: string, website: string): EnrichedContactFields {
   const rawPhone = hrefs.find((href) => href.toLowerCase().startsWith('tel:'));
   const whatsapp = absoluteLinks.find((href) => /^(https:\/\/wa\.me\/|https:\/\/api\.whatsapp\.com\/)/i.test(href)) ?? null;
   const instagram = absoluteLinks.find((href) => /^https?:\/\/(www\.)?instagram\.com\//i.test(href)) ?? null;
-  const imageMatch = html.match(/<meta[^>]+(?:property|name)\s*=\s*["']og:image["'][^>]+content\s*=\s*["']([^"']+)["']/i)
-    ?? html.match(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+(?:property|name)\s*=\s*["']og:image["']/i);
+  const imageUrl = metaContent(html, 'og:image')
+    ?? metaContent(html, 'og:image:secure_url')
+    ?? metaContent(html, 'twitter:image')
+    ?? metaContent(html, 'twitter:image:src');
 
   return {
     website,
-    name: structured.name ?? metaContent(html, 'og:title') ?? metaContent(html, 'og:site_name'),
+    name: structured.name ?? metaContent(html, 'og:title') ?? metaContent(html, 'og:site_name') ?? metaContent(html, 'twitter:title'),
     whatsapp,
     instagram,
     phone: normalizePhone(rawPhone?.slice(4) ?? structured.telephone),
-    imageUrl: safeHttpUrl(imageMatch?.[1] ?? '', website)
+    imageUrl: safeHttpUrl(imageUrl ?? '', website)
   };
 }
 

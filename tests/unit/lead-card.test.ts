@@ -1,7 +1,36 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('motion/react', async () => {
+  const ReactModule = await import('react');
+  return {
+    motion: { article: ({ children, className }: { children: React.ReactNode; className?: string }) => ReactModule.createElement('article', { className }, children) },
+    useReducedMotion: () => false
+  };
+});
+
+import { LeadCard } from '../../components/lead-card';
+import { scoreBusiness } from '../../lib/lead-score';
+import type { ExternalBusiness } from '../../lib/osm';
+
+test('renders a branded image fallback when a prospect has no real photo', () => {
+  const business: ExternalBusiness = {
+    osmId: 'overture/garage', name: 'Oficina Bianquini Garage', category: 'automotive_repair',
+    source: 'Overture', phone: null, website: null, instagram: null
+  };
+  const html = renderToStaticMarkup(React.createElement(LeadCard, { business, result: scoreBusiness(business) }));
+  const svgImageUrl = html.match(/src="(data:image\/svg\+xml[^"]+)"/)?.[1];
+
+  expect(html).toContain('Identidade visual de Oficina Bianquini Garage');
+  expect(svgImageUrl).toBeDefined();
+  expect(decodeURIComponent(svgImageUrl!.split(',').slice(1).join(','))).toContain('>BG</text>');
+  expect(html).not.toContain('Sem foto pública');
+});
 
 test('renders contact values as actionable links', () => {
   const cardSource = readFileSync(resolve(process.cwd(), 'components/lead-card.tsx'), 'utf8');
