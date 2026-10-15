@@ -28,7 +28,10 @@ test('renders a branded image fallback when a prospect has no real photo', () =>
 
   expect(html).toContain('Identidade visual de Oficina Bianquini Garage');
   expect(svgImageUrl).toBeDefined();
-  expect(decodeURIComponent(svgImageUrl!.split(',').slice(1).join(','))).toContain('>BG</text>');
+  const fallbackSvg = decodeURIComponent(svgImageUrl!.split(',').slice(1).join(','));
+  expect(fallbackSvg).toContain('>BG</text>');
+  const [, width, height] = fallbackSvg.match(/viewBox="0 0 (\d+) (\d+)"/) ?? [];
+  expect(Number(width) / Number(height)).toBeLessThanOrEqual(2);
   expect(html).not.toContain('Sem foto pública');
 });
 
