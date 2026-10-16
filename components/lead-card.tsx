@@ -12,14 +12,17 @@ import { googleMapsSearchUrl } from '@/lib/google-maps-url';
 import { possibleWhatsAppHref } from '@/lib/contact-links';
 import { getCompanyBrandImage } from '@/lib/company-branding';
 import { getDashboardCardMotionProps } from './motion-primitives';
+import { MapsPhoneLookup } from './maps-phone-lookup';
 
 type LeadCardProps = {
   business: ExternalBusiness;
   result: BusinessScore;
   onApproached?: (osmId: string) => void;
+  city?: string;
+  region?: string;
 };
 
-export function LeadCard({ business, result, onApproached }: LeadCardProps) {
+export function LeadCard({ business, result, onApproached, city = '', region = '' }: LeadCardProps) {
   const router = useRouter();
   const prefersReducedMotion = useReducedMotion() === true;
   const [isApproaching, setIsApproaching] = useState(false);
@@ -99,6 +102,8 @@ export function LeadCard({ business, result, onApproached }: LeadCardProps) {
           {googleMapsHref ? <a href={googleMapsHref} target="_blank" rel="noreferrer" aria-label={`Abrir ${business.name} no Google Maps`} className="rounded-lg border border-[var(--atelier-green)]/60 px-3 py-2 text-sm font-semibold text-[var(--atelier-green)]">Abrir no Google Maps</a> : null}
         </div>
       ) : null}
+
+      <MapsPhoneLookup business={business} city={city} region={region} />
 
       <details className="rounded-xl border border-white/[0.08] bg-black/15 p-4 text-sm text-white/75">
         <summary className="cursor-pointer font-medium text-white/70 marker:text-[var(--atelier-green)]">Ver dados e prioridade</summary>
