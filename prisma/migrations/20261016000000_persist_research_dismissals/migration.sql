@@ -13,4 +13,11 @@ ON "ResearchDismissal"("ownerId", "osmId");
 CREATE INDEX "ResearchDismissal_ownerId_idx"
 ON "ResearchDismissal"("ownerId");
 
+ALTER TABLE "ResearchDismissal" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "ResearchDismissal_app_access" ON "ResearchDismissal"
+FOR ALL TO atelier_app
+USING (true)
+WITH CHECK (true);
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "ResearchDismissal" TO atelier_app;
