@@ -36,12 +36,14 @@ export function normalizeInstagramProfileUrl(value: string | null | undefined): 
     if (!['instagram.com', 'www.instagram.com'].includes(url.hostname.toLowerCase())) return null;
     if (url.username || url.password || url.port) return null;
 
-    const segments = url.pathname.split('/').filter(Boolean);
+    // URL normalizes dot segments before exposing pathname, so validate the input path.
+    const rawPath = candidate.match(/^https?:\/\/[^/?#]+([^?#]*)/i)?.[1] ?? '';
+    const segments = rawPath.split('/').filter(Boolean);
     if (segments.length !== 1) return null;
     handle = segments[0];
   }
 
-  if (!/^[a-z0-9._]{1,30}$/i.test(handle)) return null;
+  if (!/^(?=.{1,30}$)[a-z0-9_]+(?:\.[a-z0-9_]+)*$/i.test(handle)) return null;
   if (RESERVED_INSTAGRAM_PATHS.has(handle.toLowerCase())) return null;
   return `https://www.instagram.com/${handle}/`;
 }
