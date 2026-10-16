@@ -41,6 +41,11 @@ describe('matchMapsPhoneCandidate', () => {
     expect(matchMapsPhoneCandidate(input, [candidate({ address: 'Avenida Central, 900' })])).toEqual({ status: 'none' });
   });
 
+  it('rejects matching street names with conflicting explicit house numbers', () => {
+    expect(matchMapsPhoneCandidate(input, [candidate({ address: 'Rua das Flores, 900' })])).toEqual({ status: 'none' });
+    expect(matchMapsPhoneCandidate(input, [candidate({ address: 'Rua das Flores 900' })])).toEqual({ status: 'none' });
+  });
+
   it('does not require address similarity when either address is absent', () => {
     expect(matchMapsPhoneCandidate(input, [candidate({ address: null })])).toEqual({ status: 'matched', candidate: candidate({ address: null }) });
     expect(matchMapsPhoneCandidate({ ...input, address: null }, [candidate({ address: 'Avenida Central, 900' })])).toEqual({

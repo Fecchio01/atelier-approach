@@ -80,9 +80,25 @@ function diceSimilarity(first: string, second: string) {
 
 function addressMatches(inputAddress: string | null | undefined, candidateAddress: string | null) {
   if (!inputAddress?.trim() || !candidateAddress?.trim()) return true;
+  const inputHouseNumber = explicitHouseNumber(inputAddress);
+  const candidateHouseNumber = explicitHouseNumber(candidateAddress);
+  if (inputHouseNumber && candidateHouseNumber && inputHouseNumber !== candidateHouseNumber) return false;
   const input = normalizeMapsPhoneText(inputAddress);
   const candidate = normalizeMapsPhoneText(candidateAddress);
   return input.length > 0 && candidate.length > 0 && diceSimilarity(input, candidate) >= 0.75;
+}
+
+function explicitHouseNumber(address: string) {
+  const afterComma = /[,;]\s*(?:n(?:[º°o.]|o)?\s*)?(\d+[a-z]?)(?=\D|$)/iu.exec(address);
+  if (afterComma) return afterComma[1].toLocaleLowerCase('pt-BR');
+
+  const normalized = normalizeMapsPhoneText(address);
+  const markedNumber = /(?:^|\s)(?:n|numero)\s+(\d+[a-z]?)(?=\s|$)/u.exec(normalized);
+  if (markedNumber) return markedNumber[1];
+
+  const streetSegment = address.split(/[,;]/u, 1)[0];
+  const trailingNumber = /(?:^|\s)(\d+[a-z]?)\s*$/iu.exec(streetSegment);
+  return trailingNumber?.[1]?.toLocaleLowerCase('pt-BR') ?? null;
 }
 
 export function matchMapsPhoneCandidate(
