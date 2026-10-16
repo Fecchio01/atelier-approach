@@ -12,7 +12,7 @@ export type SearchResultBatch = {
 
 type SearchFormProps = {
   onResults: (batch: SearchResultBatch) => void;
-  onSearchStart: () => void;
+  onSearchStart: (submittedFilters: SearchFilters) => void;
   onFailure: () => void;
   filters: SearchFilters;
   onFiltersChange: (filters: SearchFilters) => void;
@@ -83,7 +83,7 @@ export function SearchForm({ onResults, onSearchStart, onFailure, filters, onFil
       national: String(isNational)
     });
 
-    onSearchStart();
+    onSearchStart({ niche, businessName, country, region, city, includeWorked });
     setError(null);
     setIsLoading(true);
 

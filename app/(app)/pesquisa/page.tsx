@@ -9,12 +9,14 @@ import { approachabilityRank, scoreBusiness } from '@/lib/lead-score';
 import type { ExternalBusiness } from '@/lib/osm';
 
 type ScoredBusiness = ExternalBusiness & ReturnType<typeof scoreBusiness>;
+type ResultLocation = Pick<SearchFilters, 'city' | 'region'>;
 type SearchSnapshot = {
   businesses: ScoredBusiness[];
   hasSearched: boolean;
   searchId: string | null;
   hasMore: boolean;
   filters: SearchFilters;
+  resultLocation: ResultLocation | null;
 };
 
 let savedSearch: SearchSnapshot | null = null;
@@ -34,6 +36,7 @@ export default function PesquisaPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [continuationError, setContinuationError] = useState<string | null>(null);
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_SEARCH_FILTERS);
+  const [resultLocation, setResultLocation] = useState<ResultLocation | null>(null);
   const [isRestored, setIsRestored] = useState(false);
   const searchGeneration = useRef(0);
   const restoredScrollY = useRef(0);
@@ -47,14 +50,15 @@ export default function PesquisaPage() {
       setSearchId(savedSearch.searchId);
       setHasMore(savedSearch.hasMore);
       setFilters(savedSearch.filters);
+      setResultLocation(savedSearch.resultLocation);
     }
     setIsRestored(true);
   }, []);
 
   useEffect(() => {
     if (!isRestored) return;
-    savedSearch = { businesses, hasSearched, searchId, hasMore, filters };
-  }, [isRestored, businesses, hasSearched, searchId, hasMore, filters]);
+    savedSearch = { businesses, hasSearched, searchId, hasMore, filters, resultLocation };
+  }, [isRestored, businesses, hasSearched, searchId, hasMore, filters, resultLocation]);
 
   useEffect(() => {
     if (!isRestored) return;
@@ -81,9 +85,10 @@ export default function PesquisaPage() {
     setBusinesses((previous) => previous.filter((business) => business.osmId !== osmId));
   }
 
-  function handleSearchStart() {
+  function handleSearchStart(submittedFilters: SearchFilters) {
     sessionStorage.setItem(SEARCH_SCROLL_KEY, '0');
     searchGeneration.current += 1;
+    setResultLocation({ city: submittedFilters.city, region: submittedFilters.region });
     setHasSearched(false);
     setBusinesses([]);
     setSearchId(null);
@@ -100,6 +105,7 @@ export default function PesquisaPage() {
   }
 
   function handleFailure() {
+    setResultLocation(null);
     setHasSearched(false);
     setBusinesses([]);
     setSearchId(null);
@@ -158,7 +164,7 @@ export default function PesquisaPage() {
             <p className="mb-4 text-sm text-white/65">{businesses.length} prospect{businesses.length === 1 ? '' : 's'} novo{businesses.length === 1 ? '' : 's'}, em ordem de prioridade.</p>
             <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
               {businesses.map((business) => (
-                <LeadCard key={business.osmId} business={business} result={business} onApproached={handleApproached} city={filters.city} region={filters.region} />
+                <LeadCard key={business.osmId} business={business} result={business} onApproached={handleApproached} city={resultLocation?.city} region={resultLocation?.region} />
               ))}
             </div>
           </>

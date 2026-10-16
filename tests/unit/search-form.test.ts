@@ -16,7 +16,7 @@ test('submits the actual selected form values so restored browser selections are
   const formSource = readFileSync(resolve(process.cwd(), 'components/search-form.tsx'), 'utf8');
 
   expect(formSource).toContain('new FormData(event.currentTarget)');
-  expect(formSource.indexOf('const formData = new FormData(event.currentTarget);')).toBeLessThan(formSource.indexOf('onSearchStart();'));
+  expect(formSource.indexOf('const formData = new FormData(event.currentTarget);')).toBeLessThan(formSource.indexOf('onSearchStart({'));
   expect(formSource).toContain("const region = String(formData.get('region') ?? '');");
   expect(formSource).toContain('value={filters.region}');
   expect(formSource).not.toContain('defaultValue=""');
@@ -73,10 +73,10 @@ test('loads and accumulates progressive search batches instead of paginating a l
 
   expect(formSource).toContain('export type SearchResultBatch');
   expect(formSource).toContain('onResults: (batch: SearchResultBatch) => void');
-  expect(formSource).toContain('onSearchStart();');
+  expect(formSource).toContain('onSearchStart({ niche, businessName, country, region, city, includeWorked });');
   expect(pageSource).not.toContain('.slice(');
   expect(pageSource).not.toContain('currentPage');
-  expect(pageSource).toContain('function handleSearchStart()');
+  expect(pageSource).toContain('function handleSearchStart(submittedFilters: SearchFilters)');
   expect(pageSource).toContain('setSearchId(null);');
   expect(pageSource).toContain('fetch(`/api/search?searchId=${encodeURIComponent(searchId)}`)');
   expect(pageSource).toContain('new Map(previous.map((business) => [business.osmId, business]))');

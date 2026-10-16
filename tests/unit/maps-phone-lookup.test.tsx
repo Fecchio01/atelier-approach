@@ -21,11 +21,13 @@ beforeAll(async () => {
         import { createRoot } from 'react-dom/client';
         import { MapsPhoneLookup } from './components/maps-phone-lookup';
         import { LeadCard } from './components/lead-card';
+        import PesquisaPage from './app/(app)/pesquisa/page';
         import { scoreBusiness } from './lib/lead-score';
         const root = createRoot(document.getElementById('root'));
         window.renderLookup = (props, card = false) => root.render(card
           ? React.createElement(LeadCard, { ...props, result: scoreBusiness(props.business) })
-          : React.createElement(MapsPhoneLookup, props));`,
+          : React.createElement(MapsPhoneLookup, props));
+        window.renderResearch = (visible = true) => root.render(visible ? React.createElement(PesquisaPage) : null);`,
       resolveDir: process.cwd(), loader: 'tsx'
     },
     bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic',
@@ -72,6 +74,73 @@ async function respond(payload: unknown, status = 200) {
 }
 
 describe('on-demand Maps phone lookup', () => {
+  test('uses submitted FormData location after draft edits and for loaded-more companies', async () => {
+    const queries: URLSearchParams[] = [];
+    await page.route('**/api/search?**', async route => {
+      const query = new URL(route.request().url()).searchParams;
+      queries.push(query);
+      const continuation = query.has('searchId');
+      await route.fulfill({ json: { businesses: [{ ...business, ...(continuation ? { osmId: 'overture/second', name: 'Café Novo' } : {}) }], searchId: 'search-campinas', hasMore: !continuation } });
+    });
+    await respond({ status: 'none' });
+    await page.evaluate(() => (window as unknown as { renderResearch: () => void }).renderResearch());
+    await page.getByLabel('Nicho', { exact: true }).fill('café');
+    await page.getByLabel('Região / estado').selectOption('São Paulo, SP');
+    await page.getByLabel('Cidade (opcional)').fill('Santos');
+    // Browser-restored/native form values can differ from React's draft state.
+    await page.getByLabel('Cidade (opcional)').evaluate(input => { (input as HTMLInputElement).value = 'Campinas'; });
+    await page.getByRole('button', { name: 'Pesquisar', exact: true }).click();
+    await page.getByRole('heading', { name: 'Café das Flores' }).waitFor();
+    expect(queries[0].get('city')).toBe('Campinas');
+    expect(queries[0].get('region')).toBe('São Paulo, SP');
+
+    await page.getByLabel('Região / estado').selectOption('Rio de Janeiro, RJ');
+    await page.getByLabel('Cidade (opcional)').fill('Rio de Janeiro');
+    await page.getByRole('button', { name: 'Testar telefone no Maps' }).click();
+    await page.getByText('Nenhum telefone confirmado para esta empresa.').waitFor();
+    await page.getByRole('button', { name: 'Carregar mais empresas' }).click();
+    const nextCard = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Café Novo' }) });
+    await nextCard.getByRole('button', { name: 'Testar telefone no Maps' }).click();
+    await nextCard.getByText('Nenhum telefone confirmado para esta empresa.').waitFor();
+    expect(requests.filter(request => request.path === '/api/research/phone-lookup').map(request => request.body)).toEqual([
+      { business: { name: 'Café das Flores', address: 'Rua das Flores, 100', city: 'Campinas', region: 'SP' } },
+      { business: { name: 'Café Novo', address: 'Rua das Flores, 100', city: 'Campinas', region: 'SP' } }
+    ]);
+    expect(queries[1].toString()).toBe('searchId=search-campinas');
+  });
+
+  test('restores result location separately from unsent draft filters', async () => {
+    await page.route('**/api/search?**', route => route.fulfill({ json: { businesses: [business], searchId: 'search-campinas', hasMore: false } }));
+    await respond({ status: 'none' });
+    await page.evaluate(() => (window as unknown as { renderResearch: () => void }).renderResearch());
+    await page.getByLabel('Nicho', { exact: true }).fill('café');
+    await page.getByLabel('Região / estado').selectOption('São Paulo, SP');
+    await page.getByLabel('Cidade (opcional)').fill('Campinas');
+    await page.getByRole('button', { name: 'Pesquisar', exact: true }).click();
+    await page.getByRole('heading', { name: 'Café das Flores' }).waitFor();
+    await page.getByLabel('Cidade (opcional)').fill('Santos');
+    await page.evaluate(() => (window as unknown as { renderResearch: (visible: boolean) => void }).renderResearch(false));
+    await page.getByRole('heading', { name: 'Café das Flores' }).waitFor({ state: 'detached' });
+    await page.evaluate(() => (window as unknown as { renderResearch: () => void }).renderResearch());
+    await page.getByRole('heading', { name: 'Café das Flores' }).waitFor();
+    expect(await page.getByLabel('Cidade (opcional)').inputValue()).toBe('Santos');
+    await page.getByRole('button', { name: 'Testar telefone no Maps' }).click();
+    await page.getByText('Nenhum telefone confirmado para esta empresa.').waitFor();
+    expect(requests).toEqual([{ path: '/api/research/phone-lookup', body: { business: { name: 'Café das Flores', address: 'Rua das Flores, 100', city: 'Campinas', region: 'SP' } } }]);
+  });
+
+  test('does not enable lookup on state-wide results when only the draft gains a city', async () => {
+    await page.route('**/api/search?**', route => route.fulfill({ json: { businesses: [business], searchId: 'search-state', hasMore: false } }));
+    await page.evaluate(() => (window as unknown as { renderResearch: () => void }).renderResearch());
+    await page.getByLabel('Nicho', { exact: true }).fill('café');
+    await page.getByLabel('Região / estado').selectOption('São Paulo, SP');
+    await page.getByRole('button', { name: 'Pesquisar', exact: true }).click();
+    await page.getByRole('heading', { name: 'Café das Flores' }).waitFor();
+    await page.getByLabel('Cidade (opcional)').fill('Campinas');
+    expect(await page.getByRole('button', { name: 'Testar telefone no Maps' }).count()).toBe(0);
+    expect(requests).toEqual([]);
+  });
+
   test('waits for explicit action and sends only selected identity/location with the parsed UF', async () => {
     await respond({ status: 'matched', candidate });
     await render();
