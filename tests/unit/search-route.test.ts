@@ -71,6 +71,7 @@ describe('GET /api/search', () => {
     await prisma.activity.deleteMany();
     await prisma.followUp.deleteMany();
     await prisma.lead.deleteMany();
+    vi.spyOn(prisma.researchDismissal, 'findMany').mockResolvedValue([]);
     mocks.getCurrentUser.mockReset().mockResolvedValue({ id: `search-user-${crypto.randomUUID()}` });
     mocks.startSearch.mockReset();
     mocks.continueSearch.mockReset();
@@ -265,6 +266,92 @@ describe('GET /api/search', () => {
     expect(first.businesses.filter(({ name }) => name === 'Orange Car Wash')).toHaveLength(1);
     expect(next.businesses.some(({ name }) => name === 'Orange Car Wash')).toBe(false);
     expect(next.businesses.map(({ osmId }) => osmId)).toEqual(Array.from({ length: 5 }, (_, index) => `overture/next-${index}`));
+  });
+
+  test('omits prospects dismissed by the current owner from the initial page', async () => {
+    const ownerId = `dismissed-owner-${crypto.randomUUID()}`;
+    mocks.getCurrentUser.mockResolvedValue({ id: ownerId });
+    const findDismissals = vi.spyOn(prisma.researchDismissal, 'findMany')
+      .mockResolvedValue([{ osmId: 'overture/dismissed-initial' }] as never);
+    mocks.searchOvertureArea.mockResolvedValue({
+      businesses: [business('dismissed-initial', 'Prospect descartado'), business('visible-initial', 'Prospect mantido')],
+      hitLimit: false
+    });
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      businesses: [{ osmId: 'overture/visible-initial', name: 'Prospect mantido' }]
+    });
+    expect(findDismissals).toHaveBeenCalledWith({
+      where: { ownerId, osmId: { in: ['overture/dismissed-initial', 'overture/visible-initial'] } },
+      select: { osmId: true }
+    });
+  });
+
+  test('omits a prospect dismissed after the first page from the same progressive search', async () => {
+    const ownerId = `progressive-dismissed-owner-${crypto.randomUUID()}`;
+    mocks.getCurrentUser.mockResolvedValue({ id: ownerId });
+    vi.spyOn(prisma.researchDismissal, 'findMany')
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ osmId: 'overture/queued-dismissal' }] as never)
+      .mockResolvedValueOnce([]);
+    mocks.planOvertureSearchAreas.mockReturnValue([FIRST_AREA, SECOND_AREA]);
+    mocks.searchOvertureArea
+      .mockResolvedValueOnce({
+        businesses: [
+          ...Array.from({ length: 60 }, (_, index) => business(`initial-page-${index}`, `Empresa A ${String(index).padStart(2, '0')}`)),
+          business('queued-dismissal', 'Z Empresa descartada'),
+          ...Array.from({ length: 4 }, (_, index) => business(`queued-${index}`, `Z Empresa restante ${index}`))
+        ],
+        hitLimit: false
+      })
+      .mockResolvedValueOnce({
+        businesses: Array.from({ length: 5 }, (_, index) => business(`continuation-${index}`, `Prospect seguinte ${index}`)),
+        hitLimit: false
+      });
+
+    const initial = await (await GET(request('niche=est%C3%A9tica%20automotiva&national=true'))).json() as {
+      businesses: ExternalBusiness[];
+      searchId: string;
+    };
+    const nextPage = await (await GET(request(`searchId=${initial.searchId}`))).json() as {
+      businesses: ExternalBusiness[];
+      hasMore: boolean;
+    };
+
+    expect(initial.businesses).toHaveLength(60);
+    expect(nextPage.businesses.map(({ osmId }) => osmId)).toEqual(expect.arrayContaining(
+      Array.from({ length: 5 }, (_, index) => `overture/continuation-${index}`)
+    ));
+    expect(nextPage.businesses.some(({ osmId }) => osmId === 'overture/queued-dismissal')).toBe(false);
+    expect(nextPage.hasMore).toBe(false);
+  });
+
+  test('does not hide a prospect dismissed only by another owner', async () => {
+    const ownerId = `current-owner-${crypto.randomUUID()}`;
+    const otherOwnerId = `different-owner-${crypto.randomUUID()}`;
+    mocks.getCurrentUser.mockResolvedValue({ id: ownerId });
+    const findDismissals = vi.spyOn(prisma.researchDismissal, 'findMany').mockImplementation((query) => Promise.resolve(
+      query?.where?.ownerId === otherOwnerId
+        ? [{ osmId: 'overture/other-owner-dismissal' }]
+        : []
+    ) as never);
+    mocks.searchOvertureArea.mockResolvedValue({
+      businesses: [business('other-owner-dismissal', 'Prospect de outro usuário')],
+      hitLimit: false
+    });
+
+    const response = await GET(request());
+
+    await expect(response.json()).resolves.toMatchObject({
+      businesses: [{ osmId: 'overture/other-owner-dismissal' }]
+    });
+    expect(findDismissals).toHaveBeenCalledWith({
+      where: { ownerId, osmId: { in: ['overture/other-owner-dismissal'] } },
+      select: { osmId: true }
+    });
   });
 
   test('does not return Overture businesses already registered as CRM leads', async () => {

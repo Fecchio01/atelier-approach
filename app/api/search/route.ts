@@ -71,7 +71,7 @@ export async function GET(request: Request) {
     if (!savedSearch) return expiredSearchResponse();
 
     try {
-      const businesses = await consumeOverturePage(savedSearch);
+      const businesses = await consumeOverturePage(savedSearch, user.id);
       const expiresAt = new Date(Date.now() + SEARCH_FILTER_TTL_MS);
       savedSearch.expiresAt = expiresAt.getTime();
       const persisted = await prisma.researchSearchSession.updateMany({
@@ -125,7 +125,7 @@ export async function GET(request: Request) {
   };
 
   try {
-    const businesses = await consumeOverturePage(overtureSearch);
+    const businesses = await consumeOverturePage(overtureSearch, user.id);
     const overtureSearchId = crypto.randomUUID();
     if (hasMoreOvertureAreas(overtureSearch)) {
       const expiresAt = new Date(Date.now() + SEARCH_FILTER_TTL_MS);
@@ -151,7 +151,7 @@ export async function GET(request: Request) {
   }
 }
 
-async function consumeOverturePage(savedSearch: SavedSearch) {
+async function consumeOverturePage(savedSearch: SavedSearch, ownerId: string) {
   const businesses: ExternalBusiness[] = [];
   let queriedAreas = 0;
   let successfulAreaQueries = 0;
@@ -165,7 +165,7 @@ async function consumeOverturePage(savedSearch: SavedSearch) {
     if (savedSearch.overtureQueue.length) {
       const candidates = savedSearch.overtureQueue.splice(0, INITIAL_RESULTS_PER_PAGE - businesses.length);
       const verifiedCandidates = await enrichOvertureBusinesses(candidates);
-      businesses.push(...await filterBusinessesForResponse(verifiedCandidates, savedSearch.filters));
+      businesses.push(...await filterBusinessesForResponse(verifiedCandidates, savedSearch.filters, ownerId));
       continue;
     }
 
@@ -285,17 +285,27 @@ function unavailableResponse(message = UNAVAILABLE_MESSAGE) {
   return Response.json({ error: message }, { status: 503 });
 }
 
-async function filterBusinessesForResponse(businesses: ExternalBusiness[], filters: ResearchFilters) {
+async function filterBusinessesForResponse(businesses: ExternalBusiness[], filters: ResearchFilters, ownerId: string) {
   const filteredBusinesses = businesses.filter((business) => hasVerifiableName(business.name)
     && matchesOvertureSearch(business, filters)
     && matchesResearchFilters(business, filters));
+  if (!filteredBusinesses.length) return [];
+
+  const dismissedBusinesses = await prisma.researchDismissal.findMany({
+    where: { ownerId, osmId: { in: filteredBusinesses.map((business) => business.osmId) } },
+    select: { osmId: true }
+  });
+  const dismissedOsmIds = new Set(dismissedBusinesses.map((dismissal) => dismissal.osmId));
+  const visibleBusinesses = filteredBusinesses.filter((business) => !dismissedOsmIds.has(business.osmId));
+  if (!visibleBusinesses.length) return [];
+
   const existingLeads = await prisma.lead.findMany({
-    where: { osmId: { in: filteredBusinesses.map((business) => business.osmId) } },
+    where: { osmId: { in: visibleBusinesses.map((business) => business.osmId) } },
     select: { id: true, osmId: true }
   });
   const leadsByOsmId = new Map(existingLeads.map((lead) => [lead.osmId, lead]));
 
-  return filteredBusinesses.flatMap((business) => {
+  return visibleBusinesses.flatMap((business) => {
     const existingLead = leadsByOsmId.get(business.osmId);
     if (existingLead && !filters.includeWorked) return [];
     if (!filters.includeWorked) return [business];
