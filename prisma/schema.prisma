@@ -288,3 +288,13 @@ model ResearchSearchSession {
 
   @@index([ownerId, expiresAt])
 }
+
+model ResearchDismissal {
+  id        String   @id @default(cuid())
+  ownerId   String
+  osmId     String
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, osmId])
+  @@index([ownerId])
+}
