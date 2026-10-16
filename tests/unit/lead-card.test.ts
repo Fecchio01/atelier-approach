@@ -42,6 +42,9 @@ test('renders contact values as actionable links', () => {
   expect(cardSource).toContain('toWhatsAppHref(business.whatsapp);');
   expect(cardSource).toContain('{displayCategory ? <p');
   expect(cardSource).not.toContain('toWhatsAppHref(business.whatsapp ?? business.phone)');
+  expect(cardSource).not.toContain('possibleWhatsAppHref');
+  expect(cardSource).not.toContain('MapsPhoneLookup');
+  expect(cardSource).not.toContain('Testar WhatsApp');
   expect(cardSource).toContain('<dd>{websiteHref ? <a');
   expect(cardSource).toContain('<dd>{instagramHref ? <a');
   expect(cardSource).toContain('<dd>{whatsappHref ? <a');

@@ -71,24 +71,40 @@ export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): 
   }
   return businesses.map((business, index) => {
     const fields = enriched.get(index);
-    if (!fields || !isBusinessIdentityVerified(business, fields)) {
+    if (!fields) {
       return { ...business, phone: null, phoneSource: null, whatsapp: null };
     }
 
-    const phoneConflict = Boolean(business.phone && fields.phone && !samePhone(business.phone, fields.phone));
-    const phone = phoneConflict ? null : fields.phone;
+    const locationVerified = isBusinessIdentityVerified(business, fields);
+    const siteNameVerified = isOfficialWebsiteNameVerified(business, fields);
+    const phoneConflict = Boolean(locationVerified && business.phone && fields.phone && !samePhone(business.phone, fields.phone));
+    const phone = locationVerified && !phoneConflict ? fields.phone : null;
     const whatsappPhone = fields.whatsapp ? whatsappPhoneNumber(fields.whatsapp) : null;
-    const whatsapp = phone && whatsappPhone && samePhone(phone, whatsappPhone) ? fields.whatsapp : null;
+    const whatsapp = locationVerified && phone && whatsappPhone && samePhone(phone, whatsappPhone) ? fields.whatsapp : null;
     return {
       ...business,
-      website: fields.website,
+      website: siteNameVerified ? fields.website : business.website,
       phone,
       phoneSource: phone ? 'site oficial verificado' as const : null,
       whatsapp,
-      instagram: fields.instagram,
-      imageUrl: business.imageUrl ?? fields.imageUrl
+      instagram: siteNameVerified ? fields.instagram ?? business.instagram : business.instagram,
+      imageUrl: business.imageUrl ?? (siteNameVerified ? fields.imageUrl : undefined)
     };
   });
+}
+
+function isOfficialWebsiteNameVerified(business: ExternalBusiness, fields: EnrichedContactFields) {
+  const pageName = fields.structuredBusinessName ?? fields.name;
+  if (!pageName || /\b(instagram|facebook|linkedin|linktree|linktr\.ee|google maps|whatsapp)\b/i.test(pageName)) return false;
+  if (business.website) {
+    try {
+      const host = new URL(business.website).hostname.toLowerCase().replace(/^www\./, '');
+      if (['instagram.com', 'facebook.com', 'linkedin.com', 'linktr.ee', 'wa.me'].some((domain) => host === domain || host.endsWith(`.${domain}`))) return false;
+    } catch {
+      return false;
+    }
+  }
+  return businessNamesMatch(business.name, pageName);
 }
 
 function isBusinessIdentityVerified(business: ExternalBusiness, fields: EnrichedContactFields) {

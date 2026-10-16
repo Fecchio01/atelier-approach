@@ -137,12 +137,14 @@ test('accepts phone only when official-site name and location match the Overture
 
   const [business] = await enrichOvertureBusinesses([{
     osmId: 'overture/real-match', name: 'Oficina Real', category: 'automotive_repair',
-    source: 'Overture', website: 'https://real-match.example', phone: null, whatsapp: null, instagram: null,
+    source: 'Overture', website: 'https://real-match.example', phone: null, whatsapp: null,
+    instagram: 'https://instagram.com/oficina-real',
     address: 'Rua das Flores, 45, Volta Redonda, RJ'
   }]);
 
   expect(business).toMatchObject({
-    phone: '+552433334444', whatsapp: 'https://wa.me/552433334444', phoneSource: 'site oficial verificado'
+    phone: '+552433334444', whatsapp: 'https://wa.me/552433334444', phoneSource: 'site oficial verificado',
+    instagram: 'https://instagram.com/oficina-real'
   });
 });
 
@@ -222,4 +224,24 @@ test('does not assign another brand profile image to an Overture business', asyn
 
   expect(enriched[0].imageUrl).toBeUndefined();
   expect(enriched[1].imageUrl).toBeUndefined();
+});
+
+test('uses a matching official page title to recover its photo when it has no structured location', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    '<meta property="og:title" content="Oficina Real"><meta property="og:image" content="https://img.example/oficina-real.jpg">',
+    { status: 200 }
+  )));
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/real-photo', name: 'Oficina Real', category: 'automotive_repair',
+    source: 'Overture', website: 'https://oficina-real.example', phone: null, whatsapp: null,
+    instagram: 'https://instagram.com/oficina-real', address: 'Rua das Flores, 45, Volta Redonda, RJ'
+  }]);
+
+  expect(business).toMatchObject({
+    imageUrl: 'https://img.example/oficina-real.jpg',
+    instagram: 'https://instagram.com/oficina-real'
+  });
+  expect(business.phone).toBeNull();
+  expect(business.whatsapp).toBeNull();
 });
