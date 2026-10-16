@@ -81,6 +81,22 @@ export default function PesquisaPage() {
     setBusinesses((previous) => previous.filter((business) => business.osmId !== osmId));
   }
 
+  async function handleDiscard(osmId: string) {
+    const response = await fetch('/api/research/dismissals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ osmId })
+    });
+    if (response.status !== 204) {
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(payload.error ?? 'Não foi possível descartar a empresa. Tente novamente.');
+    }
+
+    sessionStorage.setItem(SEARCH_SCROLL_KEY, String(window.scrollY));
+    if (savedSearch) savedSearch.businesses = savedSearch.businesses.filter((business) => business.osmId !== osmId);
+    setBusinesses((previous) => previous.filter((business) => business.osmId !== osmId));
+  }
+
   function handleSearchStart(submittedFilters: SearchFilters) {
     sessionStorage.setItem(SEARCH_SCROLL_KEY, '0');
     searchGeneration.current += 1;
@@ -156,9 +172,9 @@ export default function PesquisaPage() {
         {businesses.length ? (
           <>
             <p className="mb-4 text-sm text-white/65">{businesses.length} prospect{businesses.length === 1 ? '' : 's'} novo{businesses.length === 1 ? '' : 's'}, em ordem de prioridade.</p>
-            <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-3">
               {businesses.map((business) => (
-                <LeadCard key={business.osmId} business={business} result={business} onApproached={handleApproached} />
+                <LeadCard key={business.osmId} business={business} result={business} onApproached={handleApproached} onDiscard={handleDiscard} />
               ))}
             </div>
           </>

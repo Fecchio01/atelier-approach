@@ -2,15 +2,23 @@ import { expect, test } from '@playwright/test';
 
 import { e2eCredentials } from './credentials';
 
-test('search cards keep their own height and show a distinct no-photo state', async ({ page }) => {
+test('search cards stay aligned, normalize long content, and discard only after success', async ({ page }) => {
+  const discardCalls: string[] = [];
   await page.route('**/api/search?**', async (route) => route.fulfill({
     contentType: 'application/json',
     body: JSON.stringify({ searchId: 'layout-test', hasMore: false, businesses: [
       { osmId: 'overture/photo', name: 'Oficina Foto', source: 'Overture', category: 'automotive_repair', imageUrl: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E', phone: null, website: null, instagram: null, whatsapp: null },
-      { osmId: 'overture/plain', name: 'Oficina Sem Foto', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: null, website: null, instagram: null, whatsapp: null },
-      { osmId: 'overture/third', name: 'Terceira Oficina', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: null, website: null, instagram: null, whatsapp: null }
+      { osmId: 'overture/plain', name: 'Oficina Sem Foto, uma descrição promocional extremamente longa que não deve ser exibida como parte do nome principal do prospect', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: null, website: 'https://example.com/a-very-long-business-path-that-must-wrap-inside-the-card', instagram: 'https://instagram.com/oficina.sem.foto', whatsapp: null },
+      { osmId: 'overture/third', name: 'Terceira Oficina', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: null, website: null, instagram: null, whatsapp: null },
+      { osmId: 'overture/fourth', name: 'Oficina do Quarto Prospect', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: '+5511999998888', website: null, instagram: null, whatsapp: null },
+      { osmId: 'overture/fifth', name: 'Oficina com outra combinação de canais', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: null, website: 'https://example.org', instagram: '@oficina.fifth', whatsapp: 'https://wa.me/5511999997777' }
     ] })
   }));
+  await page.route('**/api/research/dismissals', async (route) => {
+    const body = route.request().postDataJSON() as { osmId: string };
+    discardCalls.push(body.osmId);
+    await route.fulfill({ status: body.osmId === 'overture/third' ? 500 : 204 });
+  });
 
   await page.goto('/login');
   await page.getByLabel('E-mail').fill(e2eCredentials.email);
@@ -19,11 +27,11 @@ test('search cards keep their own height and show a distinct no-photo state', as
   await expect(page).toHaveURL('http://127.0.0.1:3001/');
   await page.goto('/pesquisa');
   await page.getByRole('button', { name: 'Pesquisar' }).click();
-  await expect(page.getByRole('heading', { name: 'Oficina Sem Foto' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Oficina Sem Foto', exact: true })).toBeVisible();
 
   const photoCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Oficina Foto' }) });
-  const plainCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Oficina Sem Foto' }) });
-  await expect(plainCard.getByText('Sem foto pública')).toBeVisible();
+  const plainCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Oficina Sem Foto', exact: true }) });
+  const thirdCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Terceira Oficina' }) });
   await expect(photoCard.locator('img')).toHaveCount(1);
 
   const before = await plainCard.boundingBox();
@@ -31,9 +39,17 @@ test('search cards keep their own height and show a distinct no-photo state', as
   const button = await plainCard.getByRole('button', { name: 'Marcar como abordada' }).boundingBox();
   expect(button).not.toBeNull();
   expect(before!.y + before!.height - (button!.y + button!.height)).toBeLessThan(30);
+  const photoBounds = await photoCard.boundingBox();
+  expect(photoBounds).not.toBeNull();
+  expect(Math.abs(photoBounds!.height - before!.height)).toBeLessThan(2);
+  await expect(plainCard.locator('dd a[href^="https://www.instagram.com/"]')).toHaveAttribute('href', 'https://www.instagram.com/oficina.sem.foto/');
+  await expect(plainCard.locator('dd a').filter({ hasText: 'example.com' })).toHaveClass(/break-all/);
 
-  await photoCard.getByText('Ver dados e prioridade').click();
-  const after = await plainCard.boundingBox();
-  expect(after).not.toBeNull();
-  expect(after!.height).toBe(before!.height);
+  await thirdCard.getByRole('button', { name: 'Descartar empresa' }).click();
+  await expect(thirdCard.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Terceira Oficina' })).toBeVisible();
+  const discardCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Oficina Foto' }) });
+  await discardCard.getByRole('button', { name: 'Descartar empresa' }).click();
+  await expect(page.getByRole('heading', { name: 'Oficina Foto' })).toHaveCount(0);
+  expect(discardCalls).toEqual(['overture/third', 'overture/photo']);
 });
