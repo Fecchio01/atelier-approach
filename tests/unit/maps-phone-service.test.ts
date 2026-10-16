@@ -8,6 +8,12 @@ const options = { baseUrl: 'https://phone.example.test/', token: 'private-servic
 afterEach(() => vi.useRealTimers());
 
 describe('Maps phone service boundary', () => {
+  test('refuses to send the bearer token to a non-local HTTP service', async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    await expect(lookupMapsPhone(business, { ...options, baseUrl: 'http://phone.example.test', fetchImpl })).rejects.toThrow();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   test('sends only company identity and location with server credentials and no caching', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ candidates: [candidate] }));
     const selectedBusiness = { ...business, leadId: 'private-lead', notes: 'private', phone: '+5511999999999' };

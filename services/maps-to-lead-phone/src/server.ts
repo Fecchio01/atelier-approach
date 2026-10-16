@@ -5,10 +5,10 @@ import { lookupCompany, BRAZIL_REGIONS, type LookupRequest, type MapsPhoneCandid
 
 export function createApp(options: {
   token: string;
-  lookup?: (request: LookupRequest) => Promise<MapsPhoneCandidate[]>;
+  lookup?: (request: LookupRequest, signal?: AbortSignal) => Promise<MapsPhoneCandidate[]>;
 }) {
   if (!options.token.trim()) throw new Error('MAPS_PHONE_SERVICE_TOKEN is required');
-  const lookup = options.lookup ?? lookupCompany;
+  const lookup = options.lookup ?? ((input, signal) => lookupCompany(input, undefined, signal));
   const app = express();
   app.disable('x-powered-by');
   app.post('/lookup', (req, res, next) => {
@@ -36,8 +36,12 @@ export function createApp(options: {
     }
     const input: LookupRequest = { companyName: data.companyName.trim(), city: data.city.trim(), region: data.region.toUpperCase() };
     if (data.address !== undefined) input.address = data.address === null ? null : (data.address as string).trim();
+    const controller = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) controller.abort();
+    });
     try {
-      const candidates = (await lookup(input)).slice(0, 5).map(({ name, phone, address, city, region }) => ({ name, phone, address, city, region }));
+      const candidates = (await lookup(input, controller.signal)).slice(0, 5).map(({ name, phone, address, city, region }) => ({ name, phone, address, city, region }));
       res.json({ candidates });
     } catch {
       res.status(502).json({ error: 'Maps lookup failed' });

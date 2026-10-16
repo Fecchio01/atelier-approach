@@ -60,7 +60,8 @@ export async function lookupMapsPhone(business: MapsPhoneLookupInput, options: {
   try {
     const input = parseMapsPhoneLookupInput(business);
     const url = new URL(options.baseUrl);
-    if (!input || !options.token.trim() || !['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    const isLocalHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (!input || !options.token.trim() || (url.protocol !== 'https:' && !isLocalHttp) || url.username || url.password || url.search || url.hash) {
       throw new Error(UNAVAILABLE_MESSAGE);
     }
     url.pathname = `${url.pathname.replace(/\/$/, '')}/lookup`;

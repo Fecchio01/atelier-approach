@@ -46,8 +46,11 @@ describe('matchMapsPhoneCandidate', () => {
     expect(matchMapsPhoneCandidate(input, [candidate({ address: 'Rua das Flores 900' })])).toEqual({ status: 'none' });
   });
 
-  it('does not require address similarity when either address is absent', () => {
-    expect(matchMapsPhoneCandidate(input, [candidate({ address: null })])).toEqual({ status: 'matched', candidate: candidate({ address: null }) });
+  it('rejects a candidate with no observed address when the searched company has one', () => {
+    expect(matchMapsPhoneCandidate(input, [candidate({ address: null })])).toEqual({ status: 'none' });
+  });
+
+  it('does not require address similarity when the searched company has no address', () => {
     expect(matchMapsPhoneCandidate({ ...input, address: null }, [candidate({ address: 'Avenida Central, 900' })])).toEqual({
       status: 'matched',
       candidate: candidate({ address: 'Avenida Central, 900' })

@@ -79,7 +79,8 @@ function diceSimilarity(first: string, second: string) {
 }
 
 function addressMatches(inputAddress: string | null | undefined, candidateAddress: string | null) {
-  if (!inputAddress?.trim() || !candidateAddress?.trim()) return true;
+  if (!inputAddress?.trim()) return true;
+  if (!candidateAddress?.trim()) return false;
   const inputHouseNumber = explicitHouseNumber(inputAddress);
   const candidateHouseNumber = explicitHouseNumber(candidateAddress);
   if (inputHouseNumber && candidateHouseNumber && inputHouseNumber !== candidateHouseNumber) return false;

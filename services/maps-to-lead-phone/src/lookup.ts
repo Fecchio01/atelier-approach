@@ -60,11 +60,18 @@ async function readCandidate(page: Page): Promise<MapsPhoneCandidate | null> {
   return { name: detail.name, phone, address: detail.address, city: BRAZIL_REGIONS.has(region) ? locality![1].trim() : '', region: BRAZIL_REGIONS.has(region) ? region : '' };
 }
 
-export async function lookupCompany(input: LookupRequest, launch: () => Promise<Browser> = () => chromium.launch({ headless: true })): Promise<MapsPhoneCandidate[]> {
+export async function lookupCompany(input: LookupRequest, launch: () => Promise<Browser> = () => chromium.launch({ headless: true }), signal?: AbortSignal): Promise<MapsPhoneCandidate[]> {
   const browser = await launch();
   let context: BrowserContext | undefined;
+  const closeBrowserOnAbort = () => {
+    void context?.close().catch(() => {});
+    void browser.close().catch(() => {});
+  };
+  signal?.addEventListener('abort', closeBrowserOnAbort, { once: true });
   try {
+    if (signal?.aborted) throw new Error('Maps lookup aborted');
     context = await browser.newContext({ locale: 'pt-BR', acceptDownloads: false });
+    if (signal?.aborted) throw new Error('Maps lookup aborted');
     context.setDefaultTimeout(15000);
     context.setDefaultNavigationTimeout(30000);
     const page = await context.newPage();
@@ -85,6 +92,7 @@ export async function lookupCompany(input: LookupRequest, launch: () => Promise<
     });
     const candidates: MapsPhoneCandidate[] = [];
     if (links.length === 0) {
+      if (signal?.aborted) throw new Error('Maps lookup aborted');
       if (await page.locator(selectors.title).count()) {
         const candidate = await readCandidate(page);
         if (candidate) candidates.push(candidate);
@@ -92,12 +100,14 @@ export async function lookupCompany(input: LookupRequest, launch: () => Promise<
       return candidates;
     }
     for (const link of links) {
+      if (signal?.aborted) throw new Error('Maps lookup aborted');
       await page.goto(link, { waitUntil: 'domcontentloaded' });
       const candidate = await readCandidate(page);
       if (candidate) candidates.push(candidate);
     }
     return candidates;
   } finally {
+    signal?.removeEventListener('abort', closeBrowserOnAbort);
     try { await context?.close(); } finally { await browser.close(); }
   }
 }

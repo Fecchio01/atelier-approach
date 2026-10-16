@@ -18,12 +18,28 @@ async function serve(lookup: Parameters<typeof createApp>[0]['lookup'] = async (
   await new Promise<void>(resolve => server.once('listening', resolve));
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('No HTTP port');
-  return async (body: unknown = request, authorization: string | null = 'Bearer test-secret') => fetch(`http://127.0.0.1:${address.port}/lookup`, {
-    method: 'POST', headers: { 'content-type': 'application/json', ...(authorization ? { authorization } : {}) }, body: JSON.stringify(body)
+  return async (body: unknown = request, authorization: string | null = 'Bearer test-secret', signal?: AbortSignal) => fetch(`http://127.0.0.1:${address.port}/lookup`, {
+    method: 'POST', headers: { 'content-type': 'application/json', ...(authorization ? { authorization } : {}) }, body: JSON.stringify(body), signal
   });
 }
 
 describe('POST /lookup', () => {
+  it('propagates a disconnected client as an aborted lookup signal', async () => {
+    let started!: () => void;
+    let observedSignal: AbortSignal | undefined;
+    const lookupStarted = new Promise<void>(resolve => { started = resolve; });
+    const post = await serve(async (_input, signal) => {
+      observedSignal = signal;
+      started();
+      return new Promise(() => {});
+    });
+    const controller = new AbortController();
+    const pending = post(request, 'Bearer test-secret', controller.signal);
+    await lookupStarted;
+    controller.abort();
+    await expect(pending).rejects.toThrow();
+    await expect.poll(() => observedSignal?.aborted).toBe(true);
+  });
   // Catches removal of auth or accepting a partial/incorrect bearer token.
   it.each([null, 'Bearer wrong', 'Basic test-secret', 'Bearer test-secret extra'])('rejects authorization %s before performing a lookup', async authorization => {
     const post = await serve(async () => { throw new Error('Lookup must not run'); });
@@ -120,7 +136,7 @@ describe('Brazil phone normalization', () => {
 
 // Only Google Maps network responses are replaced: real Chromium, DOM extraction,
 // navigation and owned browser/context cleanup remain under test.
-async function mapsFixture(mode: 'feed' | 'direct' | 'empty' | 'broken' | 'delayed' | 'no-results' = 'feed', timing?: { address: number | null; phone: number | null; partialAddress?: boolean }) {
+async function mapsFixture(mode: 'feed' | 'direct' | 'empty' | 'broken' | 'delayed' | 'no-results' | 'stalled' = 'feed', timing?: { address: number | null; phone: number | null; partialAddress?: boolean }) {
   let browser: Browser | undefined;
   const contexts: BrowserContext[] = [];
   let closed = 0;
@@ -140,6 +156,10 @@ async function mapsFixture(mode: 'feed' | 'direct' | 'empty' | 'broken' | 'delay
         if (url.pathname.startsWith('/maps/place/')) {
           visited.push(url.pathname);
           const index = Number(url.pathname.split('/').pop());
+          if (mode === 'stalled') {
+            await new Promise(resolve => setTimeout(resolve, 10_000));
+            return route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<h1>Late result</h1>' });
+          }
           if (mode === 'broken') return route.abort();
           return route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<h1>Ateliê ${index}</h1><button data-item-id="address" aria-label="Endereço: Rua A, 12 - Centro, Belo Horizonte - MG, 30100-000, Brasil"></button>${index === 2 ? '<a href="tel:+5531999998888">Ligar</a>' : `<button data-item-id="phone:tel:${index === 3 ? '+552033334444' : '+553133334444'}" aria-label="WhatsApp"></button>`}` });
         }
@@ -227,6 +247,20 @@ describe('Maps detail extraction', () => {
   it('closes the context and browser even when detail navigation fails', async () => {
     const fixture = await mapsFixture('broken');
     await expect(lookupCompany(request, fixture.launch)).rejects.toThrow();
+    expect(fixture.closed).toBe(1);
+    expect(fixture.connected).toBe(false);
+  });
+
+  it('closes Chromium immediately when the requesting client disconnects mid-lookup', async () => {
+    const fixture = await mapsFixture('stalled');
+    const controller = new AbortController();
+    const pending = lookupCompany(request, fixture.launch, controller.signal);
+    for (let attempt = 0; attempt < 50 && fixture.visited.length === 0; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(fixture.visited).toHaveLength(1);
+    controller.abort();
+    await expect(pending).rejects.toThrow();
     expect(fixture.closed).toBe(1);
     expect(fixture.connected).toBe(false);
   });
