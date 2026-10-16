@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { chromium, errors, type Browser, type BrowserContext, type Page } from 'playwright';
 
 export interface LookupRequest { companyName: string; city: string; region: string; address?: string | null }
 export interface MapsPhoneCandidate { name: string; phone: string; address: string; city: string; region: string }
@@ -19,7 +19,7 @@ const selectors = {
 export function normalizeBrazilPhone(raw: string): string | null {
   if (!/^[+\d\s().-]+$/.test(raw)) return null;
   let digits = raw.replace(/\D/g, '');
-  if (raw.trim().startsWith('+') && !raw.trim().startsWith('+55')) return null;
+  if (raw.trim().startsWith('+') && (!digits.startsWith('55') || (digits.length !== 12 && digits.length !== 13))) return null;
   if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) digits = digits.slice(2);
   if (!GEOGRAPHIC_DDDS.has(digits.slice(0, 2))) return null;
   if (!/^\d{2}(?:[2-5]\d{7}|9\d{8})$/.test(digits)) return null;
@@ -28,8 +28,23 @@ export function normalizeBrazilPhone(raw: string): string | null {
 
 async function readCandidate(page: Page): Promise<MapsPhoneCandidate | null> {
   await page.locator(selectors.title).first().waitFor();
-  // Maps renders the detail controls asynchronously after the title.
-  await page.locator(`${selectors.address}, ${selectors.phone}, ${selectors.tel}`).first().waitFor();
+  // Each field may populate separately, including controls attached with empty
+  // attributes. Give optional fields independent bounded waits in parallel.
+  const optionalFieldTimeout = (error: unknown) => {
+    if (!(error instanceof errors.TimeoutError)) throw error;
+  };
+  await Promise.all([
+    page.waitForFunction(({ selector, regions }) => {
+      const address = document.querySelector(selector)?.getAttribute('aria-label')?.replace(/^[^:]*:\s*/, '') ?? '';
+      const locality = address.match(/(?:^|,)\s*([^,]+?)\s*[-–]\s*([A-Za-z]{2})(?=\s*(?:,|$))/);
+      return Boolean(locality && regions.includes(locality[2].toUpperCase()));
+    }, { selector: selectors.address, regions: [...BRAZIL_REGIONS] }, { timeout: 3000 }).catch(optionalFieldTimeout),
+    page.waitForFunction(sel => {
+      const phone = document.querySelector(sel.phone)?.getAttribute('data-item-id')?.replace(/^phone:tel:/, '') ||
+        document.querySelector(sel.tel)?.getAttribute('href')?.replace(/^tel:/, '') || '';
+      return /\d/.test(phone);
+    }, selectors, { timeout: 3000 }).catch(optionalFieldTimeout)
+  ]);
   const detail = await page.evaluate(sel => {
     const clean = (value: string | null | undefined) => (value ?? '').replace(/\s+/g, ' ').trim();
     const name = clean(document.querySelector(sel.title)?.textContent);

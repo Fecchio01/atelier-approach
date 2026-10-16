@@ -101,6 +101,8 @@ describe('Brazil phone normalization', () => {
   it.each([
     ['(31) 3333-4444', '+553133334444'], ['+55 (11) 99999-8888', '+5511999998888'],
     ['5531999998888', '+5531999998888'], ['(55) 3222-4444', '+555532224444'],
+    ['+55 3222-4444', null], ['+55 99999-8888', null],
+    ['+55 (55) 3222-4444', '+555532224444'],
     ['0800 123 4567', null], ['+55 800 1234567', null], ['(20) 3333-4444', null],
     ['(10) 99999-8888', null], ['(90) 3333-4444', null], ['3333-4444', null],
     ['+1 212 333 4444', null], ['(31) 1234-5678', null], ['(31) 88888-7777', null]
@@ -109,7 +111,7 @@ describe('Brazil phone normalization', () => {
 
 // Only Google Maps network responses are replaced: real Chromium, DOM extraction,
 // navigation and owned browser/context cleanup remain under test.
-async function mapsFixture(mode: 'feed' | 'direct' | 'empty' | 'broken' | 'delayed' | 'no-results' = 'feed') {
+async function mapsFixture(mode: 'feed' | 'direct' | 'empty' | 'broken' | 'delayed' | 'no-results' = 'feed', timing?: { address: number | null; phone: number | null; partialAddress?: boolean }) {
   let browser: Browser | undefined;
   const contexts: BrowserContext[] = [];
   let closed = 0;
@@ -133,6 +135,13 @@ async function mapsFixture(mode: 'feed' | 'direct' | 'empty' | 'broken' | 'delay
           return route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<h1>Ateliê ${index}</h1><button data-item-id="address" aria-label="Endereço: Rua A, 12 - Centro, Belo Horizonte - MG, 30100-000, Brasil"></button>${index === 2 ? '<a href="tel:+5531999998888">Ligar</a>' : `<button data-item-id="phone:tel:${index === 3 ? '+552033334444' : '+553133334444'}" aria-label="WhatsApp"></button>`}` });
         }
         queries.push(url.searchParams.get('q') || '');
+        if (timing) {
+          const address = timing.address === null ? '' : `<button data-item-id="address" aria-label="Endereço:${timing.partialAddress ? ' Av. Brasil, 100' : ''}"></button>`;
+          const phone = timing.phone === null ? '' : '<button data-item-id="phone:tel:"></button>';
+          const addressScript = timing.address === null ? '' : `setTimeout(() => document.querySelector('[data-item-id="address"]').setAttribute('aria-label', 'Endereço: Av. Brasil, 100, São Paulo - SP, 01000-000'), ${timing.address});`;
+          const phoneScript = timing.phone === null ? '' : `setTimeout(() => document.querySelector('[data-item-id^="phone:tel:"]').setAttribute('data-item-id', 'phone:tel:+551133334444'), ${timing.phone});`;
+          return route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<h1>Resultado único</h1>${address}${phone}<script>${addressScript}${phoneScript}</script>` });
+        }
         if (mode === 'delayed') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<div role="main"><div role="feed" id="root"></div></div><script>setTimeout(() => { document.getElementById('root').innerHTML = '<a href="https://www.google.com/maps/place/0">Lugar</a>'; }, 100);</script>` });
         if (mode === 'no-results') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<div role="main">O Google Maps não encontrou resultados para esta pesquisa.</div>' });
         if (mode === 'direct') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<h1>Resultado único</h1><button data-item-id="address" aria-label="Endereço: Av. Brasil, 100, São Paulo - SP, 01000-000"></button><button data-item-id="phone:tel:+551133334444"></button>' });
@@ -147,6 +156,26 @@ async function mapsFixture(mode: 'feed' | 'direct' | 'empty' | 'broken' | 'delay
 }
 
 describe('Maps detail extraction', () => {
+  // Catches treating the first detail control as readiness for every field.
+  it.each([{ address: 0, phone: 250 }, { address: 250, phone: 0 }, { address: 250, phone: 0, partialAddress: true }])('waits for independently delayed address/phone values %j', async timing => {
+    const fixture = await mapsFixture('direct', timing);
+    expect(await lookupCompany(request, fixture.launch)).toEqual([{ name: 'Resultado único', phone: '+551133334444', address: 'Av. Brasil, 100, São Paulo - SP, 01000-000', city: 'São Paulo', region: 'SP' }]);
+    expect(fixture.closed).toBe(1);
+  });
+
+  it.each([{ address: 0, phone: null }, { address: null, phone: null }])('treats an absent phone as absent after bounded field waits %j', async timing => {
+    const fixture = await mapsFixture('direct', timing);
+    expect(await lookupCompany(request, fixture.launch)).toEqual([]);
+    expect(fixture.closed).toBe(1);
+    expect(fixture.connected).toBe(false);
+  });
+
+  it('keeps a phone-bearing candidate with genuinely absent address/locality fields', async () => {
+    const fixture = await mapsFixture('direct', { address: null, phone: 0 });
+    expect(await lookupCompany(request, fixture.launch)).toEqual([{ name: 'Resultado único', phone: '+551133334444', address: '', city: '', region: '' }]);
+    expect(fixture.closed).toBe(1);
+  });
+
   it('waits for asynchronous results after the main container appears', async () => {
     const fixture = await mapsFixture('delayed');
     expect(await lookupCompany(request, fixture.launch)).toEqual([{ name: 'Ateliê 0', phone: '+553133334444', address: 'Rua A, 12 - Centro, Belo Horizonte - MG, 30100-000, Brasil', city: 'Belo Horizonte', region: 'MG' }]);

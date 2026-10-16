@@ -32,6 +32,9 @@ when no matching phone-bearing result is observed. Each candidate has exactly
 Invalid input returns 400, unauthorized requests 401, oversized JSON 413, and
 Maps/browser failures 502. No jobs, result cache, database, webhook, or persistent
 browser context are created. Every request closes its browser context and browser.
+Detail phone and address/locality values are awaited independently for up to three
+seconds in parallel. After that bound, an absent phone skips the candidate and an
+absent address/locality stays empty; no location is inferred from the request.
 
 Build from this directory with `docker build -f Dockerfile.vercel -t maps-phone .`.
 The image pins Playwright and its Chromium runtime to 1.64.1 and checks browser
