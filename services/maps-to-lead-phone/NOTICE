@@ -1,0 +1,15 @@
+Maps phone lookup service
+
+Minimal Maps accessibility selectors and detail-field extraction in src/lookup.ts
+are adapted from Maps to Lead by Jonathan Henrique:
+https://github.com/jhowbhz/maps-to-lead
+Reviewed source revision: c22f16e7384e159d22bcb38f8cac6dba7659fc3a
+
+The upstream README and package.json declare MIT; package.json names Jonathan
+Henrique as author. The upstream repository did not include a root LICENSE file
+when reviewed on 2026-10-16. LICENSE supplies the standard MIT permission text
+with attribution to that declared author; no upstream copyright year was stated.
+
+Adaptation is limited to Maps page selectors and reading name, address and phone.
+No upstream job, database, dashboard, webhook, enrichment or WhatsApp inference
+implementation is included. This service never claims a number supports WhatsApp.
