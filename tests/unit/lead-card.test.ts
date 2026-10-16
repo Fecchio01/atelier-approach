@@ -89,6 +89,48 @@ test('normalizes Instagram profile links and wraps long contact links', () => {
   expect(html).toContain('break-all');
 });
 
+test('keeps trusted WhatsApp short links intact and upgrades insecure links', () => {
+  const business: ExternalBusiness = {
+    osmId: 'overture/wa-link', name: 'Oficina WA Link', category: null,
+    source: 'Overture', phone: null, website: null, instagram: null,
+    whatsapp: 'http://wa.link/abc123?text=55-11-9999'
+  };
+  const html = renderToStaticMarkup(React.createElement(LeadCard, { business, result: scoreBusiness(business) }));
+
+  expect(html).toContain('href="https://wa.link/abc123?text=55-11-9999"');
+});
+
+test('does not reinterpret digits in an explicit WhatsApp URL as a different phone number', () => {
+  const business: ExternalBusiness = {
+    osmId: 'overture/wa-path', name: 'Oficina WA Path', category: null,
+    source: 'Overture', phone: null, website: null, instagram: null,
+    whatsapp: 'https://api.whatsapp.com/send/5511999000111?phone=5511888777666&text=pedido-123'
+  };
+  const html = renderToStaticMarkup(React.createElement(LeadCard, { business, result: scoreBusiness(business) }));
+
+  expect(html).toContain('href="https://api.whatsapp.com/send/5511999000111?phone=5511888777666&amp;text=pedido-123"');
+  expect(html).not.toContain('href="https://wa.me/55119990001115511888777666123"');
+});
+
+test('does not create a WhatsApp link from a plain number or advertise a rejected Instagram post URL', () => {
+  const phoneAsWhatsApp: ExternalBusiness = {
+    osmId: 'overture/plain-phone', name: 'Oficina Telefone', category: null,
+    source: 'Overture', phone: null, website: null, instagram: null, whatsapp: '+55 11 99999-8888'
+  };
+  const phoneMarkup = renderToStaticMarkup(React.createElement(LeadCard, { business: phoneAsWhatsApp, result: scoreBusiness(phoneAsWhatsApp) }));
+  expect(phoneMarkup).not.toContain('href="https://wa.me/5511999998888"');
+  expect(phoneMarkup).not.toContain('WhatsApp disponível');
+
+  const invalidInstagram: ExternalBusiness = {
+    osmId: 'overture/instagram-post', name: 'Oficina Instagram', category: null,
+    source: 'Overture', phone: null, website: null, whatsapp: null,
+    instagram: 'https://www.instagram.com/p/12345678901/'
+  };
+  const instagramMarkup = renderToStaticMarkup(React.createElement(LeadCard, { business: invalidInstagram, result: scoreBusiness(invalidInstagram) }));
+  expect(instagramMarkup).not.toContain('Instagram disponível');
+  expect(instagramMarkup).toContain('Sem canal direto');
+});
+
 test('keeps the secondary discard action above the final primary approach action', () => {
   const business: ExternalBusiness = {
     osmId: 'overture/cafe', name: 'Café Bom', category: 'coffee_shop',

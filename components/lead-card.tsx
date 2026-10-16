@@ -98,7 +98,7 @@ export function LeadCard({ business, result, onApproached, onDiscard }: LeadCard
           <h2 className="mt-2 line-clamp-2 break-words text-lg font-semibold leading-snug text-white">{displayName}</h2>
         </div>
         <span className="rounded-full border border-[var(--atelier-green)]/60 px-3 py-1 text-xs font-semibold text-[var(--atelier-green)]">
-          {business.whatsapp ? 'WhatsApp disponível' : business.instagram ? 'Instagram disponível' : business.website ? 'Site disponível' : business.phone ? 'Telefone disponível' : 'Sem canal direto'}
+          {whatsappHref ? 'WhatsApp disponível' : instagramHref ? 'Instagram disponível' : business.website ? 'Site disponível' : business.phone ? 'Telefone disponível' : 'Sem canal direto'}
         </span>
       </div>
 
@@ -179,9 +179,21 @@ export function LeadCard({ business, result, onApproached, onDiscard }: LeadCard
 }
 function toWhatsAppHref(value: string | null | undefined) {
   if (!value) return null;
-  if (/^https:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(value)) return value;
-  const digits = value.replace(/\D/g, '');
-  return digits.length >= 10 ? `https://wa.me/${digits}` : null;
+  const input = value.trim();
+  const candidate = /^(?:wa\.me|api\.whatsapp\.com|wa\.link)(?:[/:?#]|$)/i.test(input) ? `https://${input}` : input;
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol)
+    || !['wa.me', 'api.whatsapp.com', 'wa.link'].includes(url.hostname.toLowerCase())
+    || url.username || url.password || url.port) return null;
+
+  // Keep the explicit short link's path and query unchanged; never derive a phone from URL digits.
+  return candidate.replace(/^http:/i, 'https:');
 }
 
 function toInstagramHref(value: string | null | undefined) {
