@@ -9,9 +9,10 @@ export default auth((request) => {
   const { pathname } = request.nextUrl;
   const isRequiredAuthEndpoint =
     pathname === '/api/auth/csrf' || pathname === '/api/auth/callback/credentials';
+  const isPublicCronEndpoint = pathname === '/api/cron/crm-lifecycle';
   const isPublicBrandAsset = pathname.startsWith('/brand/');
 
-  if (pathname === '/login' || isRequiredAuthEndpoint || isPublicBrandAsset) {
+  if (pathname === '/login' || isRequiredAuthEndpoint || isPublicCronEndpoint || isPublicBrandAsset) {
     return NextResponse.next();
   }
 
