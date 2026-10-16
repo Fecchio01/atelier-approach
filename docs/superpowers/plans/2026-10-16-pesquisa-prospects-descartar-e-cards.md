@@ -72,7 +72,6 @@ git commit -m "fix: preserve source contacts without guessing whatsapp"
 - Modify: `lib/display-name.ts`
 - Test: `tests/unit/social-links.test.ts`
 - Test: `tests/unit/display-name.test.ts`
-- Test: `tests/unit/lead-card.test.ts`
 
 **Interfaces:**
 - Produce `normalizeInstagramProfileUrl(value: string | null | undefined): string | null` in `lib/social-links.ts`.
