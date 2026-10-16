@@ -26,7 +26,7 @@ export function createApp(options: {
       return;
     }
     const data = body as Record<string, unknown>;
-    const text = (value: unknown, max: number): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\u0000-\u001f]/.test(value);
+    const text = (value: unknown, max: number): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= max && [...value].every(character => character.charCodeAt(0) >= 32);
     if (Object.keys(data).some(key => !['companyName', 'city', 'region', 'address'].includes(key)) ||
       !text(data.companyName, 300) || !text(data.city, 150) || !text(data.region, 2) ||
       !BRAZIL_REGIONS.has(data.region.toUpperCase()) ||

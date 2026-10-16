@@ -36,6 +36,15 @@ describe('POST /lookup', () => {
     expect((await post(body)).status).toBe(400);
   });
 
+  // Catches removal or incomplete replacement of the C0 control-character guard.
+  it.each(['companyName', 'city', 'address'])('rejects every C0 control character in %s before lookup', async field => {
+    const post = await serve(async () => { throw new Error('Lookup must not run'); });
+    for (let codePoint = 0; codePoint < 32; codePoint++) {
+      const response = await post({ ...request, [field]: `Antes${String.fromCharCode(codePoint)}Depois` });
+      expect(response.status, `C0 code point ${codePoint}`).toBe(400);
+    }
+  });
+
   it('passes normalized input to the lookup and returns only the five candidate fields', async () => {
     const post = await serve(async input => input.companyName === 'Ateliê Exato' && input.region === 'MG' && input.address === null ? [{ ...candidate, whatsapp: '+5531999999999', jobId: 'forbidden' } as MapsPhoneCandidate] : []);
     const response = await post({ ...request, companyName: ' Ateliê Exato ', region: 'mg', address: null });
