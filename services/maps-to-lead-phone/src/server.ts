@@ -49,7 +49,11 @@ export function createApp(options: {
   return app;
 }
 
-export function readConfig(env: NodeJS.ProcessEnv) {
+export function readConfig(env: {
+  PORT?: string;
+  MAPS_PHONE_SERVICE_TOKEN?: string;
+  [key: string]: string | undefined;
+}) {
   const token = env.MAPS_PHONE_SERVICE_TOKEN;
   if (!token?.trim()) throw new Error('MAPS_PHONE_SERVICE_TOKEN is required');
   const value = env.PORT ?? '9000';
