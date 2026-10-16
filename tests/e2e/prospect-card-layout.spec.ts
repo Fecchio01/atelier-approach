@@ -8,7 +8,7 @@ test('search cards stay aligned, normalize long content, and discard only after 
     contentType: 'application/json',
     body: JSON.stringify({ searchId: 'layout-test', hasMore: false, businesses: [
       { osmId: 'overture/photo', name: 'Oficina Foto', source: 'Overture', category: 'automotive_repair', imageUrl: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E', phone: null, website: null, instagram: null, whatsapp: null },
-      { osmId: 'overture/plain', name: 'Oficina Sem Foto, uma descrição promocional extremamente longa que não deve ser exibida como parte do nome principal do prospect', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: null, website: 'https://example.com/a-very-long-business-path-that-must-wrap-inside-the-card', instagram: 'https://instagram.com/oficina.sem.foto', whatsapp: null },
+      { osmId: 'overture/plain', name: 'Oficina Sem Foto, uma descrição promocional extremamente longa que não deve ser exibida como parte do nome principal do prospect', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: null, website: 'https://example.com/a-very-long-business-path-that-must-wrap-inside-the-card', instagram: 'https://instagram.com/oficina.estetica.campinas', whatsapp: null },
       { osmId: 'overture/third', name: 'Terceira Oficina', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: null, website: null, instagram: null, whatsapp: null },
       { osmId: 'overture/fourth', name: 'Oficina do Quarto Prospect', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: '+5511999998888', website: null, instagram: null, whatsapp: null },
       { osmId: 'overture/fifth', name: 'Oficina com outra combinação de canais', source: 'Overture', category: 'automotive_repair', imageUrl: null, phone: null, website: 'https://example.org', instagram: '@oficina.fifth', whatsapp: 'https://wa.me/5511999997777' }
@@ -42,7 +42,7 @@ test('search cards stay aligned, normalize long content, and discard only after 
   const photoBounds = await photoCard.boundingBox();
   expect(photoBounds).not.toBeNull();
   expect(Math.abs(photoBounds!.height - before!.height)).toBeLessThan(2);
-  await expect(plainCard.locator('dd a[href^="https://www.instagram.com/"]')).toHaveAttribute('href', 'https://www.instagram.com/oficina.sem.foto/');
+  await expect(plainCard.locator('dd a[href^="https://www.instagram.com/"]')).toHaveAttribute('href', 'https://www.instagram.com/oficina.estetica.campinas/');
   await expect(plainCard.locator('dd a').filter({ hasText: 'example.com' })).toHaveClass(/break-all/);
 
   await thirdCard.getByRole('button', { name: 'Descartar empresa' }).click();

@@ -137,6 +137,14 @@ export function LeadCard({ business, result, onApproached, onDiscard }: LeadCard
       </details>
 
       <div className="mt-auto grid gap-3">
+        {onDiscard ? (
+          <>
+            {discardError ? <p role="alert" className="text-sm text-red-200">{discardError}</p> : null}
+            <button type="button" onClick={discardProspect} disabled={isDiscarding} className="min-h-9 justify-self-start rounded-lg border border-white/15 px-3 text-sm font-medium text-white/55 hover:border-red-300/50 hover:text-red-100 disabled:cursor-wait disabled:opacity-60">
+              {isDiscarding ? 'Descartando…' : 'Descartar empresa'}
+            </button>
+          </>
+        ) : null}
         {business.alreadyWorked && business.crmHref ? (
           <div className="grid gap-3 rounded-xl border border-[var(--atelier-green)]/50 bg-[var(--atelier-green)]/10 p-3"><p className="text-sm font-medium">Já trabalhada no CRM</p><button type="button" onClick={() => router.push(business.crmHref!)} className="min-h-10 rounded-lg border border-[var(--atelier-green)] px-4 font-semibold text-[var(--atelier-green)]">Abrir no CRM</button></div>
         ) : isApproaching ? (
@@ -165,14 +173,6 @@ export function LeadCard({ business, result, onApproached, onDiscard }: LeadCard
             Marcar como abordada
           </button>
         )}
-        {onDiscard ? (
-          <>
-            {discardError ? <p role="alert" className="text-sm text-red-200">{discardError}</p> : null}
-            <button type="button" onClick={discardProspect} disabled={isDiscarding} className="min-h-9 justify-self-start rounded-lg border border-white/15 px-3 text-sm font-medium text-white/55 hover:border-red-300/50 hover:text-red-100 disabled:cursor-wait disabled:opacity-60">
-              {isDiscarding ? 'Descartando…' : 'Descartar empresa'}
-            </button>
-          </>
-        ) : null}
       </div>
     </motion.article>
   );

@@ -89,7 +89,7 @@ test('normalizes Instagram profile links and wraps long contact links', () => {
   expect(html).toContain('break-all');
 });
 
-test('provides a visually secondary discard action beneath the primary approach action', () => {
+test('keeps the secondary discard action above the final primary approach action', () => {
   const business: ExternalBusiness = {
     osmId: 'overture/cafe', name: 'Café Bom', category: 'coffee_shop',
     source: 'Overture', phone: null, website: null, instagram: null
@@ -98,7 +98,8 @@ test('provides a visually secondary discard action beneath the primary approach 
   const approachButton = html.indexOf('Marcar como abordada');
   const discardButton = html.indexOf('Descartar empresa');
 
-  expect(approachButton).toBeGreaterThan(-1);
-  expect(discardButton).toBeGreaterThan(approachButton);
+  expect(discardButton).toBeGreaterThan(-1);
+  expect(approachButton).toBeGreaterThan(discardButton);
   expect(html.slice(discardButton - 300, discardButton)).toContain('border-white');
+  expect(html.lastIndexOf('<button')).toBeLessThan(approachButton);
 });
