@@ -7,6 +7,42 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+test('preserves Overture phone and explicit WhatsApp when no website exists', async () => {
+  const sourcePhone = '+55 (19) 3203-5110';
+  const sourceWhatsApp = 'https://wa.me/551932035110';
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/no-website', name: 'Oficina Horizonte', category: 'automotive_repair',
+    source: 'Overture', website: null, phone: sourcePhone, whatsapp: sourceWhatsApp, instagram: null
+  }]);
+
+  expect(business).toMatchObject({ phone: sourcePhone, whatsapp: sourceWhatsApp });
+});
+
+test('never derives WhatsApp from an Overture phone', async () => {
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/phone-only', name: 'Oficina Horizonte', category: 'automotive_repair',
+    source: 'Overture', website: null, phone: '+551932035110', whatsapp: null, instagram: null
+  }]);
+
+  expect(business.whatsapp).toBeNull();
+});
+
+test('does not use website contacts or photo when the website identity conflicts', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    '<meta property="og:image" content="https://img.example/vizinha.jpg"><script type="application/ld+json">{"@type":"LocalBusiness","name":"Oficina Vizinha","telephone":"+55 24 3333-4444","address":{"@type":"PostalAddress","streetAddress":"Rua das Flores, 45","addressLocality":"Volta Redonda","addressRegion":"RJ"}}</script><a href="https://wa.me/552433334444">WhatsApp</a>',
+    { status: 200 }
+  )));
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/real-conflict-contacts', name: 'Oficina Real', category: 'automotive_repair',
+    source: 'Overture', website: 'https://oficina-real-conflict.example', phone: null, whatsapp: null, instagram: null,
+    address: 'Rua das Flores, 45, Volta Redonda, RJ'
+  }]);
+
+  expect(business).toMatchObject({ phone: null, whatsapp: null, imageUrl: undefined });
+});
+
 test('extracts public WhatsApp, Instagram, telephone and Open Graph image links', async () => {
   vi.stubGlobal(
     'fetch',
