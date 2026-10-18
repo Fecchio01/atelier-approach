@@ -77,8 +77,8 @@ export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): 
 
     const locationVerified = isBusinessIdentityVerified(business, fields);
     const siteNameVerified = isOfficialWebsiteNameVerified(business, fields);
-    const phoneConflict = Boolean(locationVerified && business.phone && fields.phone && !samePhone(business.phone, fields.phone));
-    const phone = locationVerified && !phoneConflict ? fields.phone : null;
+    const phoneConflict = Boolean(business.phone && fields.phone && !samePhone(business.phone, fields.phone));
+    const phone = phoneConflict ? null : locationVerified ? fields.phone ?? business.phone : business.phone;
     const whatsappPhone = fields.whatsapp ? whatsappPhoneNumber(fields.whatsapp) : null;
     const whatsapp = locationVerified && phone && whatsappPhone && samePhone(phone, whatsappPhone) ? fields.whatsapp : null;
     return {

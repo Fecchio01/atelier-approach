@@ -39,7 +39,7 @@ export type CrmLead = {
 };
 
 
-export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays }: { leads: CrmLead[]; focusedLeadId?: string; services: CommercialServiceOption[]; followUpDelayDays: number }) {
+export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays, boardVersion = '' }: { leads: CrmLead[]; focusedLeadId?: string; services: CommercialServiceOption[]; followUpDelayDays: number; boardVersion?: string }) {
   const router = useRouter();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(focusedLeadId ?? null);
   const [stageOverrides, setStageOverrides] = useState<Record<string, LeadStage>>({});
@@ -52,7 +52,33 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays 
   const funnelScrollRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion() === true;
   const pageWasSuspended = useRef(false);
+  const boardVersionRef = useRef(boardVersion);
+  useEffect(() => { boardVersionRef.current = boardVersion; }, [boardVersion]);
   useEffect(() => { setSelectedLeadId(focusedLeadId ?? null); }, [focusedLeadId]);
+  useEffect(() => {
+    let stopped = false;
+    async function checkForSharedChanges() {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const response = await fetch('/api/crm/board-version', { cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = await response.json() as { version?: unknown };
+        if (stopped || typeof payload.version !== 'string' || payload.version === boardVersionRef.current) return;
+        boardVersionRef.current = payload.version;
+        router.refresh();
+      } catch {
+        // A temporary polling failure must not block CRM use; the next poll retries.
+      }
+    }
+
+    const intervalId = window.setInterval(() => void checkForSharedChanges(), 12_000);
+    document.addEventListener('visibilitychange', checkForSharedChanges);
+    return () => {
+      stopped = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', checkForSharedChanges);
+    };
+  }, [router]);
   useEffect(() => {
     // Overrides are created only after PATCH succeeds. Retire them once the
     // refreshed server props acknowledge the transition, so later tabs can win.

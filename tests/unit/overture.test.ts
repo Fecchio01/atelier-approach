@@ -155,6 +155,15 @@ describe('Overture automotive places', () => {
     })]);
   });
 
+  test('drops category-only records while keeping a specifically named business in that category', () => {
+    const businesses = normalizeOverturePlaces([
+      { id: 'generic-cafe', name: 'Cafeteria', category: 'cafe' },
+      { id: 'named-cafe', name: 'Cafeteria do Abençoado', category: 'cafe' }
+    ], { niche: '', businessName: 'Cafeteria' });
+
+    expect(businesses.map(({ name }) => name)).toEqual(['Cafeteria do Abençoado']);
+  });
+
   test('classifies social and WhatsApp URLs instead of exposing them as websites', () => {
     const businesses = normalizeOverturePlaces([{
       id: 'social-1', name: 'Oficina Central', category: 'automotive_repair',

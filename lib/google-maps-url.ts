@@ -9,6 +9,9 @@ type GoogleMapsSearchTarget = {
 export function googleMapsSearchUrl({ name, address, category, latitude, longitude }: GoogleMapsSearchTarget) {
   const hasCoordinates = typeof latitude === 'number' && Number.isFinite(latitude)
     && typeof longitude === 'number' && Number.isFinite(longitude);
+  if (hasCoordinates) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
+  }
   const hasBusinessName = Boolean(name?.trim()) && name !== 'Nome comercial não informado' && !/^(yes|no)$/i.test(name!.trim());
   const searchableName = hasBusinessName ? name : null;
   const addressParts = address?.split(',').map((part) => part.trim()).filter(Boolean) ?? [];

@@ -11,6 +11,7 @@ import { displayCompanyName } from '@/lib/display-name';
 import { normalizeInstagramProfileUrl } from '@/lib/social-links';
 import { googleMapsSearchUrl } from '@/lib/google-maps-url';
 import { getCompanyBrandImage } from '@/lib/company-branding';
+import { possibleWhatsAppHref } from '@/lib/contact-links';
 import { getDashboardCardMotionProps } from './motion-primitives';
 
 type LeadCardProps = {
@@ -29,7 +30,7 @@ export function LeadCard({ business, result, onApproached, onDiscard }: LeadCard
   const [isSaving, setIsSaving] = useState(false);
   const [discardError, setDiscardError] = useState<string | null>(null);
   const [isDiscarding, setIsDiscarding] = useState(false);
-  const whatsappHref = toWhatsAppHref(business.whatsapp);
+  const whatsappHref = toWhatsAppHref(business.whatsapp) ?? possibleWhatsAppHref(business.phone);
   const instagramHref = toInstagramHref(business.instagram);
   const websiteHref = toWebsiteHref(business.website);
   const googleMapsHref = googleMapsSearchUrl({ name: business.name, address: business.address, category: business.category, latitude: business.latitude, longitude: business.longitude });
@@ -104,7 +105,7 @@ export function LeadCard({ business, result, onApproached, onDiscard }: LeadCard
 
       {whatsappHref || business.phone || instagramHref || websiteHref || googleMapsHref ? (
         <div className="flex flex-wrap gap-2">
-          {whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label={`Abrir WhatsApp de ${business.name}`} className="rounded-lg bg-[var(--atelier-green)] px-3 py-2 text-sm font-semibold text-black">WhatsApp</a> : null}
+          {whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label={`Abrir WhatsApp de ${business.name}`} className="rounded-lg bg-[var(--atelier-green)] px-3 py-2 text-sm font-semibold text-black">Abrir WhatsApp</a> : null}
           {business.phone ? <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} aria-label={`Ligar para ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Ligar</a> : null}
           {instagramHref ? <a href={instagramHref} target="_blank" rel="noreferrer" aria-label={`Abrir Instagram de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Instagram</a> : null}
           {websiteHref ? <a href={websiteHref} target="_blank" rel="noreferrer" aria-label={`Abrir site de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Site</a> : null}

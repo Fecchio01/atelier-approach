@@ -17,6 +17,9 @@ describe('searchBusinesses', () => {
     expect(isGenericBusinessName('Centro de Estética Automotiva')).toBe(true);
     expect(isGenericBusinessName('Auto Repair')).toBe(true);
     expect(isGenericBusinessName('Centro de Estética Automotiva LK')).toBe(false);
+    expect(isGenericBusinessName('Cafeteria')).toBe(true);
+    expect(isGenericBusinessName('Casa de Saúde')).toBe(true);
+    expect(isGenericBusinessName('Cafeteria do Abençoado')).toBe(false);
   });
 
   test('resolves a state or city bounding box for supplemental Overture queries', async () => {

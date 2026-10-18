@@ -22,3 +22,12 @@ test('keeps the mobile funnel inside a bounded vertical scrollport', () => {
   expect(horizontalScrollport?.[1]).toContain('overflow-x-auto');
   expect(horizontalScrollport?.[1]).toContain('overflow-y-hidden');
 });
+
+test('checks for shared funnel changes while the page is visible', () => {
+  const source = readFileSync(resolve(process.cwd(), 'components/kanban-board.tsx'), 'utf8');
+
+  expect(source).toContain('/api/crm/board-version');
+  expect(source).toContain('setInterval');
+  expect(source).toContain('document.visibilityState');
+  expect(source).toContain('router.refresh()');
+});

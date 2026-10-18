@@ -48,7 +48,10 @@ const GENERIC_BUSINESS_NAMES = new Set([
   'higienizacao automotiva', 'lava jato', 'lava rapido', 'lavagem automotiva',
   'polimento automotivo', 'funilaria', 'martelinho de ouro', 'autopecas', 'pneus',
   'borracharia', 'troca de oleo', 'centro de estetica automotiva', 'automotive service',
-  'auto service', 'auto detailing', 'automotive detailing', 'tire shop', 'auto parts store'
+  'auto service', 'auto detailing', 'automotive detailing', 'tire shop', 'auto parts store',
+  'cafe', 'cafeteria', 'coffee shop', 'coffeehouse', 'hospital', 'casa de saude',
+  'clinica', 'clinic', 'health center', 'healthcare', 'restaurante', 'restaurant',
+  'bar', 'padaria', 'bakery', 'barbearia', 'barber shop', 'salon', 'salao de beleza'
 ]);
 
 export type ExternalBusiness = {

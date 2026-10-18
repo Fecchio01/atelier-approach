@@ -28,6 +28,17 @@ test('never derives WhatsApp from an Overture phone', async () => {
   expect(business.whatsapp).toBeNull();
 });
 
+test('keeps the phone attached to the Overture place when its website cannot independently verify it', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<title>Oficina Horizonte</title>', { status: 200 })));
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/source-phone', name: 'Oficina Horizonte', category: 'automotive_repair',
+    source: 'Overture', website: 'https://source-phone-horizonte.example', phone: '+55 19 3203-5110', whatsapp: null, instagram: null,
+    address: 'Rua das Flores, 45, Volta Redonda, RJ'
+  }]);
+
+  expect(business).toMatchObject({ phone: '+55 19 3203-5110', whatsapp: null });
+});
+
 test('does not use website contacts or photo when the website identity conflicts', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
     '<meta property="og:image" content="https://img.example/vizinha.jpg"><script type="application/ld+json">{"@type":"LocalBusiness","name":"Oficina Vizinha","telephone":"+55 24 3333-4444","address":{"@type":"PostalAddress","streetAddress":"Rua das Flores, 45","addressLocality":"Volta Redonda","addressRegion":"RJ"}}</script><a href="https://wa.me/552433334444">WhatsApp</a>',
@@ -128,7 +139,7 @@ test('ignores unsafe links and returns empty fields when the official site fails
   await expect(enrichFromOfficialWebsite('https://broken-dns.example')).resolves.toMatchObject({ website: null });
 });
 
-test('does not trust website contacts without structured identity and location verification', async () => {
+test('does not trust website contacts without structured identity, but keeps Overture phone data', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
     '<a href="https://wa.me/5521999990000">WhatsApp</a><a href="https://instagram.com/realoficina">Instagram</a>',
     { status: 200 }
@@ -141,12 +152,12 @@ test('does not trust website contacts without structured identity and location v
   }]);
 
   expect(business).toMatchObject({
-    name: 'Oficina Real', website: 'https://realoficina.example', phone: null,
+    name: 'Oficina Real', website: 'https://realoficina.example', phone: '+5521991112222',
     whatsapp: null, instagram: 'https://instagram.com/realoficina'
   });
 });
 
-test('suppresses phone and WhatsApp when the website identity does not match the business', async () => {
+test('suppresses phone and WhatsApp when the website publishes a conflicting number', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
     '<script type="application/ld+json">{"@type":"LocalBusiness","name":"Oficina Vizinha","telephone":"+55 21 98888-7777","address":{"@type":"PostalAddress","addressLocality":"Niterói","addressRegion":"RJ"}}</script><a href="https://wa.me/5521988887777">WhatsApp</a>',
     { status: 200 }

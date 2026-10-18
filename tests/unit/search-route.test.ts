@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   createOsmSearchService: vi.fn(),
   isGenericBusinessName: (name: string) => new Set([
     'auto repair', 'automotive repair', 'auto center', 'oficina mecanica',
-    'lavagem automotiva', 'centro de estetica automotiva'
+    'lavagem automotiva', 'centro de estetica automotiva', 'cafeteria', 'cafe', 'coffee shop', 'hospital'
   ]).has(name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()),
   searchOvertureArea: vi.fn(),
   planOvertureSearchAreas: vi.fn(),
@@ -179,6 +179,7 @@ describe('GET /api/search', () => {
     mocks.searchOvertureArea.mockResolvedValue({
       businesses: [
         business('generic', 'Oficina Mecânica'),
+        business('generic-cafe', 'Cafeteria'),
         business('wash', 'Lavagem automotiva'),
         business('named', 'Centro de Estética Automotiva LK')
       ],
