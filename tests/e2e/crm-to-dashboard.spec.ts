@@ -30,6 +30,10 @@ test('shows the complete operational dashboard with branded navigation and funne
   await expect(page.getByRole('heading', { name: 'Funil atual' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Desempenho da equipe' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Meu desempenho' })).toBeVisible();
+  const followUpsPanel = page.getByRole('heading', { name: 'Follow-ups' }).locator('xpath=../../..');
+  const funnelPanel = page.getByRole('heading', { name: 'Funil atual' }).locator('xpath=../../..');
+  const [followUpsBounds, funnelBounds] = await Promise.all([followUpsPanel.boundingBox(), funnelPanel.boundingBox()]);
+  expect(Math.abs((followUpsBounds?.height ?? 0) - (funnelBounds?.height ?? 0))).toBeLessThanOrEqual(1);
   const goalEditLinks = page.getByRole('link', { name: 'Editar metas' });
   await expect(goalEditLinks).toHaveCount(2);
   await expect(goalEditLinks.first().locator('svg')).toHaveCount(1);

@@ -254,7 +254,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       </DashboardMotionSection>
     </div>
 
-    <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
+    <div className="mt-6 grid items-stretch gap-4 xl:grid-cols-2">
       {dashboardActions.length > 0 && <DashboardMotionSection className="min-w-0 xl:col-span-2">
         <DashboardPendingActions actions={dashboardActions} />
       </DashboardMotionSection>}
@@ -283,13 +283,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
         </div>
       </DashboardMotionSection>
 
-      <DashboardMotionSection className="min-w-0 rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
+      <DashboardMotionSection className="flex min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><FunnelIcon size={19} weight="regular" aria-hidden="true" /></span>
           <div><h2 className="text-base font-semibold tracking-tight">Funil atual</h2><p className="mt-1 text-xs text-white/50">Empresas em cada etapa do funil.</p></div>
         </div>
-        <ul className="mt-4 divide-y divide-white/[0.07]">
-          {funnel.map((item) => <li key={item.label} className="grid grid-cols-[minmax(100px,1fr)_minmax(70px,1.3fr)_2.5rem] items-center gap-3 py-2 text-xs sm:grid-cols-[minmax(120px,1fr)_minmax(90px,1.5fr)_3rem]">
+        <ul className="mt-4 flex flex-1 flex-col divide-y divide-white/[0.07]">
+          {funnel.map((item) => <li key={item.label} className="grid flex-1 grid-cols-[minmax(100px,1fr)_minmax(70px,1.3fr)_2.5rem] items-center gap-3 py-2 text-xs sm:grid-cols-[minmax(120px,1fr)_minmax(90px,1.5fr)_3rem]">
             <span className="truncate text-white/75">{item.label}</span>
             <span className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]" role="progressbar" aria-label={`Leads em ${item.label}`} aria-valuemin={0} aria-valuemax={maxFunnelLeads} aria-valuenow={item.leads}>
               <span className="block h-full rounded-full bg-[var(--atelier-green)]" style={{ width: `${(item.leads / maxFunnelLeads) * 100}%` }} />
