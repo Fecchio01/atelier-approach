@@ -12,6 +12,8 @@ type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
 
 type CrmUpdate = {
   stage?: unknown;
+  expectedStage?: unknown;
+  expectedStageEnteredAt?: unknown;
   followUpAt?: unknown;
   meetingAt?: unknown;
   followUpAction?: unknown;
@@ -22,6 +24,12 @@ type CrmUpdate = {
   serviceItems?: unknown;
   activity?: { channel?: unknown; note?: unknown };
 };
+
+class StageConflictError extends Error {
+  constructor(readonly currentStage: LeadStage, readonly currentStageEnteredAt: Date) {
+    super('STAGE_CONFLICT');
+  }
+}
 
 function optionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -84,6 +92,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     ? body.stage as LeadStage
     : undefined;
   if (hasStage && !stage) return Response.json({ error: 'Etapa inválida.' }, { status: 400 });
+
+  const expectedStage = typeof body.expectedStage === 'string' && Object.values(LeadStage).includes(body.expectedStage as LeadStage)
+    ? body.expectedStage as LeadStage : undefined;
+  const expectedStageEnteredAt = typeof body.expectedStageEnteredAt === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(body.expectedStageEnteredAt)
+    ? new Date(body.expectedStageEnteredAt) : undefined;
+  if (hasStage && (!expectedStage || !expectedStageEnteredAt || Number.isNaN(expectedStageEnteredAt.valueOf())
+    || expectedStageEnteredAt.toISOString() !== body.expectedStageEnteredAt)) {
+    return Response.json({ error: 'Informe a etapa atual e a data de entrada válidas. Atualize o lead e tente novamente.' }, { status: 400 });
+  }
 
   const hasSaleValue = Object.prototype.hasOwnProperty.call(body, 'saleValue');
   const hasMrr = Object.prototype.hasOwnProperty.call(body, 'mrr');
@@ -162,6 +180,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     await tx.$queryRaw`SELECT "id" FROM "Lead" WHERE "id" = ${id} FOR UPDATE`;
     const lead = await tx.lead.findUnique({ where: { id } });
     if (!lead) throw new Error('LEAD_NOT_FOUND');
+    if (stage && (lead.stage !== expectedStage || lead.stageEnteredAt.valueOf() !== expectedStageEnteredAt!.valueOf())) {
+      throw new StageConflictError(lead.stage, lead.stageEnteredAt);
+    }
     if (stage === 'WON' && lead.stage === 'WON') throw new Error('ALREADY_WON');
     if (stage === 'FOLLOW_UP' && lead.stage === 'WON') throw new Error('WON_CANNOT_SCHEDULE_FOLLOW_UP');
     if (hasMeetingAt && (stage ?? lead.stage) !== 'MEETING') throw new Error('MEETING_DATE_REQUIRES_MEETING_STAGE');
@@ -173,7 +194,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     let updated = lead;
 
     if (stage && stage !== lead.stage) {
-      const leadData: Prisma.LeadUpdateInput = { stage, ...getStageLifecycleUpdate(stage, now) };
+      const leadData: Prisma.LeadUpdateManyMutationInput = { stage, ...getStageLifecycleUpdate(stage, now) };
       if (stage === 'MEETING') leadData.meetingAt = hasMeetingAt ? meetingAt ?? null : null;
       else if (lead.stage === 'MEETING') leadData.meetingAt = null;
       let selectedServices: { id: string; name: string; price: Prisma.Decimal; billingType: 'ONE_TIME' | 'MONTHLY' }[] = [];
@@ -200,6 +221,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         leadData.wonAt = now;
         leadData.wonById = user.id;
       } else if (lead.stage === 'WON') {
+        leadData.saleValue = null;
+        leadData.mrr = null;
+        leadData.wonAt = null;
+        leadData.wonById = null;
+      }
+      const transition = await tx.lead.updateMany({
+        where: { id, stage: expectedStage, stageEnteredAt: expectedStageEnteredAt }, data: leadData
+      });
+      if (transition.count !== 1) {
+        const current = await tx.lead.findUnique({ where: { id }, select: { stage: true, stageEnteredAt: true } });
+        if (!current) throw new Error('LEAD_NOT_FOUND');
+        throw new StageConflictError(current.stage, current.stageEnteredAt);
+      }
+      updated = await tx.lead.findUniqueOrThrow({ where: { id } });
+      if (lead.stage === 'WON') {
         const activeSale = await tx.saleEvent.findFirst({
           where: { leadId: id, reversedAt: null },
           orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }]
@@ -207,12 +243,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         if (activeSale) {
           await tx.saleEvent.update({ where: { id: activeSale.id }, data: { reversedAt: now, reversedById: user.id } });
         }
-        leadData.saleValue = null;
-        leadData.mrr = null;
-        leadData.wonAt = null;
-        leadData.wonById = null;
       }
-      updated = await tx.lead.update({ where: { id }, data: leadData });
       await tx.stageHistory.create({ data: { leadId: id, actorId: user.id, fromStage: lead.stage, toStage: stage } });
 
       if (lead.stage === 'FOLLOW_UP' && stage !== 'FOLLOW_UP') {
@@ -331,12 +362,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return updated;
   }).catch((error: unknown) => {
+    if (error instanceof StageConflictError) return error;
     if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'WON_CANNOT_SCHEDULE_FOLLOW_UP', 'FINANCIALS_REQUIRE_WON', 'INVALID_SERVICE_SELECTION', 'POST_FOLLOW_UP_COOLDOWN', 'MEETING_DATE_REQUIRES_MEETING_STAGE'].includes(error.message)) return error.message;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_FOUND') return null;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_PENDING') return false;
     throw error;
   });
 
+  if (updatedLead instanceof StageConflictError) return Response.json({
+    code: 'STAGE_CONFLICT', currentStage: updatedLead.currentStage,
+    currentStageEnteredAt: updatedLead.currentStageEnteredAt.toISOString()
+  }, { status: 409 });
   if (updatedLead === 'LEAD_NOT_FOUND') return Response.json({ error: 'Lead não encontrado.' }, { status: 404 });
   if (updatedLead === 'ALREADY_WON') return Response.json({ error: 'Este lead já está marcado como ganho. Reabra-o antes de registrar uma nova venda.' }, { status: 409 });
   if (updatedLead === 'WON_CANNOT_SCHEDULE_FOLLOW_UP') return Response.json({ error: 'Reabra o negócio antes de agendar um follow-up.' }, { status: 409 });

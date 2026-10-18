@@ -8,12 +8,41 @@ import { DELETE, PATCH } from '../../app/api/leads/[id]/route';
 import { POST } from '../../app/api/leads/route';
 import { prisma } from '../../lib/db';
 
+async function stageBody(id: string, data: Record<string, unknown>) {
+  if (!Object.prototype.hasOwnProperty.call(data, 'stage')) return JSON.stringify(data);
+  const current = await prisma.lead.findUniqueOrThrow({ where: { id }, select: { stage: true, stageEnteredAt: true } });
+  return JSON.stringify({ expectedStage: current.stage, expectedStageEnteredAt: current.stageEnteredAt.toISOString(), ...data });
+}
+
 describe('lead routes', () => {
   beforeEach(async () => {
     mocks.getCurrentUser.mockResolvedValue({ id: 'internal-equipe' });
     await prisma.activity.deleteMany();
     await prisma.followUp.deleteMany();
     await prisma.lead.deleteMany();
+  });
+
+  test('accepts only one of two concurrent transitions from the same expected state', async () => {
+    const lead = await prisma.lead.create({ data: { osmId: 'node/stage-race', stage: 'INTEREST' } });
+    const expected = { expectedStage: lead.stage, expectedStageEnteredAt: lead.stageEnteredAt.toISOString() };
+    const targets = ['FOLLOW_UP', 'PROPOSAL'] as const;
+    const responses = await Promise.all(targets.map((stage) => PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
+      method: 'PATCH', body: JSON.stringify({ stage, ...expected })
+    }), { params: Promise.resolve({ id: lead.id }) })));
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 409]);
+    const winner = targets[responses.findIndex(({ status }) => status === 200)];
+    const current = await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } });
+    expect(current.stage).toBe(winner);
+    await expect(responses.find(({ status }) => status === 409)!.json()).resolves.toEqual({
+      code: 'STAGE_CONFLICT', currentStage: winner, currentStageEnteredAt: current.stageEnteredAt.toISOString()
+    });
+    await expect(prisma.stageHistory.findMany({ where: { leadId: lead.id } })).resolves.toEqual([
+      expect.objectContaining({ fromStage: 'INTEREST', toStage: winner })
+    ]);
+    expect(await prisma.activity.count({ where: { leadId: lead.id, type: 'STAGE_CHANGE' } })).toBe(1);
+    expect(await prisma.activity.count({ where: { leadId: lead.id } })).toBe(winner === 'FOLLOW_UP' ? 2 : 1);
+    expect(await prisma.followUp.count({ where: { leadId: lead.id } })).toBe(winner === 'FOLLOW_UP' ? 1 : 0);
+    expect(await prisma.saleEvent.count({ where: { leadId: lead.id } })).toBe(0);
   });
 
   test('creates a shared lead and records the first approach', async () => {
@@ -42,7 +71,7 @@ describe('lead routes', () => {
   test('rejects NEW as a destination without changing persisted legacy data', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/legacy-new', stage: 'NEW' } });
     const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-      method: 'PATCH', body: JSON.stringify({ stage: 'NEW' })
+      method: 'PATCH', body: await stageBody(lead.id, { stage: 'NEW' })
     }), { params: Promise.resolve({ id: lead.id }) });
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: 'Etapa inválida.' });
@@ -58,7 +87,7 @@ describe('lead routes', () => {
     expect(contactResponse.status).toBe(200);
     await expect(prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).resolves.toMatchObject({ stage: 'NEW' });
     const moveResponse = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-      method: 'PATCH', body: JSON.stringify({ stage: 'MEETING' })
+      method: 'PATCH', body: await stageBody(lead.id, { stage: 'MEETING' })
     }), { params: Promise.resolve({ id: lead.id }) });
     expect(moveResponse.status).toBe(200);
     await expect(prisma.stageHistory.findFirstOrThrow({ where: { leadId: lead.id } })).resolves.toMatchObject({ fromStage: 'NEW', toStage: 'MEETING' });
@@ -139,7 +168,7 @@ describe('lead routes', () => {
     const response = await PATCH(
       new Request(`http://localhost/api/leads/${lead.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stage: 'WON', saleValue: -1, mrr: 0 })
+        body: await stageBody(lead.id, { stage: 'WON', saleValue: -1, mrr: 0 })
       }),
       { params: Promise.resolve({ id: lead.id }) }
     );
@@ -154,7 +183,7 @@ describe('lead routes', () => {
     const response = await PATCH(
       new Request(`http://localhost/api/leads/${lead.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stage: 'WON', saleValue: 1200, mrr: 300 })
+        body: await stageBody(lead.id, { stage: 'WON', saleValue: 1200, mrr: 300 })
       }),
       { params: Promise.resolve({ id: lead.id }) }
     );
@@ -175,7 +204,7 @@ describe('lead routes', () => {
       const followUpResponse = await PATCH(
         new Request(`http://localhost/api/leads/${lead.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ stage: 'FOLLOW_UP' })
+          body: await stageBody(lead.id, { stage: 'FOLLOW_UP' })
         }),
         { params: Promise.resolve({ id: lead.id }) }
       );
@@ -186,7 +215,7 @@ describe('lead routes', () => {
 
       const pendingFollowUp = await prisma.followUp.findFirstOrThrow({ where: { leadId: lead.id, state: 'PENDING' } });
       const repeatedResponse = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-        method: 'PATCH', body: JSON.stringify({ stage: 'FOLLOW_UP' })
+        method: 'PATCH', body: await stageBody(lead.id, { stage: 'FOLLOW_UP' })
       }), { params: Promise.resolve({ id: lead.id }) });
       expect(repeatedResponse.status).toBe(200);
       await expect(prisma.followUp.findMany({ where: { leadId: lead.id } })).resolves.toHaveLength(1);
@@ -195,7 +224,7 @@ describe('lead routes', () => {
       const closeResponse = await PATCH(
         new Request(`http://localhost/api/leads/${lead.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ stage: 'WON', saleValue: 1500, mrr: 250 })
+          body: await stageBody(lead.id, { stage: 'WON', saleValue: 1500, mrr: 250 })
         }),
         { params: Promise.resolve({ id: lead.id }) }
       );
@@ -219,7 +248,7 @@ describe('lead routes', () => {
       });
 
       const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-        method: 'PATCH', body: JSON.stringify({ stage: 'FOLLOW_UP' })
+        method: 'PATCH', body: await stageBody(lead.id, { stage: 'FOLLOW_UP' })
       }), { params: Promise.resolve({ id: lead.id }) });
 
       expect(response.status).toBe(200);
@@ -242,7 +271,7 @@ describe('lead routes', () => {
       await prisma.crmSettings.upsert({ where: { id: 'team' }, create: { id: 'team', followUpDelayDays: 3 }, update: { followUpDelayDays: 3 } });
       const firstLead = await prisma.lead.create({ data: { osmId: 'node/follow-up-interval-first', stage: 'INTEREST' } });
       const firstResponse = await PATCH(new Request(`http://localhost/api/leads/${firstLead.id}`, {
-        method: 'PATCH', body: JSON.stringify({ stage: 'FOLLOW_UP' })
+        method: 'PATCH', body: await stageBody(firstLead.id, { stage: 'FOLLOW_UP' })
       }), { params: Promise.resolve({ id: firstLead.id }) });
       expect(firstResponse.status).toBe(200);
       const firstFollowUp = await prisma.followUp.findFirstOrThrow({ where: { leadId: firstLead.id, state: 'PENDING' } });
@@ -250,7 +279,7 @@ describe('lead routes', () => {
       await prisma.crmSettings.update({ where: { id: 'team' }, data: { followUpDelayDays: 5 } });
       const secondLead = await prisma.lead.create({ data: { osmId: 'node/follow-up-interval-second', stage: 'INTEREST' } });
       const secondResponse = await PATCH(new Request(`http://localhost/api/leads/${secondLead.id}`, {
-        method: 'PATCH', body: JSON.stringify({ stage: 'FOLLOW_UP' })
+        method: 'PATCH', body: await stageBody(secondLead.id, { stage: 'FOLLOW_UP' })
       }), { params: Promise.resolve({ id: secondLead.id }) });
       expect(secondResponse.status).toBe(200);
 
@@ -271,7 +300,7 @@ describe('lead routes', () => {
     const response = await PATCH(
       new Request(`http://localhost/api/leads/${lead.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stage: 'WON', saleValue: '100', mrr: {} })
+        body: await stageBody(lead.id, { stage: 'WON', saleValue: '100', mrr: {} })
       }),
       { params: Promise.resolve({ id: lead.id }) }
     );
@@ -287,7 +316,7 @@ describe('lead routes', () => {
     const response = await PATCH(
       new Request(`http://localhost/api/leads/${lead.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stage: 'WON' })
+        body: await stageBody(lead.id, { stage: 'WON' })
       }),
       { params: Promise.resolve({ id: lead.id }) }
     );
@@ -309,7 +338,7 @@ describe('lead routes', () => {
     ]);
 
     const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceIds: setup.map((service) => service.id) })
+      method: 'PATCH', body: await stageBody(lead.id, { stage: 'WON', serviceIds: setup.map((service) => service.id) })
     }), { params: Promise.resolve({ id: lead.id }) });
 
     expect(response.status).toBe(200);
@@ -334,7 +363,7 @@ describe('lead routes', () => {
     ]);
 
     const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceItems: [
+      method: 'PATCH', body: await stageBody(lead.id, { stage: 'WON', serviceItems: [
         { id: monthly.id, price: '149.90' },
         { id: setup.id, price: '850.25' }
       ] })
@@ -357,7 +386,7 @@ describe('lead routes', () => {
     const service = await prisma.serviceCatalogItem.create({ data: { name: 'Serviço', price: '100', billingType: 'ONE_TIME' } });
 
     const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceItems: [{ id: service.id, price: '12.345' }] })
+      method: 'PATCH', body: await stageBody(lead.id, { stage: 'WON', serviceItems: [{ id: service.id, price: '12.345' }] })
     }), { params: Promise.resolve({ id: lead.id }) });
 
     expect(response.status).toBe(400);
@@ -375,7 +404,7 @@ describe('lead routes', () => {
       ? await prisma.serviceCatalogItem.create({ data: { name: 'Serviço arquivado', price: '100', billingType: 'MONTHLY', isActive: false } })
       : null;
     const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceIds: [valid.id, archived?.id ?? invalidId] })
+      method: 'PATCH', body: await stageBody(lead.id, { stage: 'WON', serviceIds: [valid.id, archived?.id ?? invalidId] })
     }), { params: Promise.resolve({ id: lead.id }) });
 
     expect(response.status).toBe(400);
@@ -388,7 +417,7 @@ describe('lead routes', () => {
   test('keeps closing without selected services compatible at zero values', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/no-service-selection' } });
     const response = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceIds: [] })
+      method: 'PATCH', body: await stageBody(lead.id, { stage: 'WON', serviceIds: [] })
     }), { params: Promise.resolve({ id: lead.id }) });
 
     expect(response.status).toBe(200);
@@ -402,13 +431,13 @@ describe('lead routes', () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/audited-sale-reversal' } });
     const service = await prisma.serviceCatalogItem.create({ data: { name: 'Plano preservado', price: '89.90', billingType: 'MONTHLY' } });
     const close = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-      method: 'PATCH', body: JSON.stringify({ stage: 'WON', serviceIds: [service.id] })
+      method: 'PATCH', body: await stageBody(lead.id, { stage: 'WON', serviceIds: [service.id] })
     }), { params: Promise.resolve({ id: lead.id }) });
     expect(close.status).toBe(200);
     const originalSale = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id }, include: { lineItems: true } });
 
     const reopen = await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, {
-      method: 'PATCH', body: JSON.stringify({ stage: 'CONTACTED' })
+      method: 'PATCH', body: await stageBody(lead.id, { stage: 'CONTACTED' })
     }), { params: Promise.resolve({ id: lead.id }) });
 
     expect(reopen.status).toBe(200);
@@ -424,7 +453,7 @@ describe('lead routes', () => {
   test('reclosing after reversal creates a distinct active sale event', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/reclosed-sale-events' } });
     const service = await prisma.serviceCatalogItem.create({ data: { name: 'Serviço recontratado', price: '250', billingType: 'ONE_TIME' } });
-    const patch = (body: object) => PATCH(new Request(`http://localhost/api/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify(body) }), { params: Promise.resolve({ id: lead.id }) });
+    const patch = async (body: Record<string, unknown>) => PATCH(new Request(`http://localhost/api/leads/${lead.id}`, { method: 'PATCH', body: await stageBody(lead.id, body) }), { params: Promise.resolve({ id: lead.id }) });
     expect((await patch({ stage: 'WON', serviceIds: [service.id] })).status).toBe(200);
     const first = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id } });
     expect((await patch({ stage: 'CONTACTED' })).status).toBe(200);
@@ -438,7 +467,7 @@ describe('lead routes', () => {
 
   test('supplements a persisted sale without changing its identity or counting another sale', async () => {
     const lead = await prisma.lead.create({ data: { osmId: 'node/financial-complement' } });
-    expect((await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify({ stage: 'WON' }) }), { params: Promise.resolve({ id: lead.id }) })).status).toBe(200);
+    expect((await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, { method: 'PATCH', body: await stageBody(lead.id, { stage: 'WON' }) }), { params: Promise.resolve({ id: lead.id }) })).status).toBe(200);
     const original = await prisma.saleEvent.findFirstOrThrow({ where: { leadId: lead.id } });
     expect((await PATCH(new Request(`http://localhost/api/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify({ saleValue: 1500 }) }), { params: Promise.resolve({ id: lead.id }) })).status).toBe(200);
     const sales = await prisma.saleEvent.findMany({ where: { leadId: lead.id } });
@@ -457,7 +486,7 @@ describe('lead routes', () => {
 
     const response = await PATCH(
       new Request(`http://localhost/api/leads/${lead.id}`, {
-        method: 'PATCH', body: JSON.stringify({ stage: 'DISCARDED' })
+        method: 'PATCH', body: await stageBody(lead.id, { stage: 'DISCARDED' })
       }), { params: Promise.resolve({ id: lead.id }) }
     );
 
@@ -472,7 +501,7 @@ describe('lead routes', () => {
     const wonResponse = await PATCH(
       new Request(`http://localhost/api/leads/${lead.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stage: 'WON', saleValue: 1200, mrr: 300 })
+        body: await stageBody(lead.id, { stage: 'WON', saleValue: 1200, mrr: 300 })
       }),
       { params: Promise.resolve({ id: lead.id }) }
     );
@@ -481,7 +510,7 @@ describe('lead routes', () => {
     const reopenedResponse = await PATCH(
       new Request(`http://localhost/api/leads/${lead.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stage: 'INTEREST' })
+        body: await stageBody(lead.id, { stage: 'INTEREST' })
       }),
       { params: Promise.resolve({ id: lead.id }) }
     );
@@ -547,7 +576,7 @@ describe('lead routes', () => {
 // The real database contract above remains enabled. This route-level harness also
 // exercises financial transactions without requiring a migrated PostgreSQL enum.
 describe('sale financial contract without database', () => {
-  type TestLead = { id: string; stage: string; saleValue: number | null; mrr: number | null; wonAt: Date | null; wonById: string | null };
+  type TestLead = { id: string; stage: string; stageEnteredAt: Date; saleValue: number | null; mrr: number | null; wonAt: Date | null; wonById: string | null };
   type TestSale = { id: string; leadId: string; actorId: string; saleValue: number; mrr: number; occurredAt: Date; reversedAt: Date | null; reversedById: string | null };
   let lead: TestLead;
   let sales: TestSale[];
@@ -556,13 +585,16 @@ describe('sale financial contract without database', () => {
 
   beforeEach(() => {
     mocks.getCurrentUser.mockResolvedValue({ id: 'internal-equipe' });
-    lead = { id: 'financial-lead', stage: 'CONTACTED', saleValue: null, mrr: null, wonAt: null, wonById: null };
+    lead = { id: 'financial-lead', stage: 'CONTACTED', stageEnteredAt: new Date('2026-09-01T10:00:00Z'), saleValue: null, mrr: null, wonAt: null, wonById: null };
     sales = [];
     activities = [];
     followUps = [{ state: 'PENDING' }, { state: 'COMPLETED' }];
     const tx = {
       $queryRaw: async () => [{ id: lead.id }],
-      lead: { findUnique: async () => ({ ...lead }), update: async ({ data }: { data: Partial<TestLead> }) => (lead = { ...lead, ...data }) },
+      lead: { findUnique: async () => ({ ...lead }), findUniqueOrThrow: async () => ({ ...lead }), updateMany: async ({ where, data }: { where: { id: string; stage: string; stageEnteredAt: Date }; data: Partial<TestLead> }) => {
+        if (where.id !== lead.id || where.stage !== lead.stage || where.stageEnteredAt.valueOf() !== lead.stageEnteredAt.valueOf()) return { count: 0 };
+        Object.assign(lead, data); return { count: 1 };
+      }, update: async ({ data }: { data: Partial<TestLead> }) => (lead = { ...lead, ...data }) },
       stageHistory: { create: async () => ({}) },
       saleEvent: {
         create: async ({ data }: { data: Omit<TestSale, 'id' | 'reversedAt' | 'reversedById'> }) => { const sale = { id: `sale-${sales.length + 1}`, reversedAt: null, reversedById: null, ...data }; sales.push(sale); return sale; },
@@ -577,7 +609,7 @@ describe('sale financial contract without database', () => {
   afterEach(() => vi.restoreAllMocks());
 
   async function patch(data: Record<string, unknown>) {
-    return PATCH(new Request('http://localhost/api/leads/financial-lead', { method: 'PATCH', body: JSON.stringify(data) }), { params: Promise.resolve({ id: lead.id }) });
+    return PATCH(new Request('http://localhost/api/leads/financial-lead', { method: 'PATCH', body: JSON.stringify({ ...(data.stage ? { expectedStage: lead.stage, expectedStageEnteredAt: lead.stageEnteredAt.toISOString() } : {}), ...data }) }), { params: Promise.resolve({ id: lead.id }) });
   }
 
   test('wins without a price, counts one sale, and cancels only pending follow-ups', async () => {
@@ -711,6 +743,13 @@ describe('lifecycle transition contract without database', () => {
       $queryRaw: async () => [{ id: lead.id }],
       lead: {
         findUnique: async () => ({ ...lead }),
+        findUniqueOrThrow: async () => ({ ...lead }),
+        updateMany: async ({ where, data }: { where: { id: string; stage: string; stageEnteredAt: Date }; data: Partial<LifecycleLead> }) => {
+          if (where.id !== lead.id || where.stage !== lead.stage || where.stageEnteredAt.valueOf() !== lead.stageEnteredAt.valueOf()) return { count: 0 };
+          updates.push(data);
+          Object.assign(lead, data);
+          return { count: 1 };
+        },
         update: async ({ data }: { data: Partial<LifecycleLead> }) => {
           updates.push(data);
           Object.assign(lead, data);
@@ -755,9 +794,84 @@ describe('lifecycle transition contract without database', () => {
 
   async function patch(data: Record<string, unknown>) {
     return PATCH(new Request('http://localhost/api/leads/lifecycle-lead', {
-      method: 'PATCH', body: JSON.stringify(data)
+      method: 'PATCH', body: JSON.stringify({ ...(data.stage ? { expectedStage: lead.stage, expectedStageEnteredAt: lead.stageEnteredAt.toISOString() } : {}), ...data })
     }), { params: Promise.resolve({ id: lead.id }) });
   }
+
+  test.each([
+    {},
+    { expectedStage: 'INTEREST' },
+    { expectedStageEnteredAt: '2026-09-01T10:00:00.000Z' },
+    { expectedStage: 'INVALID', expectedStageEnteredAt: '2026-09-01T10:00:00.000Z' },
+    { expectedStage: 'INTEREST', expectedStageEnteredAt: 'invalid-date' },
+    { expectedStage: 'INTEREST', expectedStageEnteredAt: null },
+    { expectedStage: 'INTEREST', expectedStageEnteredAt: 123 }
+  ])('rejects missing or invalid expected state without writes: %j', async (expected) => {
+    const response = await PATCH(new Request('http://localhost/api/leads/lifecycle-lead', {
+      method: 'PATCH', body: JSON.stringify({ stage: 'FOLLOW_UP', ...expected })
+    }), { params: Promise.resolve({ id: lead.id }) });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: expect.any(String) });
+    expect(lead.stage).toBe('INTEREST');
+    expect(updates).toHaveLength(0);
+    expect(stageHistory).toHaveLength(0);
+    expect(activities).toHaveLength(0);
+    expect(creates).toHaveLength(0);
+    expect(saleEventWrites).toHaveLength(0);
+  });
+
+  test.each(['INTEREST', 'CONTACTED'])('rejects stale expected state %s without transition or side effects', async (expectedStage) => {
+    const response = await patch({
+      stage: 'WON', saleValue: 200, activity: { channel: 'PHONE', note: 'Não salvar.' },
+      expectedStage, expectedStageEnteredAt: expectedStage === 'INTEREST' ? '2026-08-31T10:00:00.000Z' : '2026-09-01T10:00:00.000Z'
+    });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      code: 'STAGE_CONFLICT', currentStage: 'INTEREST', currentStageEnteredAt: '2026-09-01T10:00:00.000Z'
+    });
+    expect(lead.stage).toBe('INTEREST');
+    expect(updates).toHaveLength(0);
+    expect(stageHistory).toHaveLength(0);
+    expect(activities).toHaveLength(0);
+    expect(creates).toHaveLength(0);
+    expect(saleEventWrites).toHaveLength(0);
+  });
+
+  test.each([['FOLLOW_UP', 'PROPOSAL'], ['PROPOSAL', 'FOLLOW_UP']])('accepts only one concurrent transition (%s, %s) and creates side effects only for its winner without database', async (first, second) => {
+    const expected = { expectedStage: lead.stage, expectedStageEnteredAt: lead.stageEnteredAt.toISOString() };
+    const targets = [first, second];
+    const responses = await Promise.all(targets.map((stage) => patch({ stage, ...expected })));
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 409]);
+    const winner = targets[responses.findIndex(({ status }) => status === 200)];
+    expect(lead.stage).toBe(winner);
+    await expect(responses.find(({ status }) => status === 409)!.json()).resolves.toEqual({
+      code: 'STAGE_CONFLICT', currentStage: winner, currentStageEnteredAt: lead.stageEnteredAt.toISOString()
+    });
+    expect(stageHistory).toEqual([expect.objectContaining({ fromStage: 'INTEREST', toStage: winner })]);
+    expect(activities.filter(({ type }) => type === 'STAGE_CHANGE')).toHaveLength(1);
+    expect(activities).toHaveLength(winner === 'FOLLOW_UP' ? 2 : 1);
+    expect(creates).toHaveLength(winner === 'FOLLOW_UP' ? 1 : 0);
+    expect(saleEventWrites).toHaveLength(0);
+  });
+
+  test('rejects a stale request even when its destination is the current stage', async () => {
+    const response = await patch({ stage: 'INTEREST', expectedStageEnteredAt: '2026-08-31T10:00:00.000Z' });
+    expect(response.status).toBe(409);
+    expect(updates).toHaveLength(0);
+    expect(stageHistory).toHaveLength(0);
+    expect(activities).toHaveLength(0);
+  });
+
+  test('does not reverse a sale when a stale reopening is rejected', async () => {
+    lead = { ...lead, stage: 'WON', saleValue: 1200, mrr: 300, wonAt: new Date('2026-09-01T10:00:00Z'), wonById: 'original-winner' };
+    const response = await patch({ stage: 'CONTACTED', expectedStageEnteredAt: '2026-08-31T10:00:00.000Z' });
+    expect(response.status).toBe(409);
+    expect(lead).toMatchObject({ stage: 'WON', saleValue: 1200, mrr: 300, wonById: 'original-winner' });
+    expect(saleEventWrites).toHaveLength(0);
+    expect(stageHistory).toHaveLength(0);
+    expect(activities).toHaveLength(0);
+    expect(creates).toHaveLength(0);
+  });
 
   test('stores the exact origin stage on a newly scheduled follow-up', async () => {
     const now = new Date('2026-09-10T10:00:00Z');

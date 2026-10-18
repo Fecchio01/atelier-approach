@@ -5,7 +5,13 @@ const mocks = vi.hoisted(() => {
   const tx = {
     $queryRaw: vi.fn(),
     lead: {
-      findUnique: vi.fn(async () => lead),
+      findUnique: vi.fn(async () => ({ ...lead })),
+      findUniqueOrThrow: vi.fn(async () => ({ ...lead })),
+      updateMany: vi.fn(async ({ where, data }: { where: { id: string; stage: string; stageEnteredAt: Date }; data: Record<string, unknown> }) => {
+        if (where.id !== lead.id || where.stage !== lead.stage || where.stageEnteredAt.valueOf() !== (lead.stageEnteredAt as Date).valueOf()) return { count: 0 };
+        Object.assign(lead, data);
+        return { count: 1 };
+      }),
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => Object.assign(lead, data))
     },
     stageHistory: { create: vi.fn(async () => ({})) },
@@ -29,7 +35,10 @@ vi.mock('../../lib/commercial-settings', () => ({ getFollowUpDelayDays: vi.fn(as
 import { PATCH } from '../../app/api/leads/[id]/route';
 
 const patch = (body: Record<string, unknown>) => PATCH(new Request('http://localhost/api/leads/meeting-lead', {
-  method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+    ...(body.stage ? { expectedStage: mocks.lead.stage, expectedStageEnteredAt: (mocks.lead.stageEnteredAt as Date).toISOString() } : {}),
+    ...body
+  })
 }), { params: Promise.resolve({ id: 'meeting-lead' }) });
 
 describe('meeting date API', () => {
@@ -46,7 +55,7 @@ describe('meeting date API', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ lead: { stage: 'MEETING', meetingAt: '2026-10-15T12:00:00.000Z' } });
-    expect(mocks.tx.lead.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ stage: 'MEETING', meetingAt: new Date('2026-10-15T12:00:00.000Z') }) }));
+    expect(mocks.lead.meetingAt).toEqual(new Date('2026-10-15T12:00:00.000Z'));
   });
 
   test('updates or clears a meeting date while the lead is already in Reunião', async () => {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowSquareOutIcon, GlobeIcon, InstagramLogoIcon, MapPinIcon, PhoneIcon, StorefrontIcon, TrashIcon, WhatsappLogoIcon } from '@phosphor-icons/react';
 import { mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage } from '@/lib/funnel';
 import type { CrmLead } from './kanban-board';
@@ -35,6 +36,7 @@ function dateTimeLabel(value: string) {
 }
 
 export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays, onClose, onUpdated, onDeleted }: { lead: CrmLead; services: CommercialServiceOption[]; followUpDelayDays: number; onClose: () => void; onUpdated: (stage?: Stage) => void; onDeleted: (id: string) => void }) {
+  const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const returnButtonRef = useRef<HTMLButtonElement>(null);
@@ -116,9 +118,29 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
     setError(null);
     try {
       const response = await fetch(`/api/leads/${id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(details)
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          ...details,
+          ...(details.stage ? { expectedStage: lead.stage, expectedStageEnteredAt: lead.stageEnteredAt } : {})
+        })
       });
-      const payload = (await response.json()) as { error?: string; lead?: { stage?: Stage } };
+      const payload = (await response.json()) as { code?: string; error?: string; lead?: { stage?: Stage } };
+      if (response.status === 409 && payload.code === 'STAGE_CONFLICT') {
+        const message = 'Outra pessoa atualizou este lead. Confira a etapa atual antes de tentar novamente.';
+        setError(message);
+        setConfirmingDiscard(false);
+        try {
+          const freshResponse = await fetch(`/api/leads/${encodeURIComponent(id)}`, { cache: 'no-store' });
+          const fresh = await freshResponse.json() as { lead?: CrmLead };
+          if (!freshResponse.ok || !fresh.lead) throw new Error('DETAIL_RELOAD_FAILED');
+          setLead(fresh.lead);
+          setStageDraft(normalizeFunnelStage(fresh.lead.stage));
+        } catch {
+          setError(`${message} Não foi possível carregar os detalhes atuais. Feche e abra o lead novamente.`);
+        } finally {
+          router.refresh();
+        }
+        return false;
+      }
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível atualizar o lead.');
       onUpdated(payload.lead?.stage);
       return true;

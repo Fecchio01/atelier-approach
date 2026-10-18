@@ -2,6 +2,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+
 // Icon loading is unrelated to commercial behavior; keep the real modal and controls.
 vi.mock('@phosphor-icons/react', () => ({
   ArrowSquareOutIcon: () => null, GlobeIcon: () => null, InstagramLogoIcon: () => null,
@@ -15,7 +17,7 @@ import type { CrmLead } from '../../components/kanban-board';
 const lead: CrmLead = {
   id: 'lead', name: 'Oficina', osmId: 'node/1', phone: null, website: null,
   instagram: null, whatsapp: null, address: null, category: null, latitude: null,
-  longitude: null, stage: 'CONTACTED', saleValue: null, mrr: null, activities: [], followUps: []
+  longitude: null, stage: 'CONTACTED', stageEnteredAt: '2026-09-01T10:00:00.000Z', saleValue: null, mrr: null, activities: [], followUps: []
 };
 
 function render(overrides: Partial<CrmLead> & { meetingAt?: string | null } = {}) {

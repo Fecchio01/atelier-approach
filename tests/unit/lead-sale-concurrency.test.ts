@@ -30,9 +30,10 @@ async function fixture() {
   serviceIds.push(setup.id);
   return { lead, monthly, setup };
 }
-function patch(id: string, stage: 'WON' | 'CONTACTED', ids?: string[]) {
+async function patch(id: string, stage: 'WON' | 'CONTACTED', ids?: string[], expected?: { stage: string; stageEnteredAt: Date }) {
+  const current = expected ?? await prisma.lead.findUniqueOrThrow({ where: { id }, select: { stage: true, stageEnteredAt: true } });
   return PATCH(new Request(`http://localhost/api/leads/${id}`, {
-    method: 'PATCH', body: JSON.stringify({ stage, ...(ids ? { serviceIds: ids } : {}) })
+    method: 'PATCH', body: JSON.stringify({ stage, expectedStage: current.stage, expectedStageEnteredAt: current.stageEnteredAt.toISOString(), ...(ids ? { serviceIds: ids } : {}) })
   }), { params: Promise.resolve({ id }) });
 }
 async function state(id: string) {
@@ -57,8 +58,9 @@ function assertSnapshots(result: Awaited<ReturnType<typeof state>>, services: Aw
 test('concurrent duplicate PATCH closes persist exactly one complete sale under PostgreSQL row lock', async () => {
   const data = await fixture();
   const ids = [data.monthly.id, data.setup.id];
-  const responses = await Promise.all([patch(data.lead.id, 'WON', ids), patch(data.lead.id, 'WON', ids)]);
+  const responses = await Promise.all([patch(data.lead.id, 'WON', ids, data.lead), patch(data.lead.id, 'WON', ids, data.lead)]);
   expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+  await expect(responses.find(({ status }) => status === 409)!.json()).resolves.toMatchObject({ code: 'STAGE_CONFLICT', currentStage: 'WON' });
   const result = await state(data.lead.id);
   expect(result.stage).toBe('WON');
   expect(Number(result.saleValue)).toBe(699.91);
@@ -74,53 +76,35 @@ test.each(['CONTACTED', 'WON'] as const)('concurrent close/reopen from %s yields
   const data = await fixture();
   const ids = [data.monthly.id, data.setup.id];
   if (initial === 'WON') expect((await patch(data.lead.id, 'WON', ids)).status).toBe(200);
-  const [close, reopen] = await Promise.all([patch(data.lead.id, 'WON', ids), patch(data.lead.id, 'CONTACTED')]);
-  expect(reopen.status).toBe(200);
+  const expected = await prisma.lead.findUniqueOrThrow({ where: { id: data.lead.id } });
+  const [close, reopen] = await Promise.all([
+    patch(data.lead.id, 'WON', ids, expected), patch(data.lead.id, 'CONTACTED', undefined, expected)
+  ]);
   const result = await state(data.lead.id);
   const active = result.saleEvents.filter((event) => !event.reversedAt);
   const reversed = result.saleEvents.filter((event) => event.reversedAt);
-  const wins = result.activities.filter((activity) => activity.type === 'SALE_WON');
-  const reversals = result.activities.filter((activity) => activity.type === 'SALE_REVERSED');
-  const transitions = result.stageHistory.map((event) => `${event.fromStage}>${event.toStage}`).sort();
   if (initial === 'CONTACTED') {
     expect(close.status).toBe(200);
-    expect(result.saleEvents).toHaveLength(1);
-    expect(wins).toHaveLength(1);
-    if (result.stage === 'WON') {
-      expect(active).toHaveLength(1);
-      expect(reversed).toHaveLength(0);
-      expect(transitions).toEqual(['CONTACTED>WON']);
-    } else {
-      expect(result.stage).toBe('CONTACTED');
-      expect(active).toHaveLength(0);
-      expect(reversed).toHaveLength(1);
-      expect(transitions).toEqual(['CONTACTED>WON', 'WON>CONTACTED']);
-    }
-  } else if (result.stage === 'WON') {
-    expect(close.status).toBe(200);
+    expect([200, 409]).toContain(reopen.status);
+    expect(result.stage).toBe('WON');
     expect(active).toHaveLength(1);
-    expect(reversed).toHaveLength(1);
-    expect(wins).toHaveLength(2);
-    expect(transitions).toEqual(['CONTACTED>WON', 'CONTACTED>WON', 'WON>CONTACTED']);
+    expect(reversed).toHaveLength(0);
+    expect(result.stageHistory.map((event) => [event.fromStage, event.toStage])).toEqual([['CONTACTED', 'WON']]);
+    expect(result.activities.map((activity) => activity.type)).toEqual(['SALE_WON']);
   } else {
-    expect(result.stage).toBe('CONTACTED');
     expect(close.status).toBe(409);
+    expect(reopen.status).toBe(200);
+    expect(result.stage).toBe('CONTACTED');
     expect(active).toHaveLength(0);
     expect(reversed).toHaveLength(1);
-    expect(wins).toHaveLength(1);
-    expect(transitions).toEqual(['CONTACTED>WON', 'WON>CONTACTED']);
-  }
-  expect(reversals).toHaveLength(reversed.length);
-  expect(result.activities.filter((activity) => activity.type === 'LEAD_REOPENED')).toHaveLength(reversed.length);
-  for (const event of reversed) expect(event.reversedById).toBe('concurrency-member');
-  expect(result.saleEvents).toHaveLength(active.length + reversed.length);
-  if (active.length) {
-    expect(Number(result.saleValue)).toBe(699.91);
-    expect(Number(result.mrr)).toBe(199.9);
-    expect(result.wonAt).not.toBeNull();
-  } else {
+    expect(result.stageHistory.map((event) => `${event.fromStage}>${event.toStage}`).sort()).toEqual(['CONTACTED>WON', 'WON>CONTACTED']);
+    expect(result.activities.filter((activity) => activity.type === 'SALE_WON')).toHaveLength(1);
+    expect(result.activities.filter((activity) => activity.type === 'SALE_REVERSED')).toHaveLength(1);
+    expect(result.activities.filter((activity) => activity.type === 'LEAD_REOPENED')).toHaveLength(1);
+    expect(reversed[0].reversedById).toBe('concurrency-member');
     expect(result).toMatchObject({ saleValue: null, mrr: null, wonAt: null, wonById: null });
   }
+  expect(result.saleEvents).toHaveLength(1);
   assertSnapshots(result, data);
 });
 });

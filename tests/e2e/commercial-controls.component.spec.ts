@@ -20,10 +20,11 @@ test.beforeAll(async () => {
         { id: 'monthly', name: 'Plano mensal', price: '199.90', billingType: 'MONTHLY', isActive: true },
         { id: 'setup', name: 'Implantação', price: '500.00', billingType: 'ONE_TIME', isActive: true }
       ];
-      const lead = { id: 'lead', name: 'Oficina de teste', osmId: 'node/1', stage: 'CONTACTED',
+      const lead = { id: 'lead', name: 'Oficina de teste', osmId: 'node/1', stage: 'CONTACTED', stageEnteredAt: '2026-09-01T10:00:00.000Z',
         saleValue: null, mrr: null, phone: null, website: null, instagram: null, whatsapp: null,
         latitude: null, longitude: null, address: null, category: null, activities: [], followUps: [] };
       const mode = new URLSearchParams(window.location.search).get('mode');
+      if (mode === 'conversation') Object.assign(lead, { stage: 'IN_CONVERSATION' });
       if (mode === 'won') Object.assign(lead, { stage: 'WON', saleValue: '699.90', mrr: '199.90' });
       if (mode === 'pending') Object.assign(lead, { stage: 'FOLLOW_UP', followUps: [{ id: 'pending', state: 'PENDING', dueDate: '2027-01-10T15:30:00.000Z' }] });
       if (mode === 'reversed') Object.assign(lead, { activities: [{ id: 'reversal', type: 'SALE_REVERSED', actorId: 'member', channel: null, createdAt: '2026-10-05T15:30:00.000Z', note: 'Negócio reaberto para CONTACTED; venda revertida.' }] });
@@ -56,7 +57,7 @@ test.beforeAll(async () => {
       setup(builder) {
         builder.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: 'router', namespace: 'test-router' }));
         builder.onLoad({ filter: /.*/, namespace: 'test-router' }, () => ({
-          contents: 'const router = { refresh() {} }; export function useRouter() { return router; }',
+          contents: 'const router = { refresh() { document.body.setAttribute("data-board-refreshed", "true"); } }; export function useRouter() { return router; }',
           loader: 'js'
         }));
       }
@@ -171,6 +172,43 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   });
 
+  test(`stale stage update recovers fresh detail without resubmitting on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const patches: Record<string, unknown>[] = [];
+    let detailReads = 0;
+    await page.route('**/api/leads/lead', async (route) => {
+      if (route.request().method() === 'PATCH') {
+        patches.push(route.request().postDataJSON());
+        await route.fulfill({ status: 409, json: {
+          code: 'STAGE_CONFLICT', currentStage: 'MEETING', currentStageEnteredAt: '2026-10-18T12:00:00.000Z'
+        } });
+      } else {
+        detailReads += 1;
+        await route.fulfill({ json: { lead: {
+          id: 'lead', name: 'Oficina de teste', osmId: 'node/1', stage: 'MEETING',
+          stageEnteredAt: '2026-10-18T12:00:00.000Z', meetingAt: '2026-10-19T15:00:00.000Z',
+          activities: [], followUps: [], detailsLoaded: true
+        } } });
+      }
+    });
+    await openComponents(page, 'board');
+    await page.getByRole('button', { name: 'Abrir detalhes de Oficina de teste' }).click();
+    const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
+    await modal.getByLabel('Mover para etapa').selectOption('PROPOSAL');
+    await modal.getByRole('button', { name: 'Salvar alterações', exact: true }).click();
+    await expect(modal.getByRole('alert')).toContainText(/outra pessoa atualizou/i);
+    await expect(modal.getByLabel('Mover para etapa')).toHaveValue('MEETING');
+    await expect(modal.getByLabel('Data e hora da reunião')).not.toHaveValue('');
+    await expect(modal.getByRole('button', { name: 'Salvar alterações', exact: true })).toBeDisabled();
+    expect(patches).toEqual([{
+      stage: 'PROPOSAL', expectedStage: 'CONTACTED', expectedStageEnteredAt: '2026-09-01T10:00:00.000Z'
+    }]);
+    expect(detailReads).toBe(1);
+    await expect(page.locator('body')).toHaveAttribute('data-board-refreshed', 'true');
+    await expect(modal.getByRole('alert')).toContainText(/outra pessoa atualizou/i);
+    expect(patches).toHaveLength(1);
+  });
+
   test(`closing previews totals and preserves selections after API failure on ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     const bodies: Record<string, unknown>[] = [];
@@ -199,8 +237,8 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     expect(surface!.height).toBeLessThanOrEqual(viewport.height);
     await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
     expect(bodies).toEqual([
-      { stage: 'WON', serviceItems: [{ id: 'monthly', price: '199.90' }, { id: 'setup', price: '500.00' }] },
-      { stage: 'WON', serviceItems: [{ id: 'monthly', price: '199.90' }, { id: 'setup', price: '500.00' }] }
+      { expectedStage: 'CONTACTED', expectedStageEnteredAt: '2026-09-01T10:00:00.000Z', stage: 'WON', serviceItems: [{ id: 'monthly', price: '199.90' }, { id: 'setup', price: '500.00' }] },
+      { expectedStage: 'CONTACTED', expectedStageEnteredAt: '2026-09-01T10:00:00.000Z', stage: 'WON', serviceItems: [{ id: 'monthly', price: '199.90' }, { id: 'setup', price: '500.00' }] }
     ]);
     await expect(modal).toHaveCount(0);
     await expect(page.getByTestId('callback-result')).toHaveText('WON');
@@ -221,7 +259,7 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     await modal.getByLabel('Valor manual da venda').fill('850');
     await modal.getByLabel('MRR manual').fill('120.50');
     await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
-    await expect.poll(() => body).toEqual({ stage: 'WON', saleValue: 850, mrr: 120.5 });
+    await expect.poll(() => body).toEqual({ expectedStage: 'CONTACTED', expectedStageEnteredAt: '2026-09-01T10:00:00.000Z', stage: 'WON', saleValue: 850, mrr: 120.5 });
   });
 
   test(`zero closing, automatic follow-up, discard and return send their contracts on ${viewport.name}`, async ({ page }) => {
@@ -233,25 +271,25 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
       requests.push({ method, body });
       await route.fulfill({ json: method === 'DELETE' ? {} : { lead: { stage: body.stage } } });
     });
-    await openComponents(page);
+    await openComponents(page, 'conversation');
     const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
     await page.getByRole('button', { name: 'Abrir lead' }).click();
     await modal.getByRole('button', { name: 'Venda', exact: true }).click();
     await modal.getByRole('button', { name: 'Fechar negócio', exact: true }).click();
-    expect(requests[0].body).toEqual({ stage: 'WON', serviceItems: [] });
+    expect(requests[0].body).toEqual({ expectedStage: 'IN_CONVERSATION', expectedStageEnteredAt: '2026-09-01T10:00:00.000Z', stage: 'WON', serviceItems: [] });
     await page.getByRole('button', { name: 'Abrir lead' }).click();
     await expect(modal.getByLabel('Data do follow-up', { exact: true })).toHaveCount(0);
     await expect(modal.locator('input[type="datetime-local"]')).toHaveCount(0);
     await expect(modal.getByText(/agendado automaticamente em 3 dias/)).toBeVisible();
     await expect(modal.getByText(/Você pode escolher outra data/)).toHaveCount(0);
     await modal.getByRole('button', { name: 'Agendar follow-up', exact: true }).click();
-    expect(requests[1].body).toEqual({ stage: 'FOLLOW_UP' });
+    expect(requests[1].body).toEqual({ expectedStage: 'IN_CONVERSATION', expectedStageEnteredAt: '2026-09-01T10:00:00.000Z', stage: 'FOLLOW_UP' });
     await page.getByRole('button', { name: 'Abrir lead' }).click();
     await modal.getByRole('button', { name: 'Descartar empresa', exact: true }).click();
     const discard = page.getByRole('alertdialog', { name: 'Descartar empresa do funil?' });
     await expect(discard.getByRole('button', { name: 'Cancelar' })).toBeFocused();
     await discard.getByRole('button', { name: 'Confirmar descarte' }).click();
-    expect(requests[2].body).toEqual({ stage: 'DISCARDED' });
+    expect(requests[2].body).toEqual({ expectedStage: 'IN_CONVERSATION', expectedStageEnteredAt: '2026-09-01T10:00:00.000Z', stage: 'DISCARDED' });
     await page.getByRole('button', { name: 'Abrir lead' }).click();
     await modal.getByRole('button', { name: 'Devolver para pesquisa', exact: true }).click();
     await page.getByRole('alertdialog', { name: 'Devolver empresa para pesquisa?' }).getByRole('button', { name: 'Confirmar devolução' }).click();
