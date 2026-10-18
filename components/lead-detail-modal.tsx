@@ -46,6 +46,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   const confirmationFocusTarget = useRef<'RETURN' | 'DISCARD'>('RETURN');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
   const [lead, setLead] = useState(initialLead);
   const [loadingDetails, setLoadingDetails] = useState(initialLead.detailsLoaded === false);
   const [reloadAttempt, setReloadAttempt] = useState(0);
@@ -78,7 +79,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
     const controller = new AbortController();
     let active = true;
     setLoadingDetails(true);
-    setError(null);
+    setDetailLoadError(null);
     fetch(`/api/leads/${encodeURIComponent(initialLead.id)}`, { signal: controller.signal })
       .then(async (response) => {
         const payload = await response.json() as { error?: string; lead?: CrmLead };
@@ -87,7 +88,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
       })
       .catch((requestError: unknown) => {
         if (active && !(requestError instanceof DOMException && requestError.name === 'AbortError')) {
-          setError(requestError instanceof Error ? requestError.message : 'Não foi possível carregar os detalhes da empresa.');
+          setDetailLoadError(requestError instanceof Error ? requestError.message : 'Não foi possível carregar os detalhes da empresa.');
         }
       })
       .finally(() => { if (active) setLoadingDetails(false); });
@@ -377,7 +378,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
       {error && !confirmingReturn && !confirmingDiscard ? <p role="alert" className="border-b border-red-300/15 bg-red-300/5 px-6 py-3 text-sm text-red-200">{error}</p> : null}
       <div className="atelier-scrollbar min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-8">
         {loadingDetails ? <p role="status" className="grid min-h-48 place-items-center text-sm text-white/55">Carregando detalhes da empresa…</p>
-          : initialLead.detailsLoaded === false && error ? <div className="grid min-h-48 content-center justify-items-center gap-3"><p role="alert" className="text-sm text-red-200">{error}</p><button type="button" onClick={() => setReloadAttempt((attempt) => attempt + 1)} className="min-h-10 rounded-lg border border-white/20 px-4 text-sm">Tentar novamente</button></div>
+          : detailLoadError ? <div className="grid min-h-48 content-center justify-items-center gap-3"><p role="alert" className="text-sm text-red-200">{detailLoadError}</p><button type="button" onClick={() => setReloadAttempt((attempt) => attempt + 1)} className="min-h-10 rounded-lg border border-white/20 px-4 text-sm">Tentar novamente</button></div>
             : renderLead(lead)}
       </div>
       </div>

@@ -24,6 +24,7 @@ test.beforeAll(async () => {
         saleValue: null, mrr: null, phone: null, website: null, instagram: null, whatsapp: null,
         latitude: null, longitude: null, address: null, category: null, activities: [], followUps: [] };
       const mode = new URLSearchParams(window.location.search).get('mode');
+      if (mode === 'unloaded-board') Object.assign(lead, { detailsLoaded: false });
       if (mode === 'conversation') Object.assign(lead, { stage: 'IN_CONVERSATION' });
       if (mode === 'won') Object.assign(lead, { stage: 'WON', saleValue: '699.90', mrr: '199.90' });
       if (mode === 'pending') Object.assign(lead, { stage: 'FOLLOW_UP', followUps: [{ id: 'pending', state: 'PENDING', dueDate: '2027-01-10T15:30:00.000Z' }] });
@@ -41,7 +42,7 @@ test.beforeAll(async () => {
         : [lead]);
         return <main style={{ padding: 20 }}>
           <CommercialSettingsForm services={services} followUpDelayDays={3} />
-          {(mode === 'board' || mode === 'scrollboard') && <>
+          {(mode === 'board' || mode === 'unloaded-board' || mode === 'scrollboard') && <>
             <button onClick={() => setBoardLeads([{ ...lead, stage: 'WON' }])}>Confirmar ganho no servidor</button>
             <button onClick={() => setBoardLeads([{ ...lead, stage: 'CONTACTED' }])}>Receber reabertura externa</button>
             <KanbanBoard leads={boardLeads} services={services} followUpDelayDays={3} />
@@ -189,11 +190,20 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   });
 
-  test(`stale stage update recovers fresh detail without resubmitting on ${viewport.name}`, async ({ page }) => {
+  test(`stale stage update from an unloaded board recovers visible controls without resubmitting on ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     const patches: Record<string, unknown>[] = [];
+    const methods: string[] = [];
     let detailReads = 0;
+    const loadedLead = {
+      id: 'lead', name: 'Oficina de teste', osmId: 'node/1', stage: 'CONTACTED',
+      stageEnteredAt: '2026-10-18T11:00:00.000Z', meetingAt: null,
+      saleValue: null, mrr: null, phone: null, website: null, instagram: null, whatsapp: null,
+      latitude: null, longitude: null, address: null, category: null,
+      activities: [], followUps: [], detailsLoaded: true
+    };
     await page.route('**/api/leads/lead', async (route) => {
+      methods.push(route.request().method());
       if (route.request().method() === 'PATCH') {
         patches.push(route.request().postDataJSON());
         await route.fulfill({ status: 409, json: {
@@ -201,28 +211,33 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
         } });
       } else {
         detailReads += 1;
-        await route.fulfill({ json: { lead: {
-          id: 'lead', name: 'Oficina de teste', osmId: 'node/1', stage: 'MEETING',
-          stageEnteredAt: '2026-10-18T12:00:00.000Z', meetingAt: '2026-10-19T15:00:00.000Z',
-          activities: [], followUps: [], detailsLoaded: true
+        await route.fulfill({ json: { lead: detailReads === 1 ? loadedLead : {
+          ...loadedLead, stage: 'MEETING', stageEnteredAt: '2026-10-18T12:00:00.000Z',
+          meetingAt: '2026-10-19T15:00:00.000Z'
         } } });
       }
     });
-    await openComponents(page, 'board');
+    await openComponents(page, 'unloaded-board');
     await page.getByRole('button', { name: 'Abrir detalhes de Oficina de teste' }).click();
     const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
+    await expect(modal.getByLabel('Mover para etapa')).toHaveValue('CONTACTED');
+    expect(detailReads).toBe(1);
     await modal.getByLabel('Mover para etapa').selectOption('PROPOSAL');
     await modal.getByRole('button', { name: 'Salvar alterações', exact: true }).click();
-    await expect(modal.getByRole('alert')).toContainText(/outra pessoa atualizou/i);
     await expect(modal.getByLabel('Mover para etapa')).toHaveValue('MEETING');
+    await expect(modal.getByLabel('Mover para etapa')).toBeVisible();
+    await expect(modal.getByRole('alert')).toBeVisible();
+    await expect(modal.getByRole('alert')).toContainText(/outra pessoa atualizou/i);
+    await expect(modal.getByLabel('Data e hora da reunião')).toBeVisible();
     await expect(modal.getByLabel('Data e hora da reunião')).not.toHaveValue('');
     await expect(modal.getByRole('button', { name: 'Salvar alterações', exact: true })).toBeDisabled();
     expect(patches).toEqual([{
-      stage: 'PROPOSAL', expectedStage: 'CONTACTED', expectedStageEnteredAt: '2026-09-01T10:00:00.000Z'
+      stage: 'PROPOSAL', expectedStage: 'CONTACTED', expectedStageEnteredAt: '2026-10-18T11:00:00.000Z'
     }]);
-    expect(detailReads).toBe(1);
+    expect(detailReads).toBe(2);
     await expect(page.locator('body')).toHaveAttribute('data-board-refreshed', 'true');
     await expect(modal.getByRole('alert')).toContainText(/outra pessoa atualizou/i);
+    expect(methods).toEqual(['GET', 'PATCH', 'GET']);
     expect(patches).toHaveLength(1);
   });
 
