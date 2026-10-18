@@ -99,6 +99,17 @@ export function getDashboardCardMotionProps(reducedMotion: boolean) {
   };
 }
 
+export function getDashboardPanelMotionProps(reducedMotion: boolean) {
+  return {
+    whileHover: reducedMotion ? undefined : {
+      y: -2,
+      borderColor: 'rgba(167, 216, 26, 0.28)',
+      boxShadow: '0 14px 30px rgba(0, 0, 0, 0.2)'
+    },
+    transition: reducedMotion ? getMotionTransition(true, 'fast') : springs.gentle
+  };
+}
+
 export function getDashboardLineMotionProps(reducedMotion: boolean) {
   return {
     whileHover: reducedMotion ? undefined : { strokeWidth: 4.5 },

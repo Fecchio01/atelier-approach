@@ -1,10 +1,8 @@
 import Link from 'next/link';
 import {
-  ArrowRightIcon,
   ArrowSquareOutIcon,
   CalendarCheckIcon,
   ChartBarIcon,
-  CheckCircleIcon,
   CurrencyDollarIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
@@ -18,6 +16,7 @@ import { TeamGoalProgress } from '@/components/team-goal-progress';
 import { DashboardPeriodSelector } from '@/components/dashboard-period-selector';
 import { DailyCloseControl } from '@/components/daily-close-control';
 import { DashboardTrendChart } from '@/components/dashboard-trend-chart';
+import { DashboardFollowUps } from '@/components/dashboard-follow-ups';
 import { DashboardMotionArticle, DashboardMotionSection } from '@/components/dashboard-motion-card';
 import { DashboardLifecycleWarnings } from '@/components/dashboard-lifecycle-warnings';
 import { DashboardPendingActions } from '@/components/dashboard-pending-actions';
@@ -26,7 +25,7 @@ import { prisma } from '@/lib/db';
 import { getDailyReportForDate } from '@/lib/daily-reports';
 import { getMemberProfiles } from '@/lib/member-profile';
 import { getDashboardTrend } from '@/lib/dashboard-trend';
-import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricFollowUp, type MetricLead } from '@/lib/metrics';
+import { getDashboardMetrics, getTeamGoalProgress, getTeamGoalTargets, type MetricLead } from '@/lib/metrics';
 import { getDashboardLifecycleWarnings } from '@/lib/dashboard-lifecycle-warnings';
 import { getDashboardPendingActions } from '@/lib/dashboard-pending-actions';
 import { processCrmLifecycleForPageRequest } from '@/lib/crm-lifecycle-page-request';
@@ -37,7 +36,6 @@ import { auxiliaryFunnelStages, mainFunnelStages, normalizeFunnelStage, stageLab
 type Period = 'day' | 'week' | 'month';
 const teamOwnerId = '__team__';
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
-const shortDate = (value: Date) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo' }).format(value);
 function localDateParam(value: Date) {
   const parts = new Intl.DateTimeFormat('en', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value);
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
@@ -47,27 +45,6 @@ function localDateParam(value: Date) {
 function windowLabel(window: GoalPeriodWindow) {
   const date = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
   return `${date.format(window.start)} a ${date.format(new Date(window.end.getTime() - 1))}`;
-}
-
-function FollowUps({ followUps, empty, nameFor, overdue = false, upcoming = false }: {
-  followUps: MetricFollowUp[];
-  empty: string;
-  nameFor: (id: string) => string;
-  overdue?: boolean;
-  upcoming?: boolean;
-}) {
-  return <ul className="mt-2 flex flex-1 flex-col divide-y divide-white/[0.07]">
-    {followUps.length ? followUps.map((followUp) => <li key={followUp.id} className="flex items-start gap-3 py-3 text-sm">
-      <span className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${overdue ? 'bg-rose-300/10 text-rose-300' : 'bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]'}`}>
-        {overdue ? <CalendarCheckIcon size={17} weight="regular" aria-hidden="true" /> : <CheckCircleIcon size={17} weight="regular" aria-hidden="true" />}
-      </span>
-      <span className="min-w-0 flex-1">
-        <strong className="block truncate font-medium text-white">{followUp.lead?.name ?? 'Lead sem nome'}</strong>
-        <span className="mt-1 block text-xs text-white/55">{nameFor(followUp.ownerId)} · {overdue ? `Vencido em ${shortDate(followUp.dueDate)}` : upcoming ? `Retorno em ${shortDate(followUp.dueDate)}` : 'Retorno previsto para hoje'}</span>
-      </span>
-      <ArrowRightIcon className="mt-2 shrink-0 text-white/35" size={15} aria-hidden="true" />
-    </li>) : <li className="flex flex-1 items-center py-3 text-sm text-white/50">{empty}</li>}
-  </ul>;
 }
 
 function Result({ label, value }: { label: string; value: string | number }) {
@@ -277,7 +254,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       </DashboardMotionSection>
     </div>
 
-    <div className="mt-6 grid items-stretch gap-4 xl:grid-cols-2">
+    <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
       {dashboardActions.length > 0 && <DashboardMotionSection className="min-w-0 xl:col-span-2">
         <DashboardPendingActions actions={dashboardActions} />
       </DashboardMotionSection>}
@@ -293,15 +270,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
         <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-3 sm:divide-x sm:divide-white/[0.08]">
           <section className="flex min-w-0 flex-col sm:pr-4" aria-labelledby="overdue-followups-heading">
             <h3 id="overdue-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-rose-300" />Em atraso <span className="tabular-nums text-white/40">{selectedMetrics.overdue.length}</span></h3>
-            <FollowUps followUps={selectedMetrics.overdue} empty="Nenhum follow-up vencido." nameFor={nameFor} overdue />
+            <DashboardFollowUps followUps={selectedMetrics.overdue} empty="Nenhum follow-up vencido." nameFor={nameFor} overdue />
           </section>
           <section className="flex min-w-0 flex-col sm:px-4" aria-labelledby="today-followups-heading">
             <h3 id="today-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-[var(--atelier-green)]" />Para hoje <span className="tabular-nums text-white/40">{selectedMetrics.dueToday.length}</span></h3>
-            <FollowUps followUps={selectedMetrics.dueToday} empty="Nenhum retorno para hoje." nameFor={nameFor} />
+            <DashboardFollowUps followUps={selectedMetrics.dueToday} empty="Nenhum retorno para hoje." nameFor={nameFor} />
           </section>
           <section className="flex min-w-0 flex-col sm:pl-4" aria-labelledby="upcoming-followups-heading">
             <h3 id="upcoming-followups-heading" className="flex items-center gap-2 text-xs font-semibold text-white/70"><span className="size-1.5 rounded-full bg-sky-300" />Próximos <span className="tabular-nums text-white/40">{selectedMetrics.upcoming.length}</span></h3>
-            <FollowUps followUps={selectedMetrics.upcoming} empty="Nenhum retorno futuro pendente." nameFor={nameFor} upcoming />
+            <DashboardFollowUps followUps={selectedMetrics.upcoming} empty="Nenhum retorno futuro pendente." nameFor={nameFor} upcoming />
           </section>
         </div>
       </DashboardMotionSection>

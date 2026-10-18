@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { getDashboardCardMotionProps, getDashboardLineMotionProps, getDashboardTraceTransition, getPanelMotionProps, getReportsCardMotionProps, getReportsEntryMotionProps, getMotionTransition, MotionPanel, motionTokens, springs } from '../../components/motion-primitives';
+import { getDashboardCardMotionProps, getDashboardLineMotionProps, getDashboardPanelMotionProps, getDashboardTraceTransition, getPanelMotionProps, getReportsCardMotionProps, getReportsEntryMotionProps, getMotionTransition, MotionPanel, motionTokens, springs } from '../../components/motion-primitives';
 import { ReportsMotionCard, ReportsMotionSurface } from '../../components/reports-motion-surface';
 
 describe('shared motion primitives', () => {
@@ -81,6 +81,18 @@ describe('shared motion primitives', () => {
       borderColor: 'rgba(167, 216, 26, 0.28)'
     });
     expect(props.whileTap).toEqual({ scale: motionTokens.scale.cardPress });
+    expect(props.transition).toEqual(springs.gentle);
+  });
+
+  it('keeps dashboard panels on a consistent, size-independent hover lift', () => {
+    const props = getDashboardPanelMotionProps(false);
+
+    expect(props.whileHover).toMatchObject({
+      y: -2,
+      borderColor: 'rgba(167, 216, 26, 0.28)'
+    });
+    expect(props.whileHover).not.toHaveProperty('scale');
+    expect(props).not.toHaveProperty('whileTap');
     expect(props.transition).toEqual(springs.gentle);
   });
 
