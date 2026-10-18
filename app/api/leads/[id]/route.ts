@@ -63,13 +63,24 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
   if (!lead) return Response.json({ error: 'Lead não encontrado.' }, { status: 404 });
 
+  const actorIds = [...new Set(lead.activities.map((activity) => activity.actorId))];
+  const members = actorIds.length ? await prisma.memberProfile.findMany({
+    where: { id: { in: actorIds } },
+    select: { id: true, name: true }
+  }) : [];
+  const actorNames = new Map(members.map((member) => [member.id, member.name]));
+
   return Response.json({
     lead: {
       ...lead,
       saleValue: lead.saleValue?.toString() ?? null,
       mrr: lead.mrr?.toString() ?? null,
       meetingAt: lead.meetingAt?.toISOString() ?? null,
-      activities: lead.activities.map((activity) => ({ ...activity, createdAt: activity.createdAt.toISOString() })),
+      activities: lead.activities.map((activity) => ({
+        ...activity,
+        actorName: actorNames.get(activity.actorId) ?? null,
+        createdAt: activity.createdAt.toISOString()
+      })),
       followUps: lead.followUps.map((followUp) => ({ ...followUp, dueDate: followUp.dueDate.toISOString() })),
       detailsLoaded: true
     }

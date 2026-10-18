@@ -357,6 +357,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
           <ol className="grid max-h-60 gap-3 overflow-y-auto rounded-xl border border-white/[0.09] bg-black/10 p-4 text-sm text-white/70" aria-label="Histórico de atividades">
             {lead.activities.map((activity) => <li key={activity.id} className="rounded-md border border-white/10 p-2">
               <div className="flex flex-wrap gap-x-2 text-xs text-white/55"><strong className="text-white/80">{activityLabels[activity.type] ?? activity.type}</strong>{activity.channel ? <span>{channelLabels[activity.channel] ?? activity.channel}</span> : null}<time dateTime={activity.createdAt}>{dateTimeLabel(activity.createdAt)}</time></div>
+              <p className="mt-1 break-words text-xs text-white/55">{activity.actorName ?? 'Membro da equipe'}</p>
               <p className="mt-1 break-words">{formatReportNote(activity.note)}</p>
             </li>)}
           </ol>

@@ -33,7 +33,7 @@ export type CrmLead = {
   followUpOriginStage?: LeadStage | null;
   saleValue: string | null;
   mrr: string | null;
-  activities: { id: string; type: string; actorId: string; note: string; channel: string | null; createdAt: string }[];
+  activities: { id: string; type: string; actorId: string; actorName?: string | null; note: string; channel: string | null; createdAt: string }[];
   followUps: { id: string; dueDate: string; state: string; returnStage?: LeadStage | null }[];
   detailsLoaded?: boolean;
 };

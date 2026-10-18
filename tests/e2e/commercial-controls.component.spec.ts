@@ -28,6 +28,11 @@ test.beforeAll(async () => {
       if (mode === 'won') Object.assign(lead, { stage: 'WON', saleValue: '699.90', mrr: '199.90' });
       if (mode === 'pending') Object.assign(lead, { stage: 'FOLLOW_UP', followUps: [{ id: 'pending', state: 'PENDING', dueDate: '2027-01-10T15:30:00.000Z' }] });
       if (mode === 'reversed') Object.assign(lead, { activities: [{ id: 'reversal', type: 'SALE_REVERSED', actorId: 'member', channel: null, createdAt: '2026-10-05T15:30:00.000Z', note: 'Negócio reaberto para CONTACTED; venda revertida.' }] });
+      if (mode === 'authors') Object.assign(lead, { activities: [
+        { id: 'known-author', type: 'CONTACT', actorId: 'ana', actorName: 'Ana da equipe', channel: 'PHONE', createdAt: '2026-10-05T15:30:00.000Z', note: 'Contato com autor.' },
+        { id: 'missing-author', type: 'CONTACT', actorId: 'missing', actorName: null, channel: null, createdAt: '2026-10-04T15:30:00.000Z', note: 'Contato sem perfil.' },
+        { id: 'legacy-author', type: 'CONTACT', actorId: 'legacy', channel: null, createdAt: '2026-10-03T15:30:00.000Z', note: 'Contato legado.' }
+      ] });
       function App() {
         const [open, setOpen] = React.useState(false);
         const [result, setResult] = React.useState('');
@@ -78,6 +83,18 @@ async function openComponents(page: Page, mode = '') {
 }
 
 for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`timeline identifies activity authors and missing profiles on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openComponents(page, 'authors');
+    await page.getByRole('button', { name: 'Abrir lead' }).click();
+    const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
+    await modal.getByRole('button', { name: 'Histórico', exact: true }).click();
+    const timeline = modal.getByRole('list', { name: 'Histórico de atividades' });
+    await expect(timeline.getByRole('listitem').filter({ hasText: 'Contato com autor.' })).toContainText('Ana da equipe');
+    await expect(timeline.getByRole('listitem').filter({ hasText: 'Contato sem perfil.' })).toContainText('Membro da equipe');
+    await expect(timeline.getByRole('listitem').filter({ hasText: 'Contato legado.' })).toContainText('Membro da equipe');
+  });
+
   test(`follow-up interval boundary prevents unusable scheduling on ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     const saved: number[] = [];

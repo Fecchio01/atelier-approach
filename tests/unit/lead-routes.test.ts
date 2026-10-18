@@ -4,9 +4,43 @@ const mocks = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
 
 vi.mock('../../lib/auth', () => ({ getCurrentUser: mocks.getCurrentUser }));
 
-import { DELETE, PATCH } from '../../app/api/leads/[id]/route';
+import { DELETE, GET, PATCH } from '../../app/api/leads/[id]/route';
 import { POST } from '../../app/api/leads/route';
 import { prisma } from '../../lib/db';
+
+describe('activity author response contract without database', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  test('serializes resolved names and null for missing profiles using only public profile fields', async () => {
+    mocks.getCurrentUser.mockResolvedValue({ id: 'internal-equipe' });
+    const createdAt = new Date('2026-10-18T12:00:00.000Z');
+    const activity = { leadId: 'lead', type: 'CONTACT', channel: null, note: 'Contato.', createdAt };
+    vi.spyOn(prisma.lead, 'findUnique').mockResolvedValue({
+      id: 'lead', osmId: 'node/authors', name: null, phone: null, website: null, instagram: null,
+      whatsapp: null, address: null, category: null, latitude: null, longitude: null, syncedAt: null,
+      stage: 'CONTACTED', stageEnteredAt: createdAt, meetingAt: null, postFollowUpAt: null,
+      discardedAt: null, saleValue: null, mrr: null, wonAt: null, wonById: null,
+      activities: [
+        { ...activity, id: 'known', actorId: 'ana' },
+        { ...activity, id: 'repeat', actorId: 'ana' },
+        { ...activity, id: 'unknown', actorId: 'missing' }
+      ], followUps: []
+    } as never);
+    const profiles = vi.spyOn(prisma.memberProfile, 'findMany').mockResolvedValue([
+      { id: 'ana', name: 'Ana da equipe', email: 'private@example.com', avatarUrl: '/private-avatar.png', createdAt, updatedAt: createdAt }
+    ]);
+    const response = await GET(new Request('http://localhost/api/leads/lead'), { params: Promise.resolve({ id: 'lead' }) });
+    expect(response.status).toBe(200);
+    const { lead } = await response.json();
+    expect(lead.activities).toEqual([
+      { ...activity, id: 'known', actorId: 'ana', actorName: 'Ana da equipe', createdAt: '2026-10-18T12:00:00.000Z' },
+      { ...activity, id: 'repeat', actorId: 'ana', actorName: 'Ana da equipe', createdAt: '2026-10-18T12:00:00.000Z' },
+      { ...activity, id: 'unknown', actorId: 'missing', actorName: null, createdAt: '2026-10-18T12:00:00.000Z' }
+    ]);
+    expect(profiles).toHaveBeenCalledExactlyOnceWith({ where: { id: { in: ['ana', 'missing'] } }, select: { id: true, name: true } });
+    expect(JSON.stringify(lead.activities)).not.toMatch(/email|avatarUrl|private@example.com|private-avatar/);
+  });
+});
 
 async function stageBody(id: string, data: Record<string, unknown>) {
   if (!Object.prototype.hasOwnProperty.call(data, 'stage')) return JSON.stringify(data);
@@ -20,6 +54,34 @@ describe('lead routes', () => {
     await prisma.activity.deleteMany();
     await prisma.followUp.deleteMany();
     await prisma.lead.deleteMany();
+  });
+
+  test('resolves activity authors from member profiles without exposing private fields', async () => {
+    const member = await prisma.memberProfile.create({ data: {
+      id: 'activity-author', name: 'Ana da equipe', email: 'activity-author@example.com', avatarUrl: '/private-avatar.png'
+    } });
+    try {
+      const lead = await prisma.lead.create({ data: { osmId: 'node/activity-authors' } });
+      await prisma.activity.createMany({ data: [
+        { leadId: lead.id, actorId: member.id, note: 'Contato com autor.' },
+        { leadId: lead.id, actorId: 'missing-profile', note: 'Contato sem perfil.' }
+      ] });
+      const response = await GET(new Request(`http://localhost/api/leads/${lead.id}`), { params: Promise.resolve({ id: lead.id }) });
+      expect(response.status).toBe(200);
+      const { lead: detail } = await response.json();
+      expect(detail.activities).toEqual(expect.arrayContaining([
+        expect.objectContaining({ actorId: member.id, actorName: 'Ana da equipe' }),
+        expect.objectContaining({ actorId: 'missing-profile', actorName: null })
+      ]));
+      for (const activity of detail.activities) {
+        expect(activity).not.toHaveProperty('email');
+        expect(activity).not.toHaveProperty('avatarUrl');
+        expect(JSON.stringify(activity)).not.toContain(member.email);
+        expect(JSON.stringify(activity)).not.toContain(member.avatarUrl);
+      }
+    } finally {
+      await prisma.memberProfile.delete({ where: { id: member.id } });
+    }
   });
 
   test('accepts only one of two concurrent transitions from the same expected state', async () => {
