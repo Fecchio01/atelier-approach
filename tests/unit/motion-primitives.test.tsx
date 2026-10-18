@@ -84,16 +84,8 @@ describe('shared motion primitives', () => {
     expect(props.transition).toEqual(springs.gentle);
   });
 
-  it('keeps dashboard panels on a consistent, size-independent hover lift', () => {
-    const props = getDashboardPanelMotionProps(false);
-
-    expect(props.whileHover).toMatchObject({
-      y: -2,
-      borderColor: 'rgba(167, 216, 26, 0.28)'
-    });
-    expect(props.whileHover).not.toHaveProperty('scale');
-    expect(props).not.toHaveProperty('whileTap');
-    expect(props.transition).toEqual(springs.gentle);
+  it('keeps dashboard panels on the same hover animation as the original dashboard cards', () => {
+    expect(getDashboardPanelMotionProps(false)).toEqual(getDashboardCardMotionProps(false));
   });
 
   it('keeps dashboard cards and chart line static when reduced motion is preferred', () => {

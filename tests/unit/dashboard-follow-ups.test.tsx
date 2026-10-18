@@ -32,6 +32,7 @@ describe('DashboardFollowUps', () => {
     expect(html).toContain('Ver mais 2 empresas');
     expect(html).toContain('href="/crm?lead=lead-4"');
     expect(html).toContain('href="/crm?lead=lead-5"');
+    expect(html).toContain('group-hover:text-white');
   });
 
   test('shows the provided empty state when there are no follow-ups', () => {

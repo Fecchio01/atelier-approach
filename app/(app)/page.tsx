@@ -229,7 +229,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       <DashboardTrendChart data={dashboardTrend} periodLabel={periodLabel} />
     </div>
 
-    <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
+    <div className="mt-6 grid items-stretch gap-4 xl:grid-cols-2">
       <DashboardMotionSection className="rounded-xl border border-white/[0.08] bg-[var(--atelier-surface)] p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">

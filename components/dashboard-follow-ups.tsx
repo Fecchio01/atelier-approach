@@ -26,7 +26,7 @@ export function DashboardFollowUps({ followUps, empty, nameFor, overdue = false,
         <strong className="block truncate font-medium text-white">{companyName}</strong>
         <span className="mt-1 block text-xs text-white/55">{nameFor(followUp.ownerId)} · {overdue ? `Vencido em ${shortDate(followUp.dueDate)}` : upcoming ? `Retorno em ${shortDate(followUp.dueDate)}` : 'Retorno previsto para hoje'}</span>
       </span>
-      <ArrowRightIcon className="mt-2 shrink-0 text-white/35" size={15} aria-hidden="true" />
+      <ArrowRightIcon className="mt-2 shrink-0 text-white/35 transition-colors group-hover:text-white group-focus-visible:text-white" size={15} aria-hidden="true" />
     </>;
 
     return <li key={followUp.id ?? `${followUp.lead?.id}-${followUp.dueDate.toISOString()}`} className="text-sm">
