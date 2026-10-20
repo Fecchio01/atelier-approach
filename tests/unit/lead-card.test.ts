@@ -99,13 +99,14 @@ test('does not offer an unvalidated opaque WhatsApp short link', () => {
 test('shows the official page where a published WhatsApp link was found', () => {
   const business: ExternalBusiness = {
     osmId: 'overture/wa-source', name: 'Oficina Fonte', category: 'automotive_repair',
-    source: 'Overture', phone: null, website: 'https://oficina-fonte.example', instagram: null,
+    source: 'Overture', phone: '+55 19 3203-5110', website: 'https://oficina-fonte.example', instagram: null,
     whatsapp: 'https://wa.me/551932035110', whatsappSourceUrl: 'https://oficina-fonte.example/contato'
   };
   const html = renderToStaticMarkup(React.createElement(LeadCard, { business, result: scoreBusiness(business) }));
 
   expect(html).toContain('href="https://oficina-fonte.example/contato"');
   expect(html).toContain('Ver página fonte');
+  expect(html).not.toContain('Testar no WhatsApp (não confirmado)');
 });
 
 test('does not reinterpret digits in an explicit WhatsApp URL as a different phone number', () => {
@@ -120,20 +121,28 @@ test('does not reinterpret digits in an explicit WhatsApp URL as a different pho
   expect(html).not.toContain('href="https://wa.me/55119990001115511888777666123"');
 });
 
-test('preserves a published phone without inventing WhatsApp and rejects an Instagram post URL', () => {
+test('offers a published phone as an unverified WhatsApp test and rejects an Instagram post URL', () => {
   const phoneAsWhatsApp: ExternalBusiness = {
     osmId: 'overture/plain-phone', name: 'Oficina Telefone', category: null,
     source: 'Overture', phone: '+55 11 99999-8888', website: null, instagram: null, whatsapp: null
   };
   const phoneMarkup = renderToStaticMarkup(React.createElement(LeadCard, { business: phoneAsWhatsApp, result: scoreBusiness(phoneAsWhatsApp) }));
-  expect(phoneMarkup).not.toContain('href="https://wa.me/');
+  expect(phoneMarkup).toContain('href="https://wa.me/5511999998888"');
+  expect(phoneMarkup).toContain('Testar no WhatsApp (não confirmado)');
+  expect(phoneMarkup).toContain('Telefone publicado');
+  expect(phoneMarkup).not.toContain('WhatsApp publicado');
   expect(phoneMarkup).toContain('href="tel:+5511999998888"');
   expect(phoneMarkup).toContain('WhatsApp não confirmado');
 
   const landline: ExternalBusiness = { ...phoneAsWhatsApp, phone: '+55 11 3333-4444' };
   const landlineMarkup = renderToStaticMarkup(React.createElement(LeadCard, { business: landline, result: scoreBusiness(landline) }));
-  expect(landlineMarkup).not.toContain('href="https://wa.me/551133334444"');
+  expect(landlineMarkup).toContain('href="https://wa.me/551133334444"');
   expect(landlineMarkup).toContain('>+55 11 3333-4444</a>');
+
+  const noPhone: ExternalBusiness = { ...phoneAsWhatsApp, phone: null };
+  const noPhoneMarkup = renderToStaticMarkup(React.createElement(LeadCard, { business: noPhone, result: scoreBusiness(noPhone) }));
+  expect(noPhoneMarkup).not.toContain('Testar no WhatsApp (não confirmado)');
+  expect(noPhoneMarkup).not.toContain('href="https://wa.me/');
 
   const invalidInstagram: ExternalBusiness = {
     osmId: 'overture/instagram-post', name: 'Oficina Instagram', category: null,

@@ -36,6 +36,7 @@ export function LeadCard({ business, result, onApproached, onDiscard }: LeadCard
   const [isDiscarding, setIsDiscarding] = useState(false);
   const whatsappHref = toWhatsAppHref(business.whatsapp);
   const publishedPhone = normalizePublishedPhone(business.phone);
+  const phoneWhatsAppTestHref = !whatsappHref ? toWhatsAppHref(publishedPhone) : null;
   const instagramHref = toInstagramHref(business.instagram);
   const websiteHref = toWebsiteHref(business.website);
   const googleMapsHref = googleMapsSearchUrl({ name: business.name, address: business.address, category: business.category, latitude: business.latitude, longitude: business.longitude });
@@ -117,6 +118,7 @@ export function LeadCard({ business, result, onApproached, onDiscard }: LeadCard
       {whatsappHref || business.phone || instagramHref || websiteHref || googleMapsHref ? (
         <div className="flex flex-wrap gap-2">
           {whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label={`Abrir WhatsApp de ${business.name}`} className="rounded-lg bg-[var(--atelier-green)] px-3 py-2 text-sm font-semibold text-black">Abrir WhatsApp</a> : null}
+          {phoneWhatsAppTestHref ? <a href={phoneWhatsAppTestHref} target="_blank" rel="noreferrer" aria-label={`Testar no WhatsApp para ${business.name} (não confirmado)`} className="rounded-lg border border-[var(--atelier-green)]/60 px-3 py-2 text-sm font-semibold text-[var(--atelier-green)]">Testar no WhatsApp (não confirmado)</a> : null}
           {publishedPhone ? <a href={`tel:${publishedPhone}`} aria-label={`Ligar para ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Ligar</a> : null}
           {instagramHref ? <a href={instagramHref} target="_blank" rel="noreferrer" aria-label={`Abrir Instagram de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Instagram</a> : null}
           {websiteHref ? <a href={websiteHref} target="_blank" rel="noreferrer" aria-label={`Abrir site de ${business.name}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold">Site</a> : null}
