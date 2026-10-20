@@ -144,7 +144,21 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
         return false;
       }
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível atualizar o lead.');
-      onUpdated(payload.lead?.stage);
+      let updatedStage = payload.lead?.stage;
+      if (details.followUpAction) {
+        try {
+          const freshResponse = await fetch(`/api/leads/${encodeURIComponent(id)}`, { cache: 'no-store' });
+          const freshPayload = await freshResponse.json() as { error?: string; lead?: CrmLead };
+          if (!freshResponse.ok || !freshPayload.lead) throw new Error('DETAIL_RELOAD_FAILED');
+          setLead(freshPayload.lead);
+          updatedStage = normalizeFunnelStage(freshPayload.lead.stage);
+        } catch {
+          // The PATCH already succeeded. Keep that success and explain only
+          // that the updated follow-up details need to be reopened.
+          setError('A alteração foi salva, mas não foi possível atualizar os detalhes. Feche e abra a empresa novamente.');
+        }
+      }
+      onUpdated(updatedStage);
       return true;
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Não foi possível atualizar o lead.');

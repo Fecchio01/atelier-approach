@@ -345,8 +345,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (followUpAction && followUpId) {
       const followUp = await tx.followUp.findFirst({ where: { id: followUpId, leadId: id } });
       if (!followUp) throw new Error('FOLLOW_UP_NOT_FOUND');
-      if (followUp.state !== FollowUpState.PENDING) throw new Error('FOLLOW_UP_NOT_PENDING');
-      if (followUpAction === 'COMPLETE') {
+      // Mobile clients can retry after a slow connection even when the first
+      // completion was committed. Treat that retry as success without writing
+      // another activity or moving the lead a second time.
+      if (followUpAction === 'COMPLETE' && followUp.state === FollowUpState.COMPLETED) {
+        // No-op: `updated` already contains the current lead from this transaction.
+      } else if (followUp.state !== FollowUpState.PENDING) {
+        throw new Error('FOLLOW_UP_NOT_PENDING');
+      } else if (followUpAction === 'COMPLETE') {
         await tx.followUp.update({ where: { id: followUpId }, data: { state: 'COMPLETED', completedAt: now, completedById: user.id } });
         const returnStage = followUp.returnStage;
         const restoredStage = returnStage ?? lead.stage;
