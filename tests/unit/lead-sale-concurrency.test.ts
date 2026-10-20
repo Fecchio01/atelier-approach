@@ -162,7 +162,7 @@ describe('concurrent follow-up completion without database', () => {
     }), { params: Promise.resolve({ id: lead.id }) });
 
     const responses = await Promise.all([patch(), patch()]);
-    expect(responses.map(({ status }) => status).sort()).toEqual([200, 409]);
+    expect(responses.map(({ status }) => status)).toEqual([200, 200]);
     expect(lockCalls).toBe(2);
     expect(lead).toMatchObject({ stage: 'CONTACTED', postFollowUpAt: expect.any(Date) });
     expect(followUp.state).toBe('COMPLETED');

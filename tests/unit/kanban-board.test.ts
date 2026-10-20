@@ -12,15 +12,12 @@ test('offers a confirmed return-to-research action that deletes the CRM record',
   expect(source).toContain('onDeleted(id);');
 });
 
-test('keeps the mobile funnel inside a bounded vertical scrollport', () => {
-  const source = readFileSync(resolve(process.cwd(), 'components/kanban-board.tsx'), 'utf8');
-  const verticalScrollport = source.match(/<section data-testid="crm-main-funnel-scrollport"[^>]*className="([^"]+)"/);
-  const horizontalScrollport = source.match(/<div ref=\{funnelScrollRef\} role="region" aria-label="Funil CRM"[\s\S]*?className="([^"]+)"/);
+test('keeps the company detail card vertically scrollable on mobile', () => {
+  const source = readFileSync(resolve(process.cwd(), 'components/lead-detail-modal.tsx'), 'utf8');
 
-  expect(verticalScrollport?.[1]).toContain('h-[min(68vh,42rem)]');
-  expect(verticalScrollport?.[1]).toContain('md:h-auto');
-  expect(horizontalScrollport?.[1]).toContain('overflow-x-auto');
-  expect(horizontalScrollport?.[1]).toContain('overflow-y-hidden');
+  expect(source).toContain('data-testid="lead-modal-surface"');
+  expect(source).toContain('min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain');
+  expect(source).toContain("WebkitOverflowScrolling: 'touch'");
 });
 
 test('checks for shared funnel changes while the page is visible', () => {

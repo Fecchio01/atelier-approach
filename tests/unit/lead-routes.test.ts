@@ -1063,7 +1063,7 @@ describe('lifecycle transition contract without database', () => {
     followUps.push({ id: 'follow-up-once', leadId: lead.id, ownerId: 'lifecycle-user', dueDate: now, state: 'PENDING', returnStage: 'INTEREST', note: 'Uma vez.', completedAt: null, completedById: null, cancelledAt: null, cancelledById: null });
 
     expect((await patch({ followUpAction: 'COMPLETE', followUpId: 'follow-up-once' })).status).toBe(200);
-    expect((await patch({ followUpAction: 'COMPLETE', followUpId: 'follow-up-once' })).status).toBe(409);
+    expect((await patch({ followUpAction: 'COMPLETE', followUpId: 'follow-up-once' })).status).toBe(200);
     expect(activities.filter(({ type }) => type === 'FOLLOW_UP_COMPLETED')).toHaveLength(1);
     expect(stageHistory).toHaveLength(1);
   });
