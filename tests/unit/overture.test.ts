@@ -179,6 +179,36 @@ describe('Overture automotive places', () => {
     });
   });
 
+  test('rejects punctuation-only category labels and names that merely repeat the provider category', () => {
+    const businesses = normalizeOverturePlaces([
+      { id: 'punctuation', name: 'Cafeteria!', category: 'cafe' },
+      { id: 'category', name: 'Coffee Roaster', category: 'coffee_roaster' },
+      { id: 'brand', name: 'Cafeteria da Praça', category: 'cafe', phone: null }
+    ], { niche: '', businessName: 'c' });
+
+    expect(businesses.map(({ name, phone }) => ({ name, phone }))).toEqual([
+      { name: 'Cafeteria da Praça', phone: null }
+    ]);
+  });
+
+  test('uses an explicit brand when the provider primary name is only a category label', () => {
+    const businesses = normalizeOverturePlaces([
+      { id: 'branded', name: 'Cafeteria', brand_name: 'Café Aurora', category: 'cafe', phone: null }
+    ], { niche: 'cafeteria' });
+
+    expect(businesses).toEqual([expect.objectContaining({ name: 'Café Aurora', phone: null })]);
+  });
+
+  test('does not treat a hospital as a café just because its name includes the niche', () => {
+    const businesses = normalizeOverturePlaces([
+      { id: 'hospital', name: 'Hospital Cafeteria Esperança', category: 'hospital' },
+      { id: 'cafe', name: 'Cafeteria do Hospital', category: 'cafe' },
+      { id: 'broad', name: 'Cafeteria Aurora', category: 'business' }
+    ], { niche: 'cafeteria' });
+
+    expect(businesses.map(({ name }) => name)).toEqual(['Cafeteria do Hospital', 'Cafeteria Aurora']);
+  });
+
   test('keeps city and region in the address used for identifying the business', () => {
     const businesses = normalizeOverturePlaces([{
       id: 'address-1', name: 'Oficina Central', category: 'automotive_repair',
@@ -311,6 +341,19 @@ describe('Overture automotive places', () => {
       phone: '+5524999999999',
       source: 'OpenStreetMap + Overture'
     });
+  });
+
+  test.each(['hospital', null, 'business'])('does not assign a nearby café identity without corroborating category (%s)', (category) => {
+    const merged = mergeBusinessSources([
+      { osmId: 'way/hospital', name: 'Nome comercial não informado', phone: null, website: null, instagram: null, latitude: -22.5010482, longitude: -44.0736817, category, source: 'OpenStreetMap' }
+    ], [
+      { osmId: 'overture/cafe', name: 'Café Aurora', phone: '+5524999999999', website: null, instagram: null, latitude: -22.50105, longitude: -44.07368, category: 'cafe', source: 'Overture' }
+    ]);
+
+    expect(merged).toEqual([
+      expect.objectContaining({ osmId: 'way/hospital', name: 'Nome comercial não informado', phone: null }),
+      expect.objectContaining({ osmId: 'overture/cafe', name: 'Café Aurora', phone: '+5524999999999' })
+    ]);
   });
 
   test.skipIf(process.env.RUN_OVERTURE_LIVE !== '1')('queries real Overture places around the shared Volta Redonda map location', async () => {

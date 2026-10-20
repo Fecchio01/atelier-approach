@@ -22,8 +22,13 @@ describe('googleMapsSearchUrl', () => {
       .toBe('https://www.google.com/maps/search/?api=1&query=HR%20Car%20Wash%2C%20Rua%20das%20Flores%2C%20Campinas%2C%20Brasil');
   });
 
-  test('uses coordinates only when no business address is available', () => {
+  test('retains the business identity when there is no street address', () => {
     expect(googleMapsSearchUrl({ name: 'HR Car Wash', latitude: -22.901, longitude: -47.061 }))
+      .toBe('https://www.google.com/maps/search/?api=1&query=HR%20Car%20Wash%2C%20Brasil');
+  });
+
+  test('uses a coordinate pin only when neither a name nor address exists', () => {
+    expect(googleMapsSearchUrl({ name: 'Nome comercial não informado', latitude: -22.901, longitude: -47.061 }))
       .toBe('https://www.google.com/maps/search/?api=1&query=-22.901%2C-47.061');
   });
 

@@ -898,7 +898,7 @@ function businessName(tags: Record<string, string | undefined> | undefined) {
 }
 
 export function isGenericBusinessName(value: string) {
-  const normalized = normalizeText(value).replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const normalized = normalizeText(value).replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
   return GENERIC_BUSINESS_NAMES.has(normalized);
 }
 

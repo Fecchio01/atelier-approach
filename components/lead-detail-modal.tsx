@@ -6,6 +6,7 @@ import { ArrowSquareOutIcon, GlobeIcon, InstagramLogoIcon, MapPinIcon, PhoneIcon
 import { mainFunnelStages, normalizeFunnelStage, stageLabels, type FunnelStage } from '@/lib/funnel';
 import type { CrmLead } from './kanban-board';
 import { googleMapsSearchUrl } from '@/lib/google-maps-url';
+import { normalizePublishedPhone, toWhatsAppHref } from '@/lib/contact-links';
 
 import { displayCompanyName } from '@/lib/display-name';
 import { getBusinessNicheLabel } from '@/lib/business-category';
@@ -261,6 +262,8 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
         {activeTab === 'CONTACT' ? <section className="grid gap-5 pb-1">
           <div className="grid gap-5 sm:grid-cols-[74px_minmax(0,1fr)] sm:items-center"><div className="grid h-[74px] w-[74px] place-items-center rounded-full border border-white/15 bg-white/[0.035]" aria-hidden="true"><StorefrontIcon size={35} weight="regular" className="text-white/70" /></div><div className="min-w-0"><h3 className="text-base font-semibold text-white/90">Detalhes da empresa</h3><p className="mt-1 text-xs font-medium text-white/40">Nicho</p><p className="text-sm text-white/65">{getBusinessNicheLabel(lead.category)}</p>{lead.address ? <p className="mt-2 break-words text-sm text-white/65">{lead.address}</p> : null}</div></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{contactLinks(lead).map(({ label, href }) => <a key={label} href={href} target={label === 'Ligar' ? undefined : '_blank'} rel="noreferrer" className="group flex min-h-14 items-center gap-3 rounded-lg border border-white/[0.10] bg-white/[0.025] px-3 text-sm font-semibold text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,.04)] hover:border-[var(--atelier-green)]/45 hover:bg-white/[0.05]"><ContactActionIcon label={label} /><span className="min-w-0 flex-1">{label}</span><ArrowSquareOutIcon aria-hidden="true" size={17} weight="regular" className="text-white/35 transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] group-hover:-translate-y-px group-hover:text-white/75" /></a>)}</div>
+          {lead.phone ? <p className="break-words text-sm text-white/65">Telefone publicado: {lead.phone}</p> : null}
+          {lead.phone || lead.whatsapp ? <p className="text-xs text-white/50">{toWhatsAppHref(lead.whatsapp) ? 'WhatsApp publicado; funcionamento não confirmado' : 'WhatsApp não confirmado'}</p> : null}
           <div className="grid gap-3 border-t border-white/[0.09] pt-5">
             <h3 className="text-sm font-semibold text-white/80">Etapa e retorno</h3>
             <div className={`grid min-w-0 gap-4 ${showFollowUpCard ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
@@ -413,13 +416,10 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
 
 function contactLinks(lead: CrmLead) {
   const links: { label: string; href: string }[] = [];
-  const whatsapp = lead.whatsapp;
-  if (whatsapp) {
-    const digits = whatsapp.replace(/\D/g, '');
-    if (/^https:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(whatsapp)) links.push({ label: 'WhatsApp', href: whatsapp });
-    else if (digits.length >= 10) links.push({ label: 'WhatsApp', href: `https://wa.me/${digits.length <= 11 ? '55' : ''}${digits}` });
-  }
-  if (lead.phone) links.push({ label: 'Ligar', href: `tel:${lead.phone.replace(/[^\d+]/g, '')}` });
+  const whatsappHref = toWhatsAppHref(lead.whatsapp);
+  if (whatsappHref) links.push({ label: 'WhatsApp publicado', href: whatsappHref });
+  const phone = normalizePublishedPhone(lead.phone);
+  if (phone) links.push({ label: 'Ligar', href: `tel:${phone}` });
   if (lead.instagram) {
     const handle = lead.instagram.trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^(www\.)?instagram\.com\//i, '').replace(/^@/, '').split(/[/?#]/)[0];
     if (/^[\w.]+$/.test(handle)) links.push({ label: 'Instagram', href: `https://www.instagram.com/${handle}/` });
@@ -437,7 +437,7 @@ function contactLinks(lead: CrmLead) {
 
 function ContactActionIcon({ label }: { label: string }) {
   const shared = { size: 27, weight: 'regular' as const, 'aria-hidden': true };
-  if (label === 'WhatsApp') return <WhatsappLogoIcon {...shared} className="text-[var(--atelier-green)]" />;
+  if (label === 'WhatsApp publicado') return <WhatsappLogoIcon {...shared} className="text-[var(--atelier-green)]" />;
   if (label === 'Ligar') return <PhoneIcon {...shared} className="text-sky-300" />;
   if (label === 'Instagram') return <InstagramLogoIcon {...shared} className="text-rose-400" />;
   if (label === 'Google Maps') return <MapPinIcon {...shared} className="text-amber-300" />;

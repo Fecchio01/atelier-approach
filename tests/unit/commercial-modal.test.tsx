@@ -30,6 +30,25 @@ function render(overrides: Partial<CrmLead> & { meetingAt?: string | null } = {}
 }
 
 describe('commercial lead controls', () => {
+  it('never extracts a different WhatsApp number from a short link query', () => {
+    const html = render({ whatsapp: 'http://wa.link/dead123?text=5511999999999', phone: '+55 11 99999-8888' });
+    expect(html).not.toContain('href="https://wa.me/');
+    expect(html).toContain('href="tel:+5511999998888"');
+  });
+
+  it('uses an explicitly published WhatsApp number without claiming registration was tested', () => {
+    const html = render({ whatsapp: '+55 11 99999-8888' });
+    expect(html).toContain('href="https://wa.me/5511999998888"');
+    expect(html).toContain('WhatsApp publicado');
+  });
+
+  it('keeps the source telephone visible when it contains multiple unnormalized numbers', () => {
+    const html = render({ phone: '+55 11 3333-0000 / +55 11 99999-8888' });
+    expect(html).toContain('+55 11 3333-0000 / +55 11 99999-8888');
+    expect(html).not.toContain('href="tel:');
+    expect(html).toContain('WhatsApp não confirmado');
+  });
+
   it('keeps the initial contact section focused on contact and offers a separate sales tab', () => {
     const html = render();
     expect(html).toContain('Venda');

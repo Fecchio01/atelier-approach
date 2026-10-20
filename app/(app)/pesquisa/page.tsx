@@ -75,10 +75,11 @@ export default function PesquisaPage() {
     };
   }, [isRestored]);
 
-  function handleApproached(osmId: string) {
+  function handleApproached(osmId: string, crmHref: string) {
     sessionStorage.setItem(SEARCH_SCROLL_KEY, String(window.scrollY));
-    if (savedSearch) savedSearch.businesses = savedSearch.businesses.filter((business) => business.osmId !== osmId);
-    setBusinesses((previous) => previous.filter((business) => business.osmId !== osmId));
+    const markWorked = (business: ScoredBusiness) => business.osmId === osmId ? { ...business, alreadyWorked: true, crmHref } : business;
+    if (savedSearch) savedSearch.businesses = savedSearch.businesses.map(markWorked);
+    setBusinesses((previous) => previous.map(markWorked));
   }
 
   async function handleDiscard(osmId: string) {
@@ -159,6 +160,8 @@ export default function PesquisaPage() {
     }
   }
 
+  const newProspectCount = businesses.filter((business) => !business.alreadyWorked).length;
+
   return (
     <section className="mx-auto max-w-6xl px-5 py-12 md:px-8">
       <PageHeading eyebrow="Pesquisa de prospecção" title="Encontre novas empresas." description="Empresas identificadas exclusivamente na base Overture e priorizadas pelos canais de contato disponíveis. Empresas já trabalhadas ficam fora da busca padrão." />
@@ -171,7 +174,7 @@ export default function PesquisaPage() {
         {hasSearched && businesses.length === 0 && !hasMore ? <Surface className="p-5 text-white/65"><p>Nenhum novo prospect encontrado para esta busca.</p><p className="mt-1 text-sm text-white/50">Tente pesquisar outro estado ou cidade.</p></Surface> : null}
         {businesses.length ? (
           <>
-            <p className="mb-4 text-sm text-white/65">{businesses.length} prospect{businesses.length === 1 ? '' : 's'} novo{businesses.length === 1 ? '' : 's'}, em ordem de prioridade.</p>
+            <p className="mb-4 text-sm text-white/65">{newProspectCount} prospect{newProspectCount === 1 ? '' : 's'} novo{newProspectCount === 1 ? '' : 's'}, em ordem de prioridade.</p>
             <div className="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-3">
               {businesses.map((business) => (
                 <LeadCard key={business.osmId} business={business} result={business} onApproached={handleApproached} onDiscard={handleDiscard} />

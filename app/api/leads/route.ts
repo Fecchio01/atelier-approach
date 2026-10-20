@@ -2,6 +2,7 @@ import { Channel, Prisma } from '@prisma/client';
 
 import { getCurrentUser } from '../../../lib/auth';
 import { prisma } from '../../../lib/db';
+import { normalizePublishedPhone, toWhatsAppHref } from '../../../lib/contact-links';
 
 type BusinessInput = {
   osmId?: unknown;
@@ -49,10 +50,10 @@ export async function POST(request: Request) {
         data: {
           osmId,
           name,
-          phone: optionalText(business?.phone),
+          phone: normalizePublishedPhone(optionalText(business?.phone)),
           website: optionalText(business?.website),
           instagram: optionalText(business?.instagram),
-          whatsapp: optionalText(business?.whatsapp),
+          whatsapp: toWhatsAppHref(optionalText(business?.whatsapp)),
           address: optionalText(business?.address),
           category: optionalText(business?.category),
           latitude: typeof business?.latitude === 'number' ? business.latitude : null,

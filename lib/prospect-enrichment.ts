@@ -1,3 +1,5 @@
+import { normalizePublishedPhone, toWhatsAppHref } from './contact-links';
+
 const CACHE_TTL_MS = 10 * 60_000;
 const MAX_RESPONSE_BYTES = 1_000_000;
 const EMPTY_FIELDS: EnrichedContactFields = {
@@ -26,15 +28,18 @@ export type EnrichedContactFields = {
   structuredStreetAddress: string | null;
   structuredLocality: string | null;
   structuredRegion: string | null;
+  structuredBusinessTypes?: string[];
 };
 
 const cache = new Map<string, CachedFields>();
 
-export async function enrichFromOfficialWebsite(website: string): Promise<EnrichedContactFields> {
+type BusinessIdentity = Pick<ExternalBusiness, 'name' | 'address' | 'category'>;
+
+export async function enrichFromOfficialWebsite(website: string, expectedBusiness?: BusinessIdentity): Promise<EnrichedContactFields> {
   const normalizedWebsite = safeHttpUrl(website);
   if (!normalizedWebsite) return { ...EMPTY_FIELDS };
 
-  const cacheKey = normalizedWebsite;
+  const cacheKey = JSON.stringify([normalizedWebsite, expectedBusiness?.name ?? '', expectedBusiness?.address ?? '', expectedBusiness?.category ?? '']);
   const cached = cache.get(cacheKey);
   if (cached?.expiresAt && cached.expiresAt > Date.now()) return cached.value;
 
@@ -54,7 +59,7 @@ export async function enrichFromOfficialWebsite(website: string): Promise<Enrich
     }
 
     const html = await readLimitedText(response);
-    return cacheResult(cacheKey, extractFields(html, normalizedWebsite));
+    return cacheResult(cacheKey, extractFields(html, normalizedWebsite, expectedBusiness));
   } catch {
     return cacheResult(cacheKey, { ...EMPTY_FIELDS });
   }
@@ -66,30 +71,33 @@ export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): 
   const enriched = new Map<number, EnrichedContactFields>();
   for (let offset = 0; offset < candidates.length; offset += 10) {
     const chunk = candidates.slice(offset, offset + 10);
-    const results = await Promise.all(chunk.map(({ business }) => enrichFromOfficialWebsite(business.website!)));
+    const results = await Promise.all(chunk.map(({ business }) => enrichFromOfficialWebsite(business.website!, business)));
     chunk.forEach(({ index }, resultIndex) => enriched.set(index, results[resultIndex]));
   }
-  return businesses.map((business, index) => {
+  return businesses.flatMap<ExternalBusiness>((business, index) => {
+    const sourcePhone = normalizePublishedPhone(business.phone) ? business.phone : null;
+    const source = { ...business, phone: sourcePhone, phoneSource: null, whatsapp: toWhatsAppHref(business.whatsapp) };
     const fields = enriched.get(index);
     if (!fields) {
-      return { ...business };
+      return [source];
     }
 
+    // A named physical business on the linked website is stronger evidence
+    // than a stale source association. Never present the two as one company.
+    if (fields.structuredBusinessName && (businessNamesContradict(business.name, fields.structuredBusinessName) || hasBusinessSectorConflict(business, fields))) return [];
     const locationVerified = isBusinessIdentityVerified(business, fields);
     const siteNameVerified = isOfficialWebsiteNameVerified(business, fields);
-    const phoneConflict = Boolean(business.phone && fields.phone && !samePhone(business.phone, fields.phone));
-    const phone = phoneConflict ? null : locationVerified ? fields.phone ?? business.phone : business.phone;
-    const whatsappPhone = fields.whatsapp ? whatsappPhoneNumber(fields.whatsapp) : null;
-    const whatsapp = locationVerified && phone && whatsappPhone && samePhone(phone, whatsappPhone) ? fields.whatsapp : null;
-    return {
-      ...business,
+    const phone = locationVerified ? fields.phone ?? sourcePhone : sourcePhone;
+    const whatsapp = locationVerified ? toWhatsAppHref(fields.whatsapp) : null;
+    return [{
+      ...source,
       website: siteNameVerified ? fields.website : business.website,
       phone,
-      phoneSource: phone ? 'site oficial verificado' as const : null,
+      phoneSource: locationVerified && fields.phone && phone ? 'site oficial verificado' as const : null,
       whatsapp,
       instagram: siteNameVerified ? fields.instagram ?? business.instagram : business.instagram,
       imageUrl: business.imageUrl ?? (siteNameVerified ? fields.imageUrl : undefined)
-    };
+    }];
   });
 }
 
@@ -107,30 +115,55 @@ function isOfficialWebsiteNameVerified(business: ExternalBusiness, fields: Enric
   return businessNamesMatch(business.name, pageName);
 }
 
-function isBusinessIdentityVerified(business: ExternalBusiness, fields: EnrichedContactFields) {
+function isBusinessIdentityVerified(business: BusinessIdentity, fields: EnrichedContactFields) {
   if (!fields.structuredBusinessName || !fields.structuredLocality || !business.address) return false;
-  if (!businessNamesMatch(business.name, fields.structuredBusinessName)) return false;
+  if (!businessNamesMatch(business.name, fields.structuredBusinessName) || hasBusinessSectorConflict(business, fields)) return false;
 
   const addressParts = business.address.split(',').map(normalizeIdentityText).filter(Boolean);
   const pageLocality = normalizeIdentityText(fields.structuredLocality);
-  const pageStreet = normalizeIdentityText(fields.structuredStreetAddress ?? '');
   const localityMatches = addressParts.some((part) => part === pageLocality);
-  const streetMatches = Boolean(pageStreet && addressParts.some((part) => part === pageStreet || part.includes(pageStreet)));
-  if (!localityMatches && !streetMatches) return false;
+  if (!localityMatches) return false;
+
+  const street = (value: string) => normalizeIdentityText(value).replace(/^r\s/, 'rua ').replace(/^av\s/, 'avenida ');
+  const pageStreet = street(fields.structuredStreetAddress ?? '');
+  const sourceStreet = addressParts.find((part) => /^(rua|r|avenida|av|estrada|rodovia|travessa|alameda|praca)\b|\d/.test(part) && !/^\d+$/.test(part));
+  if (pageStreet && sourceStreet && !` ${street(business.address)} `.includes(` ${pageStreet} `)) return false;
 
   if (fields.structuredRegion) {
-    const sourceRegion = addressParts.find((part) => /^[a-z]{2}$/.test(part));
-    if (sourceRegion && normalizeRegion(sourceRegion) !== normalizeRegion(fields.structuredRegion)) return false;
+    const sourceRegion = addressParts.map(normalizeRegion).find((part) => /^(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to)$/.test(part));
+    if (sourceRegion && sourceRegion !== normalizeRegion(fields.structuredRegion)) return false;
   }
   return true;
 }
 
 function businessNamesMatch(businessName: string, officialName: string) {
-  const tokens = (value: string) => normalizeIdentityText(value).split(' ')
-    .filter((token) => token.length > 2 && !/^(oficina|auto|automotiva|automotivo|servicos|servico|empresa|oficial|brasil|ltda|me)$/.test(token));
-  const businessTokens = [...new Set(tokens(businessName))];
-  const officialTokens = new Set(tokens(officialName));
+  if (normalizeIdentityText(businessName) === normalizeIdentityText(officialName)) return true;
+  const businessTokens = [...new Set(businessNameTokens(businessName))];
+  const officialTokens = new Set(businessNameTokens(officialName));
   return businessTokens.length > 0 && businessTokens.every((token) => officialTokens.has(token));
+}
+
+function businessNameTokens(value: string) {
+  return normalizeIdentityText(value).split(' ')
+    .filter((token) => token.length > 1 && !/^(de|do|da|dos|das|em|no|na|com|para|oficina|auto|automotiva|automotivo|automotivos|servicos|servico|empresa|oficial|brasil|ltda|me|sa)$/.test(token));
+}
+
+function businessNamesContradict(first: string, second: string) {
+  return !businessNamesMatch(first, second) && businessNameTokens(first).length > 0 && businessNameTokens(second).length > 0;
+}
+
+function hasBusinessSectorConflict(business: BusinessIdentity, fields: EnrichedContactFields) {
+  const sector = (value: string) => {
+    const text = normalizeIdentityText(value.replace(/([a-z])([A-Z])/g, '$1 $2'));
+    if (/\b(cafe|cafeteria|coffee|restaurant|restaurante|bakery|padaria)\b/.test(text)) return 'food';
+    if (/\b(hospital|medical|health|healthcare|clinic|clinica|dentist|dental|saude)\b/.test(text)) return 'health';
+    if (/\b(auto|automotive|automotivo|automotiva|car|vehicle|oficina|mecanica)\b/.test(text)) return 'automotive';
+    if (/\b(beauty|hair|barber|salon|salao|barbearia)\b/.test(text)) return 'beauty';
+    return null;
+  };
+  const sourceSector = sector(business.category ?? '');
+  const officialSectors = (fields.structuredBusinessTypes ?? []).map(sector).filter(Boolean);
+  return Boolean(sourceSector && officialSectors.length && !officialSectors.includes(sourceSector));
 }
 
 function normalizeIdentityText(value: string) {
@@ -148,25 +181,12 @@ function normalizeRegion(value: string) {
     'rio grande do norte': 'rn', 'rio grande do sul': 'rs', rondonia: 'ro', roraima: 'rr',
     'santa catarina': 'sc', 'sao paulo': 'sp', sergipe: 'se', tocantins: 'to'
   };
-  return regions[normalized] ?? normalized.toUpperCase();
+  return regions[normalized] ?? normalized;
 }
 
 function samePhone(first: string, second: string) {
-  const digits = (value: string) => value.replace(/\D/g, '').replace(/^0+/, '');
-  const firstDigits = digits(first);
-  const secondDigits = digits(second);
-  return Boolean(firstDigits && firstDigits === secondDigits);
-}
-
-function whatsappPhoneNumber(value: string) {
-  try {
-    const url = new URL(value);
-    return url.hostname.toLowerCase() === 'wa.me'
-      ? url.pathname.replace(/\D/g, '') || null
-      : url.searchParams.get('phone')?.replace(/\D/g, '') || null;
-  } catch {
-    return null;
-  }
+  const normalized = normalizePublishedPhone(first);
+  return normalized !== null && normalized === normalizePublishedPhone(second);
 }
 
 function cacheResult(cacheKey: string, value: EnrichedContactFields) {
@@ -198,15 +218,19 @@ async function readLimitedText(response: Response) {
   return new TextDecoder().decode(combined);
 }
 
-function extractFields(html: string, website: string): EnrichedContactFields {
+function extractFields(html: string, website: string, expectedBusiness?: BusinessIdentity): EnrichedContactFields {
   const hrefs = [...html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
-  const structured = extractStructuredData(html);
-  const absoluteLinks = [...hrefs, ...structured.sameAs]
+  const { selected: structured, count: entityCount } = extractStructuredData(html, expectedBusiness);
+  const absoluteLinks = [...(structured?.sameAs ?? []), ...hrefs]
     .map((href) => safeHttpUrl(href, website))
     .filter((href): href is string => Boolean(href));
-  const rawPhone = hrefs.find((href) => href.toLowerCase().startsWith('tel:'));
-  const whatsapp = absoluteLinks.find((href) => /^(https:\/\/wa\.me\/|https:\/\/api\.whatsapp\.com\/)/i.test(href)) ?? null;
-  const instagram = absoluteLinks.find((href) => /^https?:\/\/(www\.)?instagram\.com\//i.test(href)) ?? null;
+  const rawPhone = entityCount > 1 ? null : hrefs.find((href) => href.toLowerCase().startsWith('tel:'));
+  const phone = normalizePublishedPhone(structured?.telephone ?? rawPhone?.slice(4));
+  const ownedLinks = (structured?.sameAs ?? []).map((link) => safeHttpUrl(link, website)).filter((link): link is string => Boolean(link));
+  const whatsapp = absoluteLinks.map(toWhatsAppHref).find((link): link is string => Boolean(link)
+    && (entityCount <= 1 || ownedLinks.some((owned) => toWhatsAppHref(owned) === link) || Boolean(phone && samePhone(phone, new URL(link!).pathname.slice(1))))) ?? null;
+  const socialLinks = entityCount > 1 ? ownedLinks : absoluteLinks;
+  const instagram = socialLinks.find((href) => /^https?:\/\/(www\.)?instagram\.com\//i.test(href)) ?? null;
   const imageUrl = metaContent(html, 'og:image')
     ?? metaContent(html, 'og:image:secure_url')
     ?? metaContent(html, 'twitter:image')
@@ -214,69 +238,85 @@ function extractFields(html: string, website: string): EnrichedContactFields {
 
   return {
     website,
-    name: structured.businessName ?? metaContent(html, 'og:title') ?? metaContent(html, 'og:site_name') ?? metaContent(html, 'twitter:title'),
+    name: structured?.name ?? metaContent(html, 'og:site_name') ?? metaContent(html, 'og:title') ?? metaContent(html, 'twitter:title'),
     whatsapp,
     instagram,
-    phone: rawPhone && structured.telephone && !samePhone(rawPhone.slice(4), structured.telephone)
-      ? null
-      : normalizePhone(rawPhone?.slice(4) ?? structured.telephone),
+    phone,
     imageUrl: safeHttpUrl(imageUrl ?? '', website),
-    structuredBusinessName: structured.name,
-    structuredStreetAddress: structured.streetAddress,
-    structuredLocality: structured.locality,
-    structuredRegion: structured.region
+    structuredBusinessName: structured?.locality
+      && (structured.types.some((type) => type !== 'Organization') || !expectedBusiness || businessNamesMatch(expectedBusiness.name, structured.name))
+      ? structured.name : null,
+    structuredStreetAddress: structured?.streetAddress ?? null,
+    structuredLocality: structured?.locality ?? null,
+    structuredRegion: structured?.region ?? null,
+    ...(structured ? { structuredBusinessTypes: structured.types } : {})
   };
 }
 
-function extractStructuredData(html: string) {
-  const output = {
-    name: null as string | null, businessName: null as string | null,
-    telephone: null as string | null, sameAs: [] as string[],
-    streetAddress: null as string | null, locality: null as string | null, region: null as string | null
-  };
+type StructuredBusiness = {
+  name: string;
+  types: string[];
+  telephone: string | null;
+  sameAs: string[];
+  streetAddress: string | null;
+  locality: string | null;
+  region: string | null;
+};
+
+function extractStructuredData(html: string, expectedBusiness?: BusinessIdentity) {
+  const businesses: StructuredBusiness[] = [];
   const blocks = [...html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
 
   for (const [, rawJson] of blocks) {
     try {
-      visitStructuredData(JSON.parse(rawJson), output);
+      visitStructuredData(JSON.parse(rawJson), businesses);
     } catch {
       // Ignore malformed structured data and continue with the rest of the page.
     }
   }
 
-  return output;
+  if (!expectedBusiness) return { selected: businesses[0] ?? null, count: businesses.length };
+  const matching = businesses.filter((business) => businessNamesMatch(expectedBusiness.name, business.name));
+  const local = matching.filter((business) => isBusinessIdentityVerified(expectedBusiness, {
+    ...EMPTY_FIELDS, structuredBusinessName: business.name, structuredStreetAddress: business.streetAddress,
+    structuredLocality: business.locality, structuredRegion: business.region, structuredBusinessTypes: business.types
+  }));
+  // Several branches/entities require a unique local match. Never assemble
+  // one prospect from the first organization, first phone and every sameAs.
+  const selected = local.length === 1 ? local[0] : matching.length === 1 ? matching[0] : businesses.length === 1 ? businesses[0] : null;
+  return { selected, count: businesses.length };
 }
 
-function visitStructuredData(value: unknown, output: { name: string | null; businessName: string | null; telephone: string | null; sameAs: string[]; streetAddress: string | null; locality: string | null; region: string | null }) {
+function visitStructuredData(value: unknown, businesses: StructuredBusiness[]) {
   if (Array.isArray(value)) {
-    value.forEach((item) => visitStructuredData(item, output));
+    value.forEach((item) => visitStructuredData(item, businesses));
     return;
   }
   if (!value || typeof value !== 'object') return;
 
   const record = value as Record<string, unknown>;
-  const types = Array.isArray(record['@type']) ? record['@type'] : [record['@type']];
-  const businessType = types.some((type) => typeof type === 'string' && /localbusiness|organization|autorepair|autobodyshop|automotivebusiness/i.test(type));
-  if (businessType) {
-    if (!output.businessName && typeof record.name === 'string') output.businessName = record.name.trim() || null;
-    if (!output.telephone && typeof record.telephone === 'string') output.telephone = record.telephone;
-    const address = typeof record.address === 'string' ? { streetAddress: record.address } : record.address;
-    if (!output.name && typeof record.name === 'string' && address && typeof address === 'object' && !Array.isArray(address)) {
-      const postalAddress = address as Record<string, unknown>;
-      const locality = typeof postalAddress.addressLocality === 'string' ? postalAddress.addressLocality.trim() : '';
-      if (locality) {
-        output.name = record.name.trim() || null;
-        output.streetAddress = typeof postalAddress.streetAddress === 'string' ? postalAddress.streetAddress.trim() || null : null;
-        output.locality = locality;
-        output.region = typeof postalAddress.addressRegion === 'string' ? postalAddress.addressRegion.trim() || null : null;
-        output.telephone = typeof record.telephone === 'string' ? record.telephone : null;
-      }
-    }
-    if (Array.isArray(record.sameAs)) output.sameAs.push(...record.sameAs.filter((link): link is string => typeof link === 'string'));
-    else if (typeof record.sameAs === 'string') output.sameAs.push(record.sameAs);
+  const types = (Array.isArray(record['@type']) ? record['@type'] : [record['@type']])
+    .filter((type): type is string => typeof type === 'string').map((type) => type.split('/').pop()!);
+  const address = record.address && typeof record.address === 'object' && !Array.isArray(record.address)
+    ? record.address as Record<string, unknown> : null;
+  const businessType = types.some((type) => typeof type === 'string' && /^(LocalBusiness|Organization|AutoRepair|AutoBodyShop|AutomotiveBusiness|Hospital|MedicalClinic|CafeOrCoffeeShop|Restaurant|Store|HairSalon|BeautySalon|Dentist|Hotel|LodgingBusiness)$/i.test(type));
+  if (businessType && typeof record.name === 'string' && record.name.trim()) {
+    businesses.push({
+      name: record.name.trim(),
+      types,
+      telephone: typeof record.telephone === 'string' ? record.telephone : null,
+      sameAs: Array.isArray(record.sameAs) ? record.sameAs.filter((link): link is string => typeof link === 'string') : typeof record.sameAs === 'string' ? [record.sameAs] : [],
+      streetAddress: typeof address?.streetAddress === 'string' ? address.streetAddress.trim() || null : null,
+      locality: typeof address?.addressLocality === 'string' ? address.addressLocality.trim() || null : null,
+      region: typeof address?.addressRegion === 'string' ? address.addressRegion.trim() || null : null
+    });
   }
 
-  Object.values(record).forEach((item) => visitStructuredData(item, output));
+  Object.entries(record).forEach(([relation, item]) => {
+    // Page authors/publishers are often the web agency, not the prospect.
+    if (['author', 'creator', 'publisher', 'copyrightHolder'].includes(relation)) return;
+    visitStructuredData(item, businesses);
+  });
 }
 
 function metaContent(html: string, property: string) {
@@ -291,6 +331,7 @@ function metaContent(html: string, property: string) {
 }
 
 function safeHttpUrl(value: string, base?: string) {
+  if (!value.trim()) return null;
   try {
     const url = new URL(value, base);
     if (!['http:', 'https:'].includes(url.protocol) || isPrivateHost(url.hostname)) return null;
@@ -305,9 +346,4 @@ function isPrivateHost(hostname: string) {
   return lower === 'localhost' || lower.endsWith('.local') || lower === '::1' || /^127\./.test(lower) || /^10\./.test(lower) || /^192\.168\./.test(lower) || /^169\.254\./.test(lower) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(lower);
 }
 
-function normalizePhone(value: string | null) {
-  if (!value) return null;
-  const compact = value.trim().replace(/[^\d+]/g, '');
-  return compact.length >= 8 ? compact : null;
-}
 import type { ExternalBusiness } from './osm';

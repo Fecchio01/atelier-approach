@@ -37,6 +37,8 @@ const NICHE_TAXONOMY_TERMS: Record<string, string[]> = {
   'clinica odontologica': ['dentist', 'dental', 'dental clinic'],
   dentista: ['dentist', 'dental'],
   academia: ['gym', 'fitness center'],
+  cafeteria: ['cafe', 'coffee shop', 'coffeehouse', 'coffee roaster'],
+  cafe: ['cafe', 'coffee shop', 'coffeehouse', 'coffee roaster'],
   restaurante: ['restaurant'],
   imobiliaria: ['real estate agency', 'real estate'],
   'pet shop': ['pet shop', 'pet store', 'pet supply'],
@@ -156,8 +158,10 @@ export function normalizeOverturePlaces(
 
     const category = stringValue(row.category) || stringValue(row.category_path);
     const categoryHierarchy = stringValue(row.category_hierarchy);
-    const name = stringValue(row.name) ?? stringValue(row.brand_name);
-    if (!name || !isUsefulPlaceName(name)) continue;
+    const name = [stringValue(row.name), stringValue(row.brand_name)].find((candidate) =>
+      candidate && isUsefulPlaceName(candidate) && normalizeIdentityLabel(candidate) !== normalizeIdentityLabel(category ?? '')
+    );
+    if (!name) continue;
     if (!matchesOvertureSearch({ name, category, categoryHierarchy }, criteria)) continue;
     if (!criteria.businessName && isDefaultAutomotiveNiche(criteria.niche)) {
       if (UNRELATED_AUTO_PLACE_PATTERN.test(normalizeText(`${category ?? ''} ${categoryHierarchy ?? ''} ${name}`))) continue;
@@ -268,6 +272,7 @@ export function buildOvertureQuery(
     SELECT
       id,
       coalesce(names.primary, brand.names.primary) AS name,
+      brand.names.primary AS brand_name,
       coalesce(taxonomy.primary, basic_category) AS category,
       array_to_string(taxonomy.hierarchy, ' ') AS category_hierarchy,
       addresses[1].freeform AS address,
@@ -299,6 +304,13 @@ export function matchesOvertureSearch(
 
   if (isDefaultAutomotiveNiche(criteria.niche)) {
     return isTargetAutomotiveService(business.category ?? null, business.categoryHierarchy ?? null, business.name);
+  }
+
+  // A café keyword in a hospital's name does not establish a café business.
+  // Keep unknown/broad classifications and cafés located inside hospitals.
+  if (['cafe', 'cafeteria'].includes(normalizeSearchTerm(criteria.niche))
+    && /^(hospital|medical_center|health_center|healthcare|clinic|medical_clinic)$/.test(normalizeText(business.category ?? ''))) {
+    return false;
   }
 
   const searchableText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''} ${business.name}`);
@@ -335,6 +347,10 @@ function normalizeSearchTerm(value: string) {
   return normalizeText(value).replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function normalizeIdentityLabel(value: string) {
+  return normalizeText(value).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
 function escapeSqlString(value: string) {
   return value.replaceAll("'", "''");
 }
@@ -362,11 +378,24 @@ function sameNamedPlace(first: ExternalBusiness, second: ExternalBusiness) {
   if (typeof first.latitude === 'number' && typeof first.longitude === 'number'
     && typeof second.latitude === 'number' && typeof second.longitude === 'number') {
     const distance = distanceMeters(first.latitude, first.longitude, second.latitude, second.longitude);
-    if (!isUsefulPlaceName(first.name) || !isUsefulPlaceName(second.name)) return distance <= 15;
+    if (!isUsefulPlaceName(first.name) || !isUsefulPlaceName(second.name)) {
+      const firstCategory = mergeCategoryIdentity(first.category);
+      const secondCategory = mergeCategoryIdentity(second.category);
+      return distance <= 15 && Boolean(firstCategory && firstCategory === secondCategory);
+    }
     return firstName === secondName && distance <= 60;
   }
   return isUsefulPlaceName(first.name) && isUsefulPlaceName(second.name) && firstName === secondName
     && Boolean(first.address && second.address && normalizeText(first.address) === normalizeText(second.address));
+}
+
+function mergeCategoryIdentity(category: string | null | undefined) {
+  const normalized = normalizeIdentityLabel(category ?? '');
+  if (!normalized || ['yes', 'no', 'business', 'services', 'commercial'].includes(normalized)) return null;
+  if (['oficina mecanica', 'automotive repair', 'auto repair', 'car repair', 'vehicle repair'].includes(normalized)) {
+    return 'automotive repair';
+  }
+  return normalized;
 }
 
 function isUsefulPlaceName(name: string) {

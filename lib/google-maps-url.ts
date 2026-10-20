@@ -10,15 +10,15 @@ export function googleMapsSearchUrl({ name, address, category, latitude, longitu
   const hasCoordinates = typeof latitude === 'number' && Number.isFinite(latitude)
     && typeof longitude === 'number' && Number.isFinite(longitude);
   const hasBusinessName = Boolean(name?.trim()) && name !== 'Nome comercial não informado' && !/^(yes|no)$/i.test(name!.trim());
-  const searchableName = hasBusinessName ? name : null;
+  const searchableName = hasBusinessName ? name!.trim() : null;
   const addressParts = address?.split(',').map((part) => part.trim()).filter(Boolean) ?? [];
   if (searchableName && addressParts[0]?.localeCompare(searchableName, 'pt-BR', { sensitivity: 'base' }) === 0) addressParts.shift();
-  const query = searchableName && addressParts.length
+  const query = searchableName
     ? [searchableName, addressParts.join(', '), 'Brasil'].filter(Boolean).join(', ')
     : addressParts.length
       ? [...addressParts, 'Brasil'].join(', ')
       : hasCoordinates
         ? `${latitude},${longitude}`
-        : searchableName || category || '';
+        : category || '';
   return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : null;
 }

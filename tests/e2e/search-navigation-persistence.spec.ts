@@ -26,6 +26,7 @@ test('keeps loaded prospects, filters and scroll position when navigating away a
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page).toHaveURL('http://127.0.0.1:3001/');
   await page.goto('/pesquisa');
+  await page.getByLabel('Nicho', { exact: true }).fill('oficina');
   await page.getByLabel('Região / estado').selectOption('São Paulo, SP');
   await page.getByLabel('Cidade (opcional)').fill('Campinas');
   await page.getByRole('button', { name: 'Pesquisar' }).click();
@@ -45,7 +46,7 @@ test('keeps loaded prospects, filters and scroll position when navigating away a
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(savedScrollY - 100);
 });
 
-test('removes an approached prospect from the saved research list', async ({ page }) => {
+test('keeps the approached company and its CRM action when returning to the saved research', async ({ page }) => {
   let searchRequests = 0;
   await page.route('**/api/search?**', async (route) => {
     searchRequests += 1;
@@ -66,15 +67,21 @@ test('removes an approached prospect from the saved research list', async ({ pag
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page).toHaveURL('http://127.0.0.1:3001/');
   await page.goto('/pesquisa');
+  await page.getByLabel('Nicho', { exact: true }).fill('oficina');
   await page.getByRole('button', { name: 'Pesquisar' }).click();
   const approachedCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Oficina Abordada' }) });
   await approachedCard.getByRole('button', { name: 'Marcar como abordada' }).click();
   await approachedCard.getByRole('button', { name: 'Salvar abordagem' }).click();
-  await expect(page).toHaveURL(/\/crm$/);
+  await expect(page).toHaveURL(/\/pesquisa$/);
+  await expect(approachedCard.getByRole('status')).toHaveText('Abordagem salva no CRM.');
+  await expect(approachedCard.getByRole('button', { name: 'Abrir no CRM' })).toBeVisible();
 
+  await page.getByRole('link', { name: 'Funil' }).click();
+  await expect(page).toHaveURL(/\/crm$/);
   await page.getByRole('link', { name: 'Empresas' }).click();
   await expect(page.getByText('1 prospect novo, em ordem de prioridade.')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Oficina Abordada' })).toHaveCount(0);
+  await expect(approachedCard.getByRole('button', { name: 'Abrir no CRM' })).toBeVisible();
+  await expect(approachedCard.getByRole('button', { name: 'Marcar como abordada' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Oficina Pendente' })).toBeVisible();
   expect(searchRequests).toBe(1);
 });
