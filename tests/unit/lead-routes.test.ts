@@ -780,6 +780,7 @@ describe('lifecycle transition contract without database', () => {
   let creates: unknown[];
   let updates: Partial<LifecycleLead>[];
   let saleEventWrites: string[];
+  let lockQueries: string[];
 
   beforeEach(() => {
     mocks.getCurrentUser.mockResolvedValue({ id: 'lifecycle-user' });
@@ -800,9 +801,10 @@ describe('lifecycle transition contract without database', () => {
     creates = [];
     updates = [];
     saleEventWrites = [];
+    lockQueries = [];
 
     const tx = {
-      $queryRaw: async () => [{ id: lead.id }],
+      $queryRaw: async (strings: TemplateStringsArray) => { lockQueries.push(strings.join('?')); return []; },
       lead: {
         findUnique: async () => ({ ...lead }),
         findUniqueOrThrow: async () => ({ ...lead }),
@@ -914,6 +916,15 @@ describe('lifecycle transition contract without database', () => {
     expect(activities).toHaveLength(winner === 'FOLLOW_UP' ? 2 : 1);
     expect(creates).toHaveLength(winner === 'FOLLOW_UP' ? 1 : 0);
     expect(saleEventWrites).toHaveLength(0);
+  });
+
+  test('uses a schema-agnostic transaction lock when moving a lead', async () => {
+    const response = await patch({ stage: 'PROPOSAL' });
+
+    expect(response.status).toBe(200);
+    expect(lockQueries).toHaveLength(1);
+    expect(lockQueries[0]).toContain('pg_advisory_xact_lock');
+    expect(lockQueries[0]).not.toContain('FROM "Lead"');
   });
 
   test('rejects a stale request even when its destination is the current stage', async () => {
