@@ -2,6 +2,7 @@ import { normalizePublishedPhone, toWhatsAppHref } from './contact-links';
 
 const CACHE_TTL_MS = 10 * 60_000;
 const MAX_RESPONSE_BYTES = 1_000_000;
+const CONTACT_PAGE_TIMEOUT_MS = 2_500;
 const EMPTY_FIELDS: EnrichedContactFields = {
   website: null,
   name: null,
@@ -21,6 +22,7 @@ export type EnrichedContactFields = {
   website: string | null;
   name: string | null;
   whatsapp: string | null;
+  whatsappSourceUrl?: string | null;
   instagram: string | null;
   phone: string | null;
   imageUrl: string | null;
@@ -59,7 +61,54 @@ export async function enrichFromOfficialWebsite(website: string, expectedBusines
     }
 
     const html = await readLimitedText(response);
-    return cacheResult(cacheKey, extractFields(html, normalizedWebsite, expectedBusiness));
+    const homepageFields = extractFields(html, normalizedWebsite, expectedBusiness);
+    if (homepageFields.whatsapp) return cacheResult(cacheKey, homepageFields);
+
+    const contactPageUrl = findOfficialContactPageUrl(html, normalizedWebsite);
+    if (!contactPageUrl) return cacheResult(cacheKey, homepageFields);
+
+    try {
+      const contactResponse = await fetch(contactPageUrl, {
+        signal: AbortSignal.timeout(CONTACT_PAGE_TIMEOUT_MS),
+        redirect: 'manual',
+        headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': 'AtelierApproach/1.0 contato@atelier.local' }
+      });
+      const contactLength = Number(contactResponse.headers.get('content-length'));
+      if (!contactResponse.ok || (Number.isFinite(contactLength) && contactLength > MAX_RESPONSE_BYTES)) {
+        return cacheResult(cacheKey, homepageFields);
+      }
+
+      const contactHtml = await readLimitedText(contactResponse);
+      const contactFields = extractFields(contactHtml, normalizedWebsite, expectedBusiness, contactPageUrl);
+      if (!contactFields.whatsapp) return cacheResult(cacheKey, homepageFields);
+      if (!expectedBusiness) {
+        return cacheResult(cacheKey, {
+          ...homepageFields,
+          whatsapp: contactFields.whatsapp,
+          whatsappSourceUrl: contactFields.whatsappSourceUrl ?? contactPageUrl
+        });
+      }
+
+      const homepageIdentityVerified = isBusinessIdentityVerified(expectedBusiness, homepageFields);
+      const contactPageIdentityVerified = isBusinessIdentityVerified(expectedBusiness, contactFields);
+      if (hasConflictingStructuredIdentity(expectedBusiness, homepageFields)
+        || hasConflictingStructuredIdentity(expectedBusiness, contactFields)
+        || (!homepageIdentityVerified && !contactPageIdentityVerified)) {
+        return cacheResult(cacheKey, homepageFields);
+      }
+
+      // Keep the homepage's verified identity, or use the contact page's
+      // identity only when the homepage did not independently verify the place.
+      const verifiedFields = homepageIdentityVerified ? homepageFields : contactFields;
+      return cacheResult(cacheKey, {
+        ...verifiedFields,
+        website: normalizedWebsite,
+        whatsapp: contactFields.whatsapp,
+        whatsappSourceUrl: contactFields.whatsappSourceUrl ?? contactPageUrl
+      });
+    } catch {
+      return cacheResult(cacheKey, homepageFields);
+    }
   } catch {
     return cacheResult(cacheKey, { ...EMPTY_FIELDS });
   }
@@ -76,7 +125,7 @@ export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): 
   }
   return businesses.flatMap<ExternalBusiness>((business, index) => {
     const sourcePhone = normalizePublishedPhone(business.phone) ? business.phone : null;
-    const source = { ...business, phone: sourcePhone, phoneSource: null, whatsapp: toWhatsAppHref(business.whatsapp) };
+    const source = { ...business, phone: sourcePhone, phoneSource: null, whatsappSourceUrl: null, whatsapp: toWhatsAppHref(business.whatsapp) };
     const fields = enriched.get(index);
     if (!fields) {
       return [source];
@@ -95,6 +144,7 @@ export async function enrichOvertureBusinesses(businesses: ExternalBusiness[]): 
       phone,
       phoneSource: locationVerified && fields.phone && phone ? 'site oficial verificado' as const : null,
       whatsapp,
+      whatsappSourceUrl: locationVerified && whatsapp ? fields.whatsappSourceUrl ?? null : null,
       instagram: siteNameVerified ? fields.instagram ?? business.instagram : business.instagram,
       imageUrl: business.imageUrl ?? (siteNameVerified ? fields.imageUrl : undefined)
     }];
@@ -218,15 +268,15 @@ async function readLimitedText(response: Response) {
   return new TextDecoder().decode(combined);
 }
 
-function extractFields(html: string, website: string, expectedBusiness?: BusinessIdentity): EnrichedContactFields {
+function extractFields(html: string, website: string, expectedBusiness?: BusinessIdentity, pageUrl = website): EnrichedContactFields {
   const hrefs = [...html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
   const { selected: structured, count: entityCount } = extractStructuredData(html, expectedBusiness);
   const absoluteLinks = [...(structured?.sameAs ?? []), ...hrefs]
-    .map((href) => safeHttpUrl(href, website))
+    .map((href) => safeHttpUrl(href, pageUrl))
     .filter((href): href is string => Boolean(href));
   const rawPhone = entityCount > 1 ? null : hrefs.find((href) => href.toLowerCase().startsWith('tel:'));
   const phone = normalizePublishedPhone(structured?.telephone ?? rawPhone?.slice(4));
-  const ownedLinks = (structured?.sameAs ?? []).map((link) => safeHttpUrl(link, website)).filter((link): link is string => Boolean(link));
+  const ownedLinks = (structured?.sameAs ?? []).map((link) => safeHttpUrl(link, pageUrl)).filter((link): link is string => Boolean(link));
   const whatsapp = absoluteLinks.map(toWhatsAppHref).find((link): link is string => Boolean(link)
     && (entityCount <= 1 || ownedLinks.some((owned) => toWhatsAppHref(owned) === link) || Boolean(phone && samePhone(phone, new URL(link!).pathname.slice(1))))) ?? null;
   const socialLinks = entityCount > 1 ? ownedLinks : absoluteLinks;
@@ -240,9 +290,10 @@ function extractFields(html: string, website: string, expectedBusiness?: Busines
     website,
     name: structured?.name ?? metaContent(html, 'og:site_name') ?? metaContent(html, 'og:title') ?? metaContent(html, 'twitter:title'),
     whatsapp,
+    ...(whatsapp ? { whatsappSourceUrl: pageUrl } : {}),
     instagram,
     phone,
-    imageUrl: safeHttpUrl(imageUrl ?? '', website),
+    imageUrl: safeHttpUrl(imageUrl ?? '', pageUrl),
     structuredBusinessName: structured?.locality
       && (structured.types.some((type) => type !== 'Organization') || !expectedBusiness || businessNamesMatch(expectedBusiness.name, structured.name))
       ? structured.name : null,
@@ -251,6 +302,53 @@ function extractFields(html: string, website: string, expectedBusiness?: Busines
     structuredRegion: structured?.region ?? null,
     ...(structured ? { structuredBusinessTypes: structured.types } : {})
   };
+}
+
+function findOfficialContactPageUrl(html: string, website: string) {
+  const websiteUrl = new URL(website);
+  const candidates = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)]
+    .flatMap(([, attributes, rawLabel]) => {
+      const href = attributes.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      const value = (href?.[1] ?? href?.[2] ?? href?.[3] ?? '').replace(/&amp;/gi, '&');
+      const url = safeHttpUrl(value, website);
+      if (!url) return [];
+
+      const target = new URL(url);
+      if (target.origin !== websiteUrl.origin) return [];
+      target.hash = '';
+      if (target.href === websiteUrl.href) return [];
+
+      const label = normalizeIdentityText(rawLabel.replace(/<[^>]*>/g, ' '));
+      const path = normalizeIdentityText(target.pathname);
+      const descriptor = `${label} ${path}`;
+      if (!/\b(whatsapp|contato|contact|fale conosco|fale com|atendimento)\b/.test(descriptor)) return [];
+
+      const priority = /\bwhatsapp\b/.test(descriptor) ? 0 : /\b(contato|contact)\b/.test(descriptor) ? 1 : 2;
+      return [{ url: target.toString(), priority }];
+    });
+
+  return candidates.sort((first, second) => first.priority - second.priority)[0]?.url ?? null;
+}
+
+function hasConflictingStructuredIdentity(business: BusinessIdentity, fields: EnrichedContactFields) {
+  if (fields.structuredBusinessName && !businessNamesMatch(business.name, fields.structuredBusinessName)) return true;
+  if (hasBusinessSectorConflict(business, fields)) return true;
+
+  const addressParts = business.address?.split(',').map(normalizeIdentityText).filter(Boolean) ?? [];
+  if (fields.structuredLocality && addressParts.length
+    && !addressParts.includes(normalizeIdentityText(fields.structuredLocality))) return true;
+
+  const pageStreet = (fields.structuredStreetAddress ?? '').split(',')[0]?.trim();
+  const sourceStreet = addressParts.find((part) => /^(rua|r|avenida|av|estrada|rodovia|travessa|alameda|praca)\b|\d/.test(part) && !/^\d+$/.test(part));
+  const normalizeStreet = (value: string) => normalizeIdentityText(value).replace(/^r\s/, 'rua ').replace(/^av\s/, 'avenida ');
+  if (pageStreet && sourceStreet && !` ${sourceStreet} `.includes(` ${normalizeStreet(pageStreet)} `)) return true;
+
+  if (fields.structuredRegion) {
+    const sourceRegion = addressParts.map(normalizeRegion)
+      .find((part) => /^(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to)$/.test(part));
+    if (sourceRegion && sourceRegion !== normalizeRegion(fields.structuredRegion)) return true;
+  }
+  return false;
 }
 
 type StructuredBusiness = {

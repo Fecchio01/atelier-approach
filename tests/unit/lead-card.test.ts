@@ -96,6 +96,18 @@ test('does not offer an unvalidated opaque WhatsApp short link', () => {
   expect(html).toContain('WhatsApp não confirmado');
 });
 
+test('shows the official page where a published WhatsApp link was found', () => {
+  const business: ExternalBusiness = {
+    osmId: 'overture/wa-source', name: 'Oficina Fonte', category: 'automotive_repair',
+    source: 'Overture', phone: null, website: 'https://oficina-fonte.example', instagram: null,
+    whatsapp: 'https://wa.me/551932035110', whatsappSourceUrl: 'https://oficina-fonte.example/contato'
+  };
+  const html = renderToStaticMarkup(React.createElement(LeadCard, { business, result: scoreBusiness(business) }));
+
+  expect(html).toContain('href="https://oficina-fonte.example/contato"');
+  expect(html).toContain('Ver página fonte');
+});
+
 test('does not reinterpret digits in an explicit WhatsApp URL as a different phone number', () => {
   const business: ExternalBusiness = {
     osmId: 'overture/wa-path', name: 'Oficina WA Path', category: null,

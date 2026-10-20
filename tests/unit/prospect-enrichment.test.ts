@@ -69,6 +69,7 @@ test('extracts public WhatsApp, Instagram, telephone and Open Graph image links'
     website: 'https://oficina.example/',
     name: null,
     whatsapp: 'https://wa.me/5519999990000',
+    whatsappSourceUrl: 'https://oficina.example/',
     instagram: 'https://instagram.com/oficina',
     phone: '+551932035110',
     imageUrl: 'https://img.example/cover.jpg',
@@ -488,4 +489,68 @@ test('does not reuse another sector entity from the website cache', async () => 
   const [salon] = await enrichOvertureBusinesses([{ ...source, category: 'hair_salon' }]);
   expect(cafe.phone).toBe('+551932035110');
   expect(salon.phone).toBe('+551932035220');
+});
+
+test('finds WhatsApp on a linked contact page and records the page where it was published', async () => {
+  const fetchMock = vi.fn().mockImplementation((input: string) => {
+    if (input === 'https://contact-page-oficina.example/') {
+      return Promise.resolve(new Response(
+        '<script type="application/ld+json">{"@type":"AutoRepair","name":"Oficina Real","address":{"streetAddress":"Rua das Flores, 45","addressLocality":"Campinas","addressRegion":"SP"}}</script><a href="/contato">Fale conosco</a>',
+        { status: 200 }
+      ));
+    }
+    if (input === 'https://contact-page-oficina.example/contato') {
+      return Promise.resolve(new Response('<a href="https://wa.me/551932035110">WhatsApp</a>', { status: 200 }));
+    }
+    throw new Error(`Unexpected URL: ${input}`);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/contact-page-whatsapp', name: 'Oficina Real', category: 'automotive_repair', source: 'Overture',
+    website: 'https://contact-page-oficina.example', phone: null, whatsapp: null, instagram: null,
+    address: 'Rua das Flores, 45, Campinas, SP'
+  }]);
+
+  expect(business).toMatchObject({
+    whatsapp: 'https://wa.me/551932035110',
+    whatsappSourceUrl: 'https://contact-page-oficina.example/contato'
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test('does not crawl an off-domain contact link while enriching WhatsApp', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(
+    '<script type="application/ld+json">{"@type":"AutoRepair","name":"Oficina Real","address":{"streetAddress":"Rua das Flores, 45","addressLocality":"Campinas","addressRegion":"SP"}}</script><a href="https://another-business.example/contato">Contato</a>',
+    { status: 200 }
+  ));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/off-domain-contact', name: 'Oficina Real', category: 'automotive_repair', source: 'Overture',
+    website: 'https://off-domain-contact.example', phone: null, whatsapp: null, instagram: null,
+    address: 'Rua das Flores, 45, Campinas, SP'
+  }]);
+
+  expect(business.whatsapp).toBeNull();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+test('rejects WhatsApp from a contact page whose structured business identity conflicts', async () => {
+  const fetchMock = vi.fn().mockImplementation((input: string) => Promise.resolve(new Response(
+    input === 'https://wrong-contact-page.example/'
+      ? '<script type="application/ld+json">{"@type":"AutoRepair","name":"Oficina Real","address":{"streetAddress":"Rua das Flores, 45","addressLocality":"Campinas","addressRegion":"SP"}}</script><a href="/contato">Contato</a>'
+      : '<script type="application/ld+json">{"@type":"AutoRepair","name":"Oficina Vizinha","address":{"streetAddress":"Rua das Flores, 45","addressLocality":"Campinas","addressRegion":"SP"}}</script><a href="https://wa.me/551932035110">WhatsApp</a>',
+    { status: 200 }
+  )));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const [business] = await enrichOvertureBusinesses([{
+    osmId: 'overture/wrong-contact-identity', name: 'Oficina Real', category: 'automotive_repair', source: 'Overture',
+    website: 'https://wrong-contact-page.example', phone: null, whatsapp: null, instagram: null,
+    address: 'Rua das Flores, 45, Campinas, SP'
+  }]);
+
+  expect(business.whatsapp).toBeNull();
+  expect(business.whatsappSourceUrl).toBeNull();
 });

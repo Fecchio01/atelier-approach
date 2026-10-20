@@ -59,6 +59,7 @@ export type ExternalBusiness = {
   name: string;
   phone: string | null;
   phoneSource?: 'site oficial verificado' | null;
+  whatsappSourceUrl?: string | null;
   website: string | null;
   instagram: string | null;
   whatsapp?: string | null;
