@@ -188,7 +188,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const updatedLead = await prisma.$transaction(async (tx) => {
     // Serialize changes to this lead so repeated wins and legacy backfills cannot
     // create two sale events from the same persisted state.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}, 0))`;
+    await tx.$queryRaw`
+      WITH lead_lock AS MATERIALIZED (
+        SELECT pg_advisory_xact_lock(hashtextextended(${id}, 0))
+      )
+      SELECT TRUE AS locked FROM lead_lock
+    `;
     const lead = await tx.lead.findUnique({ where: { id } });
     if (!lead) throw new Error('LEAD_NOT_FOUND');
     if (stage && (lead.stage !== expectedStage || lead.stageEnteredAt.valueOf() !== expectedStageEnteredAt!.valueOf())) {
