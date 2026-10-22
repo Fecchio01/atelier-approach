@@ -47,6 +47,18 @@ describe('CRM lifecycle UI and empty-trash API without database', () => {
     expect(renderBoard([{ ...lead, id: 'discarded', stage: 'DISCARDED', followUpOriginStage: null }])).toContain('Esvaziar lixeira');
   });
 
+  test('shows quick filters and sorting choices in the shared CRM board', () => {
+    const html = renderBoard([lead]);
+    expect(html).toContain('aria-label="Filtrar empresas"');
+    expect(html).toContain('Com próxima ação');
+    expect(html).toContain('Sem próxima ação');
+    expect(html).toContain('Com telefone ou WhatsApp');
+    expect(html).toContain('aria-label="Ordenar empresas"');
+    expect(html).toContain('Próxima ação');
+    expect(html).toContain('Há mais tempo na etapa');
+    expect(html).toContain('Maior valor de venda');
+  });
+
   test('confirmation clearly states that emptying the trash is permanent', () => {
     const html = renderToStaticMarkup(React.createElement(EmptyTrashConfirmation, {
       count: 2, busy: false, error: null, onCancel: () => {}, onConfirm: () => {}

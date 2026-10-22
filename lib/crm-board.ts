@@ -28,12 +28,13 @@ export function getCrmBoardLeads(database: Prisma.TransactionClient | typeof pri
         where: { state: 'PENDING' },
         orderBy: { createdAt: 'desc' },
         take: 1,
-        select: { returnStage: true }
+        select: { returnStage: true, dueDate: true }
       }
     },
     orderBy: { id: 'desc' }
   }).then((leads) => leads.map((lead) => ({
     ...lead,
-    followUpOriginStage: lead.followUps[0]?.returnStage ?? null
+    followUpOriginStage: lead.followUps[0]?.returnStage ?? null,
+    nextActionAt: lead.followUps[0]?.dueDate ?? (lead.stage === 'MEETING' ? lead.meetingAt : lead.postFollowUpAt)
   })));
 }

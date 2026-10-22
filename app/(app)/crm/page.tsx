@@ -17,6 +17,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     saleValue: lead.saleValue?.toString() ?? null,
     mrr: lead.mrr?.toString() ?? null,
     stageEnteredAt: lead.stageEnteredAt.toISOString(),
+    nextActionAt: lead.nextActionAt?.toISOString() ?? null,
     meetingAt: lead.meetingAt?.toISOString() ?? null,
     postFollowUpAt: lead.postFollowUpAt?.toISOString() ?? null,
     discardedAt: lead.discardedAt?.toISOString() ?? null,

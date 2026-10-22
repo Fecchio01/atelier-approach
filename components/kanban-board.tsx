@@ -13,6 +13,7 @@ import { getDashboardCardMotionProps, getMotionTransition } from './motion-primi
 import type { CommercialServiceOption } from '@/lib/commercial-ui';
 import { synchronizeHorizontalScroll } from '@/lib/horizontal-scroll-sync';
 import { searchCrmLeads } from '@/lib/crm-search';
+import { filterCrmBoardLeads, sortCrmBoardLeads, type CrmBoardFilter, type CrmBoardSort } from '@/lib/crm-board-view';
 
 export type CrmLead = {
   id: string;
@@ -28,6 +29,7 @@ export type CrmLead = {
   longitude: number | null;
   stage: LeadStage;
   stageEnteredAt?: string;
+  nextActionAt?: string | null;
   meetingAt?: string | null;
   postFollowUpAt?: string | null;
   discardedAt?: string | null;
@@ -46,6 +48,8 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
   const [stageOverrides, setStageOverrides] = useState<Record<string, LeadStage>>({});
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<CrmBoardSort>('current');
+  const [boardFilter, setBoardFilter] = useState<CrmBoardFilter>('all');
   const [confirmingTrash, setConfirmingTrash] = useState(false);
   const [emptyTrashBusy, setEmptyTrashBusy] = useState(false);
   const [emptyTrashError, setEmptyTrashError] = useState<string | null>(null);
@@ -123,7 +127,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
     };
   }, [router]);
   const currentLeads = visibleLeads(leads, removedIds);
-  const filteredLeads = useMemo(() => searchCrmLeads(currentLeads, searchQuery), [currentLeads, searchQuery]);
+  const filteredLeads = useMemo(() => filterCrmBoardLeads(searchCrmLeads(currentLeads, searchQuery), boardFilter), [currentLeads, searchQuery, boardFilter]);
   const hasSearch = Boolean(searchQuery.trim());
   const trashedLeads = currentLeads.filter((lead) => lead.stage === 'DISCARDED');
   const selectedLead = currentLeads.find((lead) => lead.id === selectedLeadId);
@@ -150,7 +154,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
   }
 
   function renderColumn(stage: FunnelStage, title: string = stageLabels[stage], description?: string) {
-    const stageLeads = filteredLeads.filter((lead) => normalizeFunnelStage(stageOverrides[lead.id] ?? lead.stage) === stage);
+    const stageLeads = sortCrmBoardLeads(filteredLeads.filter((lead) => normalizeFunnelStage(stageOverrides[lead.id] ?? lead.stage) === stage), sortOrder);
     return <section key={stage} aria-label={title} className="min-w-0 rounded-xl border border-white/[0.07] bg-[#0d1216]/72 p-2">
       <header className="mb-3 flex min-h-8 items-center justify-between gap-2 px-1.5 pt-1">
         <h2 className="flex items-center gap-2 text-xs font-semibold text-white/80"><span className={`h-2 w-2 rounded-full ${stage === 'WON' ? 'bg-[var(--atelier-green)]' : stage === 'PROPOSAL' ? 'bg-amber-400' : stage === 'QUALIFIED' ? 'bg-violet-400' : stage === 'IN_CONVERSATION' ? 'bg-sky-400' : stage === 'DISCARDED' ? 'bg-red-300' : 'bg-white/60'}`} />{title}</h2>
@@ -181,7 +185,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
   }
 
   return <>
-    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
       <label className="grid w-full gap-1.5 text-xs font-medium text-white/55 sm:max-w-md">
         Buscar empresas
         <input
@@ -193,10 +197,31 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
           className="min-h-11 w-full rounded-lg border border-white/[0.12] bg-[#151b20] px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-[var(--atelier-green)]/60 focus:ring-2 focus:ring-[var(--atelier-green)]/20"
         />
       </label>
-      {hasSearch ? <div className="flex items-center justify-between gap-3 text-xs text-white/45 sm:pb-3">
-        <p role="status">{filteredLeads.length} {filteredLeads.length === 1 ? 'empresa encontrada' : 'empresas encontradas'}</p>
-        <button type="button" onClick={() => setSearchQuery('')} className="min-h-9 rounded-md px-2 font-medium text-[var(--atelier-green)] hover:bg-white/[0.05]">Limpar busca</button>
-      </div> : null}
+      <div className="grid gap-2 sm:grid-cols-2 sm:items-end">
+        <label className="grid w-full gap-1.5 text-xs font-medium text-white/55 sm:w-60">
+          Filtrar empresas
+          <select aria-label="Filtrar empresas" value={boardFilter} onChange={(event) => setBoardFilter(event.target.value as CrmBoardFilter)} className="min-h-11 w-full rounded-lg border border-white/[0.12] bg-[#151b20] px-3 text-sm text-white outline-none focus:border-[var(--atelier-green)]/60 focus:ring-2 focus:ring-[var(--atelier-green)]/20">
+            <option value="all">Todas</option>
+            <option value="with-next-action">Com próxima ação</option>
+            <option value="without-next-action">Sem próxima ação</option>
+            <option value="has-contact">Com telefone ou WhatsApp</option>
+          </select>
+        </label>
+        <label className="grid w-full gap-1.5 text-xs font-medium text-white/55 sm:w-60">
+          Ordenar empresas
+          <select aria-label="Ordenar empresas" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as CrmBoardSort)} className="min-h-11 w-full rounded-lg border border-white/[0.12] bg-[#151b20] px-3 text-sm text-white outline-none focus:border-[var(--atelier-green)]/60 focus:ring-2 focus:ring-[var(--atelier-green)]/20">
+            <option value="current">Ordem atual</option>
+            <option value="next-action">Próxima ação</option>
+            <option value="oldest-stage">Há mais tempo na etapa</option>
+            <option value="sale-value">Maior valor de venda</option>
+            <option value="name">Nome A–Z</option>
+          </select>
+        </label>
+        {hasSearch ? <div className="flex items-center justify-between gap-3 text-xs text-white/45">
+          <p role="status">{filteredLeads.length} {filteredLeads.length === 1 ? 'empresa encontrada' : 'empresas encontradas'}</p>
+          <button type="button" onClick={() => setSearchQuery('')} className="min-h-9 rounded-md px-2 font-medium text-[var(--atelier-green)] hover:bg-white/[0.05]">Limpar busca</button>
+        </div> : null}
+      </div>
     </div>
     <p className="mb-2 flex items-center gap-2 text-xs text-white/40 md:hidden"><ArrowsLeftRightIcon size={15} aria-hidden="true" />Deslize para ver todas as etapas</p>
     <div className="rounded-2xl border border-white/[0.1] bg-[#0d1216]/55 p-2.5 md:p-3">
