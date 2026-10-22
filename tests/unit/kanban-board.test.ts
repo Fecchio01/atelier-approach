@@ -28,3 +28,12 @@ test('checks for shared funnel changes while the page is visible', () => {
   expect(source).toContain('document.visibilityState');
   expect(source).toContain('router.refresh()');
 });
+
+test('provides global CRM search and reports matching companies', () => {
+  const source = readFileSync(resolve(process.cwd(), 'components/kanban-board.tsx'), 'utf8');
+
+  expect(source).toContain('searchCrmLeads(currentLeads, searchQuery)');
+  expect(source).toContain('aria-label="Buscar empresas no CRM"');
+  expect(source).toContain('Limpar busca');
+  expect(source).toContain('Nenhum resultado nesta etapa');
+});

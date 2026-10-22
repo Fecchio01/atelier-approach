@@ -122,20 +122,22 @@ test('does not reinterpret digits in an explicit WhatsApp URL as a different pho
   expect(html).not.toContain('href="https://wa.me/55119990001115511888777666123"');
 });
 
-test('offers a published phone as an unverified WhatsApp test and rejects an Instagram post URL', () => {
+test('offers WhatsApp from a published phone and rejects an Instagram post URL', () => {
   const phoneAsWhatsApp: ExternalBusiness = {
     osmId: 'overture/plain-phone', name: 'Oficina Telefone', category: null,
     source: 'Overture', phone: '+55 11 99999-8888', website: null, instagram: null, whatsapp: null
   };
   const phoneMarkup = renderToStaticMarkup(React.createElement(LeadCard, { business: phoneAsWhatsApp, result: scoreBusiness(phoneAsWhatsApp) }));
   expect(phoneMarkup).toContain('href="https://wa.me/5511999998888"');
-  expect(phoneMarkup).toContain('Testar WhatsApp');
-  expect(phoneMarkup).toContain('Telefone disponível para teste');
+  expect(phoneMarkup).toContain('>WhatsApp</a>');
+  expect(phoneMarkup).toContain('aria-label="Abrir WhatsApp de Oficina Telefone"');
+  expect(phoneMarkup).toContain('Telefone disponível para WhatsApp');
+  expect(phoneMarkup).not.toContain('Testar');
   expect(phoneMarkup).not.toContain('não confirmado');
   expect(phoneMarkup).toContain('Telefone publicado');
   expect(phoneMarkup).not.toContain('WhatsApp publicado');
   expect(phoneMarkup).toContain('href="tel:+5511999998888"');
-  expect(phoneMarkup).toContain('Telefone disponível para teste');
+  expect(phoneMarkup).toContain('Telefone disponível para WhatsApp');
 
   const landline: ExternalBusiness = { ...phoneAsWhatsApp, phone: '+55 11 3333-4444' };
   const landlineMarkup = renderToStaticMarkup(React.createElement(LeadCard, { business: landline, result: scoreBusiness(landline) }));
