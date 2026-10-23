@@ -63,7 +63,7 @@
 - [ ] **Step 1: Write failing route tests** for unauthenticated rejection, spoofed actor IDs, invalid lead/member references, create + activity transaction, aggregation with existing pending follow-ups, idempotent completion, cancellation, and stale concurrent update conflict.
 - [ ] **Step 2: Run** `npx vitest run tests/unit/crm-task-routes.test.ts` and confirm expected missing-route failures.
 - [ ] **Step 3: Implement** the endpoints. Use transactions for task/activity writes; use state/`updatedAt`-conditional updates for concurrency; preserve existing follow-up APIs; expose only member `id`/`name` in assignment choices.
-- [ ] **Step 4: Run** `npx vitest run tests/unit/crm-task-routes.test.ts tests/unit/lead-routes.test.ts`; expect all to pass.
+- [ ] **Step 4: Run** `npx vitest run tests/unit/crm-task-routes.test.ts tests/unit/crm-task-queue.test.ts`; expect all to pass. The legacy `lead-routes` integration suite additionally depends on the hosted test schema containing the already-migrated `Lead.meetingAt` column.
 - [ ] **Step 5: Commit** endpoints and tests.
 
 ### Task 3: CRM actions view and task management
@@ -71,16 +71,17 @@
 **Files:**
 - Create: `components/crm-action-queue.tsx`
 - Create: `components/crm-task-form.tsx`
+- Create: `lib/crm-task-datetime.ts`
 - Modify: `app/(app)/crm/page.tsx`
-- Test: `tests/unit/crm-action-queue.test.tsx`
+- Test: `tests/unit/crm-action-queue.test.tsx`, `tests/unit/crm-task-datetime.test.ts`
 
 **Interfaces:**
 - Consumes: Task 1 queue/filter types and Task 2 list/create/update endpoints.
 - Produces: “Funil” and “Ações” CRM views; all-team / assigned-to-me toggle; combinable period filters; task creation and inline update/reassign/reschedule/complete/cancel; follow-up rows that deep-link to the lead and retain existing completion/reschedule controls.
 
-- [ ] **Step 1: Write failing component tests** for view switch, filters, ordering, task and follow-up distinction, creation form fields, mobile-safe controls, and completion/cancel refresh behavior.
+- [ ] **Step 1: Write failing component tests** for view switch, filters, ordering, task and follow-up distinction, visible completion/edit/cancel controls, creation form fields, and responsive states; test São Paulo date-time conversion independently.
 - [ ] **Step 2: Run** `npx vitest run tests/unit/crm-action-queue.test.tsx` and confirm the component is missing.
-- [ ] **Step 3: Implement** the queue and responsive form; poll only while the Actions view is visible and refresh after successful mutations; keep dashboard alerts unchanged.
+- [ ] **Step 3: Implement** the queue, reusable responsive create/edit form, and São Paulo date-time formatter/converter; poll only while the Actions view is visible and refresh after successful mutations; keep dashboard alerts unchanged.
 - [ ] **Step 4: Run** the focused component tests and relevant CRM UI tests; expect all to pass.
 - [ ] **Step 5: Commit** the queue view and tests.
 

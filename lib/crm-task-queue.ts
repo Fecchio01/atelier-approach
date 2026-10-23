@@ -19,11 +19,14 @@ export type CrmQueueItem = {
   leadId: string;
   leadName: string;
   title: string;
+  taskType?: CrmTaskTypeValue;
+  returnStage?: string | null;
   dueDate: Date | string;
   priority: CrmTaskPriority;
   assigneeId: string;
   assigneeName: string;
   state: 'PENDING';
+  updatedAt?: Date | string;
 };
 
 export type CrmQueueFilters = {
@@ -32,6 +35,14 @@ export type CrmQueueFilters = {
 };
 
 type CreateInputParseResult = { ok: true; value: CrmTaskCreateInput } | { ok: false; field: keyof CrmTaskCreateInput };
+
+export function parseCrmTaskDueDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return null;
+  const calendarDate = new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+  if (!Number.isFinite(calendarDate.valueOf()) || calendarDate.toISOString().slice(0, 10) !== value.slice(0, 10)) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.valueOf()) ? date : null;
+}
 
 function nonEmptyString(value: unknown, maxLength = 200): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= maxLength;
@@ -45,15 +56,8 @@ export function parseCrmTaskCreateInput(value: unknown): CreateInputParseResult 
   if (typeof input.type !== 'string' || !crmTaskTypes.includes(input.type as CrmTaskTypeValue)) return { ok: false, field: 'type' };
   if (typeof input.priority !== 'string' || !crmTaskPriorities.includes(input.priority as CrmTaskPriority)) return { ok: false, field: 'priority' };
   if (!nonEmptyString(input.assigneeId, 128)) return { ok: false, field: 'assigneeId' };
-  if (typeof input.dueDate !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(input.dueDate)) {
-    return { ok: false, field: 'dueDate' };
-  }
-  const calendarDate = new Date(`${input.dueDate.slice(0, 10)}T00:00:00.000Z`);
-  if (!Number.isFinite(calendarDate.valueOf()) || calendarDate.toISOString().slice(0, 10) !== input.dueDate.slice(0, 10)) {
-    return { ok: false, field: 'dueDate' };
-  }
-  const dueDate = new Date(input.dueDate);
-  if (!Number.isFinite(dueDate.valueOf())) return { ok: false, field: 'dueDate' };
+  const dueDate = parseCrmTaskDueDate(input.dueDate);
+  if (!dueDate) return { ok: false, field: 'dueDate' };
 
   return { ok: true, value: {
     leadId: input.leadId.trim(),

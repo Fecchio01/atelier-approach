@@ -36,7 +36,11 @@ const activityLabels: Record<ActivityType, string> = {
   SALE_FINANCIALS_UPDATED: 'Valores da venda atualizados',
   SALE_REVERSED: 'Venda revertida',
   LEAD_REOPENED: 'Empresa reaberta',
-  DISCARDED: 'Empresa descartada'
+  DISCARDED: 'Empresa descartada',
+  CRM_TASK_CREATED: 'Ação criada',
+  CRM_TASK_UPDATED: 'Ação atualizada',
+  CRM_TASK_COMPLETED: 'Ação concluída',
+  CRM_TASK_CANCELLED: 'Ação cancelada'
 } as const;
 const teamOwnerId = '__team__';
 const goalSelect = {
