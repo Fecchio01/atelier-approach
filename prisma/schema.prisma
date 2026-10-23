@@ -36,6 +36,26 @@ enum FollowUpState {
   CANCELLED
 }
 
+enum CrmTaskType {
+  WHATSAPP
+  PHONE
+  EMAIL
+  MEETING_PREP
+  OTHER
+}
+
+enum CrmTaskPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum CrmTaskState {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
 enum ActivityType {
   CONTACT
   STAGE_CHANGE
@@ -47,6 +67,10 @@ enum ActivityType {
   LEAD_REOPENED
   SALE_REVERSED
   DISCARDED
+  CRM_TASK_CREATED
+  CRM_TASK_UPDATED
+  CRM_TASK_COMPLETED
+  CRM_TASK_CANCELLED
 }
 
 enum GoalPeriodKind {
@@ -83,6 +107,7 @@ model Lead {
   wonById        String?
   activities     Activity[]
   followUps      FollowUp[]
+  crmTasks       CrmTask[]
   stageHistory   StageHistory[]
   saleEvents     SaleEvent[]
 
@@ -186,6 +211,30 @@ model FollowUp {
   @@index([leadId])
   @@index([ownerId, dueDate])
   @@index([leadId, state, completedAt, id])
+}
+
+model CrmTask {
+  id            String         @id @default(cuid())
+  leadId        String
+  title         String
+  type          CrmTaskType
+  priority      CrmTaskPriority @default(NORMAL)
+  dueDate       DateTime
+  assigneeId    String
+  createdById   String
+  updatedById   String
+  state         CrmTaskState   @default(PENDING)
+  completedAt   DateTime?
+  completedById String?
+  cancelledAt   DateTime?
+  cancelledById String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  lead          Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([state, dueDate])
+  @@index([assigneeId, state, dueDate])
+  @@index([leadId, createdAt])
 }
 
 model Goal {

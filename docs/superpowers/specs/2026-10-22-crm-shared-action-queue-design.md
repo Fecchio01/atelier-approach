@@ -1,6 +1,6 @@
 # Fila compartilhada de ações do CRM
 
-**Status:** desenho aprovado em conversa; aguardando revisão desta especificação antes do plano de implementação.
+**Status:** aprovado para implementação em 2026-10-22.
 
 ## Objetivo
 
