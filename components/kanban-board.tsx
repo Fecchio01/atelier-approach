@@ -278,7 +278,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
         setSelectedLeadId(null);
       }
       router.refresh();
-    }} /> : null}</AnimatePresence>
+    }} members={members} currentMemberId={currentMemberId} /> : null}</AnimatePresence>
   </>;
 }
 

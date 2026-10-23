@@ -15,6 +15,7 @@ import { getSelectedServiceSummary, type CommercialServiceOption } from '@/lib/c
 import { priceInCents } from '@/lib/service-sales';
 import { formatReportNote } from '@/lib/report-notes';
 import { formatMeetingDateTimeLocal } from '@/lib/meeting-scheduling';
+import { CrmTaskForm, type CrmTaskFormMember } from './crm-task-form';
 
 type Stage = FunnelStage;
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
@@ -36,7 +37,7 @@ function dateTimeLabel(value: string) {
   return new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays, onClose, onUpdated, onDeleted }: { lead: CrmLead; services: CommercialServiceOption[]; followUpDelayDays: number; onClose: () => void; onUpdated: (stage?: Stage) => void; onDeleted: (id: string) => void }) {
+export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays, members = [], currentMemberId, onClose, onUpdated, onDeleted }: { lead: CrmLead; services: CommercialServiceOption[]; followUpDelayDays: number; members?: CrmTaskFormMember[]; currentMemberId?: string | null; onClose: () => void; onUpdated: (stage?: Stage) => void; onDeleted: (id: string) => void }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -52,6 +53,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
   const [loadingDetails, setLoadingDetails] = useState(initialLead.detailsLoaded === false);
   const [reloadAttempt, setReloadAttempt] = useState(0);
   const [financialsSaved, setFinancialsSaved] = useState(false);
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [confirmingReturn, setConfirmingReturn] = useState(false);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [followUpAt, setFollowUpAt] = useState<Record<string, string>>({});
@@ -168,6 +170,21 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
     }
   }
 
+  async function refreshAfterTaskSave() {
+    setTaskFormOpen(false);
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(lead.id)}`, { cache: 'no-store' });
+      const payload = await response.json() as { error?: string; lead?: CrmLead };
+      if (!response.ok || !payload.lead) throw new Error(payload.error ?? 'Não foi possível atualizar o histórico da empresa.');
+      setLead(payload.lead);
+      setStageDraft(normalizeFunnelStage(payload.lead.stage));
+    } catch {
+      setError('A ação foi criada, mas não foi possível atualizar o histórico. Feche e abra a empresa novamente.');
+    } finally {
+      router.refresh();
+    }
+  }
+
   async function saveStageChange(id: string) {
     if (stageDraft === 'WON') return;
     const stageChanged = stageDraft !== normalizeFunnelStage(lead.stage);
@@ -276,6 +293,20 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
         {activeTab === 'CONTACT' ? <section className="grid gap-5 pb-1">
           <div className="grid gap-5 sm:grid-cols-[74px_minmax(0,1fr)] sm:items-center"><div className="grid h-[74px] w-[74px] place-items-center rounded-full border border-white/15 bg-white/[0.035]" aria-hidden="true"><StorefrontIcon size={35} weight="regular" className="text-white/70" /></div><div className="min-w-0"><h3 className="text-base font-semibold text-white/90">Detalhes da empresa</h3><p className="mt-1 text-xs font-medium text-white/40">Nicho</p><p className="text-sm text-white/65">{getBusinessNicheLabel(lead.category)}</p>{lead.address ? <p className="mt-2 break-words text-sm text-white/65">{lead.address}</p> : null}</div></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{contactLinks(lead).map(({ label, href }) => <a key={label} href={href} target={label === 'Ligar' ? undefined : '_blank'} rel="noreferrer" className="group flex min-h-14 items-center gap-3 rounded-lg border border-white/[0.10] bg-white/[0.025] px-3 text-sm font-semibold text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,.04)] hover:border-[var(--atelier-green)]/45 hover:bg-white/[0.05]"><ContactActionIcon label={label} /><span className="min-w-0 flex-1">{label}</span><ArrowSquareOutIcon aria-hidden="true" size={17} weight="regular" className="text-white/35 transition-transform duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] group-hover:-translate-y-px group-hover:text-white/75" /></a>)}</div>
+          <div className="grid gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div><h3 className="text-sm font-semibold text-white/85">Ação compartilhada</h3><p className="mt-1 text-xs text-white/45">Crie uma tarefa para alguém da equipe acompanhar esta empresa.</p></div>
+              <button data-testid="lead-create-crm-task" data-lead-id={lead.id} type="button" disabled={savingId === lead.id} onClick={() => { setError(null); setTaskFormOpen((open) => !open); }} className="min-h-10 rounded-lg border border-[var(--atelier-green)]/45 px-3 text-xs font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/[0.08] disabled:opacity-50">{taskFormOpen ? 'Fechar formulário' : 'Criar ação'}</button>
+            </div>
+            {taskFormOpen ? <CrmTaskForm
+              leads={[{ id: lead.id, name: lead.name }]}
+              members={members}
+              currentMemberId={currentMemberId}
+              initialLeadId={lead.id}
+              onCancel={() => setTaskFormOpen(false)}
+              onSaved={() => void refreshAfterTaskSave()}
+            /> : null}
+          </div>
           {lead.phone ? <p className="break-words text-sm text-white/65">Telefone publicado: {lead.phone}</p> : null}
           {lead.phone || lead.whatsapp ? <p className="text-xs text-white/50">{toWhatsAppHref(lead.whatsapp) ? 'WhatsApp publicado; funcionamento não confirmado' : 'WhatsApp não confirmado'}</p> : null}
           <div className="grid gap-3 border-t border-white/[0.09] pt-5">

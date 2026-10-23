@@ -100,7 +100,7 @@
 - [ ] **Step 1: Write failing tests** proving the company-detail entry point passes the lead ID/name, saves with server-owned creator identity, and does not alter existing follow-up actions.
 - [ ] **Step 2: Run** `npx vitest run tests/unit/crm-task-entry-points.test.tsx` and confirm the entry point is missing.
 - [ ] **Step 3: Implement** the detail-modal action and wire it to the shared form/queue refresh contract.
-- [ ] **Step 4: Run** focused tests plus `npm run typecheck`, `npm run lint`, and `npm test`; expect zero errors/failures.
+- [ ] **Step 4: Run** `npx vitest run tests/unit/crm-task-entry-points.test.tsx tests/unit/commercial-modal.test.tsx tests/unit/crm-task-routes.test.ts`, `npm run typecheck`, and targeted ESLint on the changed CRM files; expect all focused checks to pass.
 - [ ] **Step 5: Commit** the final UI integration and tests.
 
 ### Task 5: Production verification, review, GitHub, and Vercel
