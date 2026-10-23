@@ -113,6 +113,7 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 930 }, { name: '
       await page.mouse.wheel(0, 400);
     }
     await expect.poll(() => surface.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await expect(header).toHaveCSS('background-color', 'rgb(17, 22, 27)');
   });
 
   test(`wheel reaches the stage controls in a short company card on ${viewport.name}`, async ({ page }) => {
