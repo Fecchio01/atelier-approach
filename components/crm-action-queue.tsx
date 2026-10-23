@@ -31,11 +31,12 @@ function dateLabel(value: Date | string) {
   return Number.isFinite(date.valueOf()) ? dateTimeFormatter.format(date) : 'Data inválida';
 }
 
-export function CrmActionQueue({ leads, members: initialMembers = [], currentMemberId, initialItems }: {
+export function CrmActionQueue({ leads, members: initialMembers = [], currentMemberId, initialItems, onOpenLead }: {
   leads: CrmTaskFormLead[];
   members?: CrmTaskFormMember[];
   currentMemberId?: string | null;
   initialItems?: QueueItem[];
+  onOpenLead?: (leadId: string) => void;
 }) {
   const [items, setItems] = useState<QueueItem[]>(initialItems ?? []);
   const [members, setMembers] = useState<CrmTaskFormMember[]>(initialMembers);
@@ -117,7 +118,7 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
     </header>
 
     {creating ? <CrmTaskForm leads={leads} members={members} currentMemberId={currentMemberId} onCancel={() => setCreating(false)} onSaved={formSaved} /> : null}
-    {editingTask ? <CrmTaskForm leads={leads} members={members} currentMemberId={currentMemberId} initialTask={editingTask} onCancel={() => setEditingTask(null)} onSaved={formSaved} /> : null}
+    {editingTask ? <CrmTaskForm key={editingTask.id} leads={leads} members={members} currentMemberId={currentMemberId} initialTask={editingTask} onCancel={() => setEditingTask(null)} onSaved={formSaved} /> : null}
 
     <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center">
       <div role="group" aria-label="Responsável das ações" className="grid grid-cols-2 gap-2 rounded-xl border border-white/[0.08] bg-black/10 p-1">
@@ -140,7 +141,7 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
               {item.kind === 'FOLLOW_UP' ? <ClockIcon size={18} /> : <CheckCircleIcon size={18} />}
             </span>
             <div className="min-w-0 flex-1">
-              <Link href={`/crm?lead=${encodeURIComponent(item.leadId)}`} className="group inline-flex min-h-7 max-w-full items-center gap-1.5 text-sm font-semibold text-white/90 hover:text-[var(--atelier-green)] focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+              <Link href={`/crm?lead=${encodeURIComponent(item.leadId)}`} onClick={onOpenLead ? (event) => { event.preventDefault(); onOpenLead(item.leadId); } : undefined} className="group inline-flex min-h-7 max-w-full items-center gap-1.5 text-sm font-semibold text-white/90 hover:text-[var(--atelier-green)] focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
                 <span className="truncate">{item.leadName}</span><ArrowRightIcon className="shrink-0 text-white/35 transition-colors group-hover:text-white" size={15} aria-hidden="true" />
               </Link>
               <p className="break-words text-sm text-white/70">{item.title}</p>
@@ -156,7 +157,7 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
             <button type="button" disabled={busyId === item.id} onClick={() => { setCreating(false); setEditingTask({ id: item.id, leadId: item.leadId, title: item.title, taskType: item.taskType, priority: item.priority, dueDate: new Date(item.dueDate).toISOString(), assigneeId: item.assigneeId, updatedAt: item.updatedAt }); }} className="min-h-10 rounded-lg border border-white/[0.12] px-2.5 text-xs font-semibold text-white/70 hover:bg-white/[0.05] disabled:opacity-50"><PencilSimpleIcon size={15} className="mr-1 inline" aria-hidden="true" />Editar</button>
             <button type="button" disabled={busyId === item.id} onClick={() => void mutateTask(item, 'COMPLETE')} className="min-h-10 rounded-lg border border-[var(--atelier-green)]/40 px-2.5 text-xs font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/[0.08] disabled:opacity-50">{busyId === item.id ? 'Salvando…' : 'Concluir'}</button>
             <button type="button" disabled={busyId === item.id} onClick={() => void mutateTask(item, 'CANCEL')} aria-label={`Cancelar ação: ${item.title}`} className="min-h-10 rounded-lg border border-white/[0.12] px-2.5 text-xs font-semibold text-white/55 hover:border-red-200/30 hover:text-red-100 disabled:opacity-50"><XCircleIcon size={15} className="mr-1 inline" aria-hidden="true" />Cancelar</button>
-          </div> : <Link href={`/crm?lead=${encodeURIComponent(item.leadId)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/[0.12] px-3 text-xs font-semibold text-white/65 hover:border-white/25 hover:text-white">Abrir empresa <ArrowRightIcon size={14} aria-hidden="true" /></Link>}
+          </div> : <Link href={`/crm?lead=${encodeURIComponent(item.leadId)}`} onClick={onOpenLead ? (event) => { event.preventDefault(); onOpenLead(item.leadId); } : undefined} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/[0.12] px-3 text-xs font-semibold text-white/65 hover:border-white/25 hover:text-white">Abrir empresa <ArrowRightIcon size={14} aria-hidden="true" /></Link>}
         </li>)}
       </ul> : <p className="rounded-xl border border-dashed border-white/[0.12] px-4 py-10 text-center text-sm text-white/45">Nenhuma ação neste filtro.</p>}
     </div>

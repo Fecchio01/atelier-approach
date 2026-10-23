@@ -193,7 +193,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
       <button id="crm-actions-tab" type="button" role="tab" aria-selected={activeView === 'ACTIONS'} aria-controls="crm-actions-panel" onClick={() => setActiveView('ACTIONS')} className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition-colors ${activeView === 'ACTIONS' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}>Ações</button>
     </div>
     {activeView === 'ACTIONS' ? <div id="crm-actions-panel" role="tabpanel" aria-labelledby="crm-actions-tab">
-      <CrmActionQueue leads={leads.map(({ id, name }) => ({ id, name }))} members={members} currentMemberId={currentMemberId} />
+      <CrmActionQueue leads={leads.map(({ id, name }) => ({ id, name }))} members={members} currentMemberId={currentMemberId} onOpenLead={setSelectedLeadId} />
     </div> : <div id="crm-funnel-panel" role="tabpanel" aria-labelledby="crm-funnel-tab">
     <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
       <label className="grid w-full gap-1.5 text-xs font-medium text-white/55 sm:max-w-md">

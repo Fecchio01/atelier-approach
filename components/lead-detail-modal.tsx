@@ -30,7 +30,8 @@ const channelLabels: Record<string, string> = {
 const activityLabels: Record<string, string> = {
   CONTACT: 'Contato', STAGE_CHANGE: 'Etapa alterada', FOLLOW_UP_SCHEDULED: 'Follow-up agendado',
   FOLLOW_UP_COMPLETED: 'Follow-up concluído', FOLLOW_UP_CANCELLED: 'Follow-up cancelado', SALE_WON: 'Negócio ganho',
-  LEAD_REOPENED: 'Lead reaberto', SALE_REVERSED: 'Venda revertida', DISCARDED: 'Lead descartado', SALE_FINANCIALS_UPDATED: 'Valores da venda atualizados'
+  LEAD_REOPENED: 'Lead reaberto', SALE_REVERSED: 'Venda revertida', DISCARDED: 'Lead descartado', SALE_FINANCIALS_UPDATED: 'Valores da venda atualizados',
+  CRM_TASK_CREATED: 'Ação criada', CRM_TASK_UPDATED: 'Ação atualizada', CRM_TASK_COMPLETED: 'Ação concluída', CRM_TASK_CANCELLED: 'Ação cancelada'
 };
 
 function dateTimeLabel(value: string) {
