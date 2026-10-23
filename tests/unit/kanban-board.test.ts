@@ -15,8 +15,8 @@ test('offers a confirmed return-to-research action that deletes the CRM record',
 test('keeps the company detail card vertically scrollable on mobile', () => {
   const source = readFileSync(resolve(process.cwd(), 'components/lead-detail-modal.tsx'), 'utf8');
 
-  expect(source).toContain('data-testid="lead-modal-surface"');
-  expect(source).toContain('min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain');
+  expect(source).toContain('data-testid="lead-modal-surface" className="atelier-scrollbar starting:translate-y-2');
+  expect(source).toContain('flex-col overflow-y-auto overscroll-y-contain touch-pan-y');
   expect(source).toContain("WebkitOverflowScrolling: 'touch'");
 });
 

@@ -34,6 +34,12 @@ test.beforeAll(async () => {
         { id: 'missing-author', type: 'CONTACT', actorId: 'missing', actorName: null, channel: null, createdAt: '2026-10-04T15:30:00.000Z', note: 'Contato sem perfil.' },
         { id: 'legacy-author', type: 'CONTACT', actorId: 'legacy', channel: null, createdAt: '2026-10-03T15:30:00.000Z', note: 'Contato legado.' }
       ] });
+      if (mode === 'scroll-modal') Object.assign(lead, {
+        stage: 'QUALIFIED', followUps: [{ id: 'pending', state: 'PENDING', dueDate: '2026-10-27T15:30:00.000Z' }]
+      });
+      if (mode === 'scroll-edge') Object.assign(lead, {
+        phone: '+5521979429064', address: 'Sepetiba, Rio de Janeiro, RJ, Brasil', category: 'Carpet Cleaning'
+      });
       function App() {
         const [open, setOpen] = React.useState(false);
         const [result, setResult] = React.useState('');
@@ -57,7 +63,7 @@ test.beforeAll(async () => {
       createRoot(document.getElementById('root')).render(<App />);
     ` },
     bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic',
-    define: { 'process.env.NODE_ENV': '"production"' },
+    define: { 'process.env.NODE_ENV': '"production"', 'process.env.__NEXT_ROUTER_BASEPATH': '""' },
     plugins: [{
       name: 'router-test-boundary',
       setup(builder) {
@@ -83,7 +89,71 @@ async function openComponents(page: Page, mode = '') {
   await expect(page.getByRole('heading', { name: 'Configurações comerciais' })).toBeVisible();
 }
 
-for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'mobile', width: 390, height: 844 }]) {
+for (const viewport of [{ name: 'desktop', width: 1440, height: 930 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`scrolling can start anywhere inside the company card on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openComponents(page, 'scroll-modal');
+    await page.getByRole('button', { name: 'Abrir lead' }).click();
+    const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
+    const surface = modal.getByTestId('lead-modal-surface');
+    const header = modal.locator('header');
+    const bounds = await header.boundingBox();
+    expect(bounds).not.toBeNull();
+    const x = bounds!.x + bounds!.width / 2;
+    const y = bounds!.y + bounds!.height / 2;
+    if (viewport.name === 'mobile') {
+      const session = await page.context().newCDPSession(page);
+      await session.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+      await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - 180 }] });
+      await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await session.detach();
+    } else {
+      await page.mouse.move(x, y);
+      await page.mouse.wheel(0, 400);
+    }
+    await expect.poll(() => surface.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  });
+
+  test(`wheel reaches the stage controls in a short company card on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize({ ...viewport, height: 600 });
+    await openComponents(page, 'scroll-edge');
+    await page.getByRole('button', { name: 'Abrir lead' }).click();
+    const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
+    const surface = modal.getByTestId('lead-modal-surface');
+    const bounds = await surface.boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height * 0.7);
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => surface.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await expect(modal.getByLabel('Mover para etapa')).toBeVisible();
+  });
+
+  test(`the company detail content scrolls by gesture on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openComponents(page, 'scroll-modal');
+    await page.getByRole('button', { name: 'Abrir lead' }).click();
+    const modal = page.getByRole('dialog', { name: 'Oficina de teste' });
+    const scrollport = modal.getByTestId('lead-modal-surface');
+    await expect.poll(() => scrollport.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    const bounds = await scrollport.boundingBox();
+    expect(bounds).not.toBeNull();
+    if (viewport.name === 'mobile') {
+      const session = await page.context().newCDPSession(page);
+      await session.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+      const x = bounds!.x + bounds!.width / 2;
+      const y = bounds!.y + bounds!.height * 0.75;
+      await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - 220 }] });
+      await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await session.detach();
+    } else {
+      await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+      await page.mouse.wheel(0, 500);
+    }
+    await expect.poll(() => scrollport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  });
+
   test(`timeline identifies activity authors and missing profiles on ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await openComponents(page, 'authors');
