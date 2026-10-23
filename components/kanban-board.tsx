@@ -14,6 +14,8 @@ import type { CommercialServiceOption } from '@/lib/commercial-ui';
 import { synchronizeHorizontalScroll } from '@/lib/horizontal-scroll-sync';
 import { searchCrmLeads } from '@/lib/crm-search';
 import { filterCrmBoardLeads, sortCrmBoardLeads, type CrmBoardFilter, type CrmBoardSort } from '@/lib/crm-board-view';
+import { CrmActionQueue } from './crm-action-queue';
+import type { CrmTaskFormMember } from './crm-task-form';
 
 export type CrmLead = {
   id: string;
@@ -42,7 +44,7 @@ export type CrmLead = {
 };
 
 
-export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays, boardVersion = '' }: { leads: CrmLead[]; focusedLeadId?: string; services: CommercialServiceOption[]; followUpDelayDays: number; boardVersion?: string }) {
+export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays, boardVersion = '', members = [], currentMemberId }: { leads: CrmLead[]; focusedLeadId?: string; services: CommercialServiceOption[]; followUpDelayDays: number; boardVersion?: string; members?: CrmTaskFormMember[]; currentMemberId?: string | null }) {
   const router = useRouter();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(focusedLeadId ?? null);
   const [stageOverrides, setStageOverrides] = useState<Record<string, LeadStage>>({});
@@ -50,6 +52,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<CrmBoardSort>('current');
   const [boardFilter, setBoardFilter] = useState<CrmBoardFilter>('all');
+  const [activeView, setActiveView] = useState<'FUNNEL' | 'ACTIONS'>('FUNNEL');
   const [confirmingTrash, setConfirmingTrash] = useState(false);
   const [emptyTrashBusy, setEmptyTrashBusy] = useState(false);
   const [emptyTrashError, setEmptyTrashError] = useState<string | null>(null);
@@ -185,6 +188,13 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
   }
 
   return <>
+    <div role="tablist" aria-label="Visões do CRM" className="mb-4 flex w-fit max-w-full gap-1 rounded-xl border border-white/[0.09] bg-[#0d1216]/70 p-1">
+      <button id="crm-funnel-tab" type="button" role="tab" aria-selected={activeView === 'FUNNEL'} aria-controls="crm-funnel-panel" onClick={() => setActiveView('FUNNEL')} className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition-colors ${activeView === 'FUNNEL' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}>Funil</button>
+      <button id="crm-actions-tab" type="button" role="tab" aria-selected={activeView === 'ACTIONS'} aria-controls="crm-actions-panel" onClick={() => setActiveView('ACTIONS')} className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition-colors ${activeView === 'ACTIONS' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}>Ações</button>
+    </div>
+    {activeView === 'ACTIONS' ? <div id="crm-actions-panel" role="tabpanel" aria-labelledby="crm-actions-tab">
+      <CrmActionQueue leads={leads.map(({ id, name }) => ({ id, name }))} members={members} currentMemberId={currentMemberId} />
+    </div> : <div id="crm-funnel-panel" role="tabpanel" aria-labelledby="crm-funnel-tab">
     <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
       <label className="grid w-full gap-1.5 text-xs font-medium text-white/55 sm:max-w-md">
         Buscar empresas
@@ -255,6 +265,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
       {renderColumn('DISCARDED', 'Lixeira', 'Empresas descartadas ficam guardadas aqui, com o histórico preservado, sem voltar para a pesquisa.')}
       {confirmingTrash ? <EmptyTrashConfirmation count={trashedLeads.length} busy={emptyTrashBusy} error={emptyTrashError} onCancel={() => setConfirmingTrash(false)} onConfirm={() => void emptyTrash()} /> : null}
     </section>
+    </div>}
     <AnimatePresence>{selectedLead ? <LeadDetailModal key={selectedLead.id} lead={{ ...selectedLead, followUpOriginStage: selectedFollowUpOrigin }} services={services} followUpDelayDays={followUpDelayDays} onClose={() => setSelectedLeadId(null)} onDeleted={(id) => {
       setRemovedIds((previous) => [...previous, id]);
       setSelectedLeadId(null);

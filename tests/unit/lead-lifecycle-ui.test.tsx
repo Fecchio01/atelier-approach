@@ -57,6 +57,9 @@ describe('CRM lifecycle UI and empty-trash API without database', () => {
     expect(html).toContain('Próxima ação');
     expect(html).toContain('Há mais tempo na etapa');
     expect(html).toContain('Maior valor de venda');
+    expect(html).toContain('aria-label="Visões do CRM"');
+    expect(html).toContain('role="tab"');
+    expect(html).toContain('Ações');
   });
 
   test('confirmation clearly states that emptying the trash is permanent', () => {

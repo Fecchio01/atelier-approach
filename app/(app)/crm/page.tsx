@@ -5,13 +5,16 @@ import { getFollowUpDelayDays } from '@/lib/commercial-settings';
 import { getCrmBoardLeads } from '@/lib/crm-board';
 import { processCrmLifecycleForPageRequest } from '@/lib/crm-lifecycle-page-request';
 import { getCrmBoardVersion } from '@/lib/crm-board-version';
+import { getCurrentUser } from '@/lib/auth';
 
 export default async function CrmPage({ searchParams }: { searchParams: Promise<{ lead?: string; notice?: string }> }) {
   const { lead: focusedLeadId, notice } = await searchParams;
   await processCrmLifecycleForPageRequest();
-  const [leads, services, followUpDelayDays, boardVersion] = await Promise.all([getCrmBoardLeads(),
+  const [leads, services, followUpDelayDays, boardVersion, members, user] = await Promise.all([getCrmBoardLeads(),
   prisma.serviceCatalogItem.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
-  getFollowUpDelayDays(), getCrmBoardVersion()]);
+  getFollowUpDelayDays(), getCrmBoardVersion(),
+  prisma.memberProfile.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+  getCurrentUser()]);
   const serializedLeads: CrmLead[] = leads.map((lead) => ({
     ...lead,
     saleValue: lead.saleValue?.toString() ?? null,
@@ -31,7 +34,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     <section className="mx-auto max-w-[1840px] px-5 py-7 md:px-8 md:py-9">
       <PageHeading eyebrow="CRM compartilhado" title="Seu funil, mais resultados." description="Acompanhe cada abordagem em uma visão única. Clique em uma empresa para abrir contatos, histórico e próxima ação." />
       {notice === 'duplicate' ? <p role="alert" className="mt-4 rounded-lg border border-[var(--atelier-green)]/50 bg-[var(--atelier-green)]/10 px-4 py-3 text-sm text-white">Esta empresa já está no CRM.</p> : null}
-      <div className="mt-8"><KanbanBoard leads={serializedLeads} focusedLeadId={focusedLeadId} services={services.map(({ id, name, price, billingType }) => ({ id, name, price: price.toString(), billingType }))} followUpDelayDays={followUpDelayDays} boardVersion={boardVersion} /></div>
+      <div className="mt-8"><KanbanBoard leads={serializedLeads} focusedLeadId={focusedLeadId} services={services.map(({ id, name, price, billingType }) => ({ id, name, price: price.toString(), billingType }))} followUpDelayDays={followUpDelayDays} boardVersion={boardVersion} members={members} currentMemberId={user?.id} /></div>
     </section>
   );
 }
