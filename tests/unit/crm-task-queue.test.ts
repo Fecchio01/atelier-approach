@@ -37,11 +37,12 @@ describe('filterAndSortCrmQueue', () => {
     const items = [
       item('today-later', '2026-10-22T02:45:00.000Z'),
       item('today-past', '2026-10-22T01:00:00.000Z'),
+      item('yesterday', '2026-10-21T12:00:00.000Z'),
       item('tomorrow-late', '2026-10-23T02:30:00.000Z')
     ];
 
-    expect(filterAndSortCrmQueue(items, { period: 'TODAY' }, now).map(({ id }) => id)).toEqual(['today-later']);
-    expect(filterAndSortCrmQueue(items, { period: 'OVERDUE' }, now).map(({ id }) => id)).toEqual(['today-past']);
+    expect(filterAndSortCrmQueue(items, { period: 'TODAY' }, now).map(({ id }) => id)).toEqual(['today-past', 'today-later']);
+    expect(filterAndSortCrmQueue(items, { period: 'OVERDUE' }, now).map(({ id }) => id)).toEqual(['yesterday']);
     expect(filterAndSortCrmQueue(items, { period: 'FUTURE' }, now).map(({ id }) => id)).toEqual(['tomorrow-late']);
   });
 

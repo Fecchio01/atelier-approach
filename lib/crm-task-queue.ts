@@ -95,9 +95,8 @@ export function filterAndSortCrmQueue<T extends CrmQueueItem>(items: readonly T[
     if (filters.assigneeId && item.assigneeId !== filters.assigneeId) return false;
     const dueDate = validDate(item.dueDate);
     if (!dueDate) return false;
-    if (dueDate.valueOf() < now.valueOf()) return filters.period !== 'TODAY' && filters.period !== 'FUTURE';
     const itemDay = calendarDateKey(dueDate);
-    if (filters.period === 'OVERDUE') return false;
+    if (filters.period === 'OVERDUE') return itemDay < today;
     if (filters.period === 'TODAY') return itemDay === today;
     if (filters.period === 'FUTURE') return itemDay > today;
     return true;
