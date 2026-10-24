@@ -1,10 +1,6 @@
-import Link from 'next/link';
+import { DashboardLifecycleWarningList } from '@/components/dashboard-lifecycle-warning-list';
 
 import type { DashboardLifecycleWarning } from '@/lib/dashboard-lifecycle-warnings';
-
-function shortDate(value: Date) {
-  return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(value);
-}
 
 export function DashboardLifecycleWarnings({ warnings }: { warnings: DashboardLifecycleWarning[] }) {
   if (warnings.length === 0) return null;
@@ -17,17 +13,6 @@ export function DashboardLifecycleWarnings({ warnings }: { warnings: DashboardLi
         <p className="mt-1 text-xs text-white/50">Este aviso é informativo. Leads sem avanço são movidos automaticamente para a lixeira ao fim do prazo.</p>
       </div>
     </div>
-    {warnings.length ? <ul className="mt-3 divide-y divide-white/[0.07]">
-      {warnings.map((warning) => <li key={warning.leadId}>
-        <Link href={`/crm?lead=${encodeURIComponent(warning.leadId)}`} className="group flex min-h-16 items-center justify-between gap-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-[var(--atelier-green)]">
-          <span className="min-w-0">
-            <strong className="block truncate text-sm font-medium text-white group-hover:text-[var(--atelier-green)]">{warning.leadName}</strong>
-            <span className="mt-1 block truncate text-xs text-white/55">{warning.currentStage} · origem: {warning.originStage ?? 'não registrada'}</span>
-            <span className="mt-1 block text-xs text-white/45">Prazo: {shortDate(warning.discardAt)}</span>
-          </span>
-          <span className="shrink-0 text-right text-xs font-medium text-amber-200">{warning.remainingTime}</span>
-        </Link>
-      </li>)}
-    </ul> : <p className="mt-3 border-t border-white/[0.07] pt-3 text-sm text-white/50">Nenhum lead próximo do descarte automático.</p>}
+    <DashboardLifecycleWarningList warnings={warnings} />
   </section>;
 }

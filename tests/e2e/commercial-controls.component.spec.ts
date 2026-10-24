@@ -16,6 +16,7 @@ test.beforeAll(async () => {
       import { CommercialSettingsForm } from './components/commercial-settings-form';
       import { LeadDetailModal } from './components/lead-detail-modal';
       import { KanbanBoard } from './components/kanban-board';
+      import { DashboardLifecycleWarnings } from './components/dashboard-lifecycle-warnings';
       const services = [
         { id: 'monthly', name: 'Plano mensal', price: '199.90', billingType: 'MONTHLY', isActive: true },
         { id: 'setup', name: 'Implantação', price: '500.00', billingType: 'ONE_TIME', isActive: true }
@@ -24,6 +25,10 @@ test.beforeAll(async () => {
         saleValue: null, mrr: null, phone: null, website: null, instagram: null, whatsapp: null,
         latitude: null, longitude: null, address: null, category: null, activities: [], followUps: [] };
       const mode = new URLSearchParams(window.location.search).get('mode');
+      const lifecycleWarnings = ['Oliveira Multimarcas', "Milla's Restaurante", 'Empório Bora Bora'].map((leadName, index) => ({
+        leadId: 'warning-' + index, leadName, currentStage: 'Abordado', originStage: 'Abordado',
+        discardAt: new Date('2026-10-25T17:00:00.000Z'), daysRemaining: 1, remainingTime: 'Vence em menos de 1 dia'
+      }));
       if (mode === 'unloaded-board') Object.assign(lead, { detailsLoaded: false });
       if (mode === 'conversation') Object.assign(lead, { stage: 'IN_CONVERSATION' });
       if (mode === 'won') Object.assign(lead, { stage: 'WON', saleValue: '699.90', mrr: '199.90' });
@@ -48,6 +53,7 @@ test.beforeAll(async () => {
         : [lead]);
         return <main style={{ padding: 20 }}>
           <CommercialSettingsForm services={services} followUpDelayDays={3} />
+          {mode === 'lifecycle-warnings' && <DashboardLifecycleWarnings warnings={lifecycleWarnings} />}
           {(mode === 'board' || mode === 'unloaded-board' || mode === 'scrollboard') && <>
             <button onClick={() => setBoardLeads([{ ...lead, stage: 'WON' }])}>Confirmar ganho no servidor</button>
             <button onClick={() => setBoardLeads([{ ...lead, stage: 'CONTACTED' }])}>Receber reabertura externa</button>
@@ -67,6 +73,11 @@ test.beforeAll(async () => {
     plugins: [{
       name: 'router-test-boundary',
       setup(builder) {
+        builder.onResolve({ filter: /^next\/link$/ }, () => ({ path: 'link', namespace: 'test-link' }));
+        builder.onLoad({ filter: /.*/, namespace: 'test-link' }, () => ({
+          contents: 'import React from "react"; export default function Link({ href, children, ...props }) { return React.createElement("a", { href, ...props }, children); }',
+          loader: 'js', resolveDir: process.cwd()
+        }));
         builder.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: 'router', namespace: 'test-router' }));
         builder.onLoad({ filter: /.*/, namespace: 'test-router' }, () => ({
           contents: 'const router = { refresh() { document.body.setAttribute("data-board-refreshed", "true"); } }; export function useRouter() { return router; }',
@@ -88,6 +99,20 @@ async function openComponents(page: Page, mode = '') {
   await page.addScriptTag({ content: script });
   await expect(page.getByRole('heading', { name: 'Configurações comerciais' })).toBeVisible();
 }
+
+test('keeps the first upcoming discard visible and expands the rest on request', async ({ page }) => {
+  await openComponents(page, 'lifecycle-warnings');
+  await expect(page.getByText('Oliveira Multimarcas')).toBeVisible();
+  await expect(page.getByText("Milla's Restaurante")).toBeHidden();
+  await expect(page.getByText('Empório Bora Bora')).toBeHidden();
+
+  await page.getByRole('button', { name: 'Ver mais' }).click();
+  await expect(page.getByText("Milla's Restaurante")).toBeVisible();
+  await expect(page.getByText('Empório Bora Bora')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Ver menos' }).click();
+  await expect(page.getByText("Milla's Restaurante")).toBeHidden();
+});
 
 for (const viewport of [{ name: 'desktop', width: 1440, height: 930 }, { name: 'mobile', width: 390, height: 844 }]) {
   test(`scrolling can start anywhere inside the company card on ${viewport.name}`, async ({ page }) => {
