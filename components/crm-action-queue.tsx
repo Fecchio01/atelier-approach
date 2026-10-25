@@ -9,6 +9,8 @@ import { CrmSavedViewManager } from './crm-saved-views';
 import { CrmTaskForm, type CrmTaskFormItem, type CrmTaskFormLead, type CrmTaskFormMember } from './crm-task-form';
 
 type AssignmentFilter = 'ALL' | 'MINE';
+type SelectedTaskVersion = { id: string; updatedAt: string };
+const maxBulkTasks = 100;
 type TaskItem = CrmQueueItem & { kind: 'TASK'; taskType: NonNullable<CrmQueueItem['taskType']>; updatedAt: string };
 type FollowUpItem = CrmQueueItem & { kind: 'FOLLOW_UP'; returnStage?: string | null };
 type QueueItem = TaskItem | FollowUpItem;
@@ -86,6 +88,12 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
   const [initialDueDate, setInitialDueDate] = useState<string | undefined>();
   const [editingTask, setEditingTask] = useState<CrmTaskFormItem | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectedTaskVersions, setSelectedTaskVersions] = useState<SelectedTaskVersion[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkAssigneeId, setBulkAssigneeId] = useState('');
+  const [confirmBulkCancel, setConfirmBulkCancel] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(initialItems === undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -122,6 +130,31 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
     assigneeId: assignment === 'MINE' ? currentMemberId : null,
     period
   }), [items, assignment, currentMemberId, period]);
+  const visibleTaskIds = useMemo(() => visibleItems.flatMap((item) => item.kind === 'TASK' ? [item.id] : []), [visibleItems]);
+  const visibleTaskIdsKey = visibleTaskIds.join('|');
+  const selectableTasks = useMemo(() => visibleItems.flatMap((item) => item.kind === 'TASK' ? [item] : []).slice(0, maxBulkTasks), [visibleItems]);
+  const selectableTaskIds = useMemo(() => selectableTasks.map(({ id }) => id), [selectableTasks]);
+  const selectedTaskIds = useMemo(() => selectedTaskVersions.map(({ id }) => id), [selectedTaskVersions]);
+  const selectedVersionById = useMemo(() => new Map(selectedTaskVersions.map(({ id, updatedAt }) => [id, updatedAt])), [selectedTaskVersions]);
+  const selectedTasks = useMemo(() => visibleItems.filter((item): item is TaskItem => item.kind === 'TASK' && selectedVersionById.has(item.id)), [visibleItems, selectedVersionById]);
+  const staleSelectedCount = selectedTasks.filter((item) => selectedVersionById.get(item.id) !== item.updatedAt).length;
+  const allSelectableTasksSelected = selectableTaskIds.length > 0 && selectableTaskIds.every((id) => selectedVersionById.has(id));
+
+  useEffect(() => {
+    const visibleIds = new Set(visibleTaskIdsKey ? visibleTaskIdsKey.split('|') : []);
+    setSelectedTaskVersions((previous) => {
+      const next = previous.filter(({ id }) => visibleIds.has(id));
+      return next.length === previous.length ? previous : next;
+    });
+    setConfirmBulkCancel(false);
+  }, [visibleTaskIdsKey]);
+
+  useEffect(() => {
+    if (view !== 'LIST') {
+      setSelectedTaskVersions([]);
+      setConfirmBulkCancel(false);
+    }
+  }, [view]);
 
   const todayKey = getCrmCalendarDayKey(new Date());
   const activeDayKey = selectedDayKey ?? todayKey;
@@ -140,6 +173,7 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
   const selectedDayItems = activeDayKey ? itemsByDay.get(activeDayKey) ?? [] : [];
 
   async function mutateTask(item: TaskItem, action: 'COMPLETE' | 'CANCEL') {
+    if (bulkBusy) return;
     setBusyId(item.id);
     setActionError(null);
     try {
@@ -154,6 +188,60 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
       await refresh(true);
     } finally {
       setBusyId(null);
+    }
+  }
+
+  function toggleTaskSelection(id: string, updatedAt: string) {
+    setBulkError(null);
+    setBulkNotice(null);
+    setConfirmBulkCancel(false);
+    setSelectedTaskVersions((previous) => previous.some((task) => task.id === id)
+      ? previous.filter((task) => task.id !== id)
+      : previous.length >= maxBulkTasks ? previous : [...previous, { id, updatedAt }]);
+  }
+
+  function toggleAllVisibleTasks() {
+    setBulkError(null);
+    setBulkNotice(null);
+    setConfirmBulkCancel(false);
+    setSelectedTaskVersions(allSelectableTasksSelected
+      ? []
+      : selectableTasks.map(({ id, updatedAt }) => ({ id, updatedAt })));
+  }
+
+  async function performBulkAction(action: 'COMPLETE' | 'CANCEL' | 'REASSIGN') {
+    if (!selectedTasks.length || bulkBusy || busyId) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    setBulkNotice(null);
+    try {
+      const response = await fetch('/api/crm/tasks/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          items: selectedTaskVersions.map(({ id, updatedAt }) => ({ id, updatedAt })),
+          ...(action === 'REASSIGN' ? { assigneeId: bulkAssigneeId } : {})
+        })
+      });
+      const payload = await response.json() as { error?: string; updatedCount?: number; skippedCount?: number; unchangedCount?: number };
+      if (!response.ok || typeof payload.updatedCount !== 'number' || typeof payload.skippedCount !== 'number' || typeof payload.unchangedCount !== 'number') {
+        throw new Error(payload.error ?? 'Não foi possível aplicar as alterações em lote.');
+      }
+      const labels = { COMPLETE: 'concluídas', CANCEL: 'canceladas', REASSIGN: 'reatribuídas' };
+      const details = [`${payload.updatedCount} ${payload.updatedCount === 1 ? 'tarefa' : 'tarefas'} ${labels[action]}`];
+      if (payload.skippedCount) details.push(`${payload.skippedCount} ignorada${payload.skippedCount === 1 ? '' : 's'} por ter mudado ou não estar mais pendente`);
+      if (payload.unchangedCount) details.push(`${payload.unchangedCount} já estava${payload.unchangedCount === 1 ? '' : 'm'} com esse responsável`);
+      setBulkNotice(`${details.join('; ')}.`);
+      setSelectedTaskVersions([]);
+      setBulkAssigneeId('');
+      setConfirmBulkCancel(false);
+      await refresh(true);
+    } catch (requestError) {
+      setBulkError(requestError instanceof Error ? requestError.message : 'Não foi possível aplicar as alterações em lote.');
+      await refresh(true);
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -198,11 +286,11 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
 
     <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center">
       <div role="group" aria-label="Responsável das ações" className="grid grid-cols-2 gap-2 rounded-xl border border-white/[0.08] bg-black/10 p-1">
-        <button type="button" aria-pressed={assignment === 'ALL'} onClick={() => setAssignment('ALL')} className={`min-h-10 rounded-lg px-3 text-xs font-semibold ${assignment === 'ALL' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}>Todas</button>
-        <button type="button" aria-pressed={assignment === 'MINE'} onClick={() => setAssignment('MINE')} disabled={!currentMemberId} className={`min-h-10 rounded-lg px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${assignment === 'MINE' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}>Atribuídas a mim</button>
+        <button type="button" aria-pressed={assignment === 'ALL'} onClick={() => { setSelectedTaskVersions([]); setConfirmBulkCancel(false); setAssignment('ALL'); }} className={`min-h-10 rounded-lg px-3 text-xs font-semibold ${assignment === 'ALL' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}>Todas</button>
+        <button type="button" aria-pressed={assignment === 'MINE'} onClick={() => { setSelectedTaskVersions([]); setConfirmBulkCancel(false); setAssignment('MINE'); }} disabled={!currentMemberId} className={`min-h-10 rounded-lg px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${assignment === 'MINE' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}>Atribuídas a mim</button>
       </div>
       <div role="group" aria-label="Período das ações" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {periodOptions.map((option) => <button key={option.value} type="button" aria-pressed={period === option.value} onClick={() => setPeriod(option.value)} className={`min-h-10 rounded-lg border px-3 text-xs font-semibold ${period === option.value ? 'border-[var(--atelier-green)]/45 bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]' : 'border-white/[0.09] text-white/55 hover:border-white/20 hover:text-white/80'}`}>{option.label}</button>)}
+        {periodOptions.map((option) => <button key={option.value} type="button" aria-pressed={period === option.value} onClick={() => { setSelectedTaskVersions([]); setConfirmBulkCancel(false); setPeriod(option.value); }} className={`min-h-10 rounded-lg border px-3 text-xs font-semibold ${period === option.value ? 'border-[var(--atelier-green)]/45 bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]' : 'border-white/[0.09] text-white/55 hover:border-white/20 hover:text-white/80'}`}>{option.label}</button>)}
       </div>
     </div>
 
@@ -211,18 +299,53 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
 
     <div role="group" aria-label="Visualização das ações" className="flex w-fit max-w-full gap-1 rounded-xl border border-white/[0.08] bg-black/10 p-1">
       <button type="button" aria-pressed={view === 'LIST'} onClick={() => setView('LIST')} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold ${view === 'LIST' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}><ListBulletsIcon size={15} aria-hidden="true" />Lista</button>
-      <button type="button" aria-pressed={view === 'CALENDAR'} onClick={() => setView('CALENDAR')} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold ${view === 'CALENDAR' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}><CalendarBlankIcon size={15} aria-hidden="true" />Calendário</button>
+      <button type="button" aria-pressed={view === 'CALENDAR'} onClick={() => { setView('CALENDAR'); setSelectedTaskVersions([]); setConfirmBulkCancel(false); }} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold ${view === 'CALENDAR' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}><CalendarBlankIcon size={15} aria-hidden="true" />Calendário</button>
     </div>
     <CrmSavedViewManager scope="ACTIONS" enabled={Boolean(currentMemberId)} currentFilters={{ assignment, period, view }} presets={[
       { id: 'my-actions', name: 'Minhas ações', disabled: !currentMemberId, filters: { assignment: 'MINE', period: 'ALL', view: 'LIST' } },
       { id: 'overdue-actions', name: 'Atrasadas', filters: { assignment: 'ALL', period: 'OVERDUE', view: 'LIST' } }
     ]} onApply={(filters) => {
       if (!('assignment' in filters)) return;
+      setSelectedTaskVersions([]);
+      setConfirmBulkCancel(false);
       setAssignment(filters.assignment);
       setPeriod(filters.period);
       setView(filters.view);
       if (filters.view === 'CALENDAR') setSelectedDayKey(getCrmCalendarDayKey(new Date()));
     }} />
+
+    {view === 'LIST' && (visibleTaskIds.length > 0 || bulkNotice || bulkError) ? <section aria-label="Ações em lote" className="grid min-w-0 gap-3 rounded-xl border border-white/[0.08] bg-black/[0.08] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="flex min-h-9 cursor-pointer items-center gap-2 text-xs font-semibold text-white/75">
+          <input type="checkbox" checked={allSelectableTasksSelected} onChange={toggleAllVisibleTasks} disabled={bulkBusy || busyId !== null || selectableTaskIds.length === 0} aria-label="Selecionar até 100 tarefas visíveis" className="size-4 accent-[var(--atelier-green)] disabled:cursor-not-allowed disabled:opacity-40" />
+          {visibleTaskIds.length > maxBulkTasks ? `Selecionar ${maxBulkTasks} primeiras tarefas` : `Selecionar tarefas visíveis (${visibleTaskIds.length})`}
+        </label>
+        <span className="text-[11px] text-white/40">{selectedTasks.length} selecionada{selectedTasks.length === 1 ? '' : 's'} · máximo {maxBulkTasks} por operação</span>
+      </div>
+      <p className="text-[11px] text-white/40">Somente tarefas manuais entram em lote. Follow-ups automáticos continuam individuais.</p>
+      {selectedTasks.length ? <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.07] pt-3">
+        <button type="button" disabled={bulkBusy || busyId !== null || staleSelectedCount > 0} onClick={() => void performBulkAction('COMPLETE')} className="min-h-10 rounded-lg bg-[var(--atelier-green)] px-3 text-xs font-semibold text-black hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45">{bulkBusy ? 'Aplicando…' : 'Concluir selecionadas'}</button>
+        <button type="button" disabled={bulkBusy || busyId !== null || staleSelectedCount > 0} onClick={() => { setConfirmBulkCancel(true); setBulkError(null); setBulkNotice(null); }} className="min-h-10 rounded-lg border border-red-200/25 px-3 text-xs font-semibold text-red-100 hover:bg-red-200/[0.06] disabled:cursor-not-allowed disabled:opacity-45">Cancelar selecionadas</button>
+        <label className="grid min-w-48 flex-1 gap-1 text-[10px] font-medium text-white/45 sm:flex-none">
+          Novo responsável
+          <select aria-label="Novo responsável das tarefas selecionadas" value={bulkAssigneeId} onChange={(event) => setBulkAssigneeId(event.target.value)} disabled={bulkBusy} className="min-h-10 w-full rounded-lg border border-white/[0.12] bg-[#151b20] px-3 text-xs text-white outline-none focus:border-[var(--atelier-green)]/60 disabled:opacity-45 sm:min-w-52">
+            <option value="">Selecionar membro</option>
+            {members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={bulkBusy || busyId !== null || staleSelectedCount > 0 || !bulkAssigneeId} onClick={() => void performBulkAction('REASSIGN')} className="min-h-10 rounded-lg border border-white/[0.12] px-3 text-xs font-semibold text-white/75 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-40">Reatribuir</button>
+      </div> : null}
+      {confirmBulkCancel && selectedTasks.length ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200/20 bg-red-200/[0.045] p-3">
+        <p className="text-xs text-red-50">Cancelar {selectedTasks.length} {selectedTasks.length === 1 ? 'tarefa selecionada' : 'tarefas selecionadas'}? Essa operação não apaga o histórico.</p>
+        <div className="flex items-center gap-2">
+          <button type="button" disabled={bulkBusy || busyId !== null || staleSelectedCount > 0} onClick={() => void performBulkAction('CANCEL')} className="min-h-9 rounded-lg bg-red-200 px-3 text-xs font-semibold text-[#291315] disabled:opacity-45">Confirmar cancelamento</button>
+          <button type="button" onClick={() => setConfirmBulkCancel(false)} className="min-h-9 rounded-lg px-3 text-xs font-semibold text-white/55 hover:bg-white/[0.06]">Voltar</button>
+        </div>
+      </div> : null}
+      {bulkError ? <p role="alert" className="text-xs text-red-200">{bulkError}</p> : null}
+      {bulkNotice ? <p role="status" className="text-xs text-white/70">{bulkNotice}</p> : null}
+      {staleSelectedCount ? <p role="status" className="text-xs text-amber-100">{staleSelectedCount} tarefa{staleSelectedCount === 1 ? ' selecionada mudou' : 's selecionadas mudaram'} desde a seleção. Desmarque e selecione novamente para aplicar a versão atual.</p> : null}
+    </section> : null}
 
     {view === 'CALENDAR' ? <section aria-label="Calendário das ações" className="grid min-w-0 gap-3">
       <header className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-[#11171c] p-3 sm:p-4">
@@ -284,6 +407,9 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
       {loading ? <p className="rounded-xl border border-dashed border-white/[0.12] px-4 py-10 text-center text-sm text-white/45">Carregando ações da equipe…</p> : visibleItems.length ? <ul className="grid gap-2">
         {visibleItems.map((item) => <li key={`${item.kind}:${item.id}`} className="grid min-w-0 gap-3 rounded-xl border border-white/[0.08] bg-[#12181d] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-4">
           <div className="flex min-w-0 items-start gap-3">
+            {item.kind === 'TASK' ? <label className="mt-2 grid size-5 shrink-0 cursor-pointer place-items-center rounded focus-within:outline-2 focus-within:outline-[var(--atelier-green)]">
+              <input type="checkbox" checked={selectedTaskIds.includes(item.id)} onChange={() => toggleTaskSelection(item.id, item.updatedAt)} disabled={bulkBusy || busyId !== null || (!selectedTaskIds.includes(item.id) && selectedTaskIds.length >= maxBulkTasks)} aria-label={`Selecionar tarefa: ${item.title}`} className="size-4 accent-[var(--atelier-green)] disabled:cursor-not-allowed disabled:opacity-40" />
+            </label> : null}
             <span className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg ${item.kind === 'FOLLOW_UP' ? 'bg-sky-300/[0.08] text-sky-200' : 'bg-[var(--atelier-green)]/[0.09] text-[var(--atelier-green)]'}`} aria-hidden="true">
               {item.kind === 'FOLLOW_UP' ? <ClockIcon size={18} /> : <CheckCircleIcon size={18} />}
             </span>
@@ -301,9 +427,9 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
             </div>
           </div>
           {item.kind === 'TASK' ? <div className="grid grid-cols-3 gap-2 sm:flex sm:justify-end">
-            <button type="button" disabled={busyId === item.id} onClick={() => editTask(item)} className="min-h-10 rounded-lg border border-white/[0.12] px-2.5 text-xs font-semibold text-white/70 hover:bg-white/[0.05] disabled:opacity-50"><PencilSimpleIcon size={15} className="mr-1 inline" aria-hidden="true" />Editar</button>
-            <button type="button" disabled={busyId === item.id} onClick={() => void mutateTask(item, 'COMPLETE')} className="min-h-10 rounded-lg border border-[var(--atelier-green)]/40 px-2.5 text-xs font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/[0.08] disabled:opacity-50">{busyId === item.id ? 'Salvando…' : 'Concluir'}</button>
-            <button type="button" disabled={busyId === item.id} onClick={() => void mutateTask(item, 'CANCEL')} aria-label={`Cancelar ação: ${item.title}`} className="min-h-10 rounded-lg border border-white/[0.12] px-2.5 text-xs font-semibold text-white/55 hover:border-red-200/30 hover:text-red-100 disabled:opacity-50"><XCircleIcon size={15} className="mr-1 inline" aria-hidden="true" />Cancelar</button>
+            <button type="button" disabled={busyId === item.id || bulkBusy} onClick={() => editTask(item)} className="min-h-10 rounded-lg border border-white/[0.12] px-2.5 text-xs font-semibold text-white/70 hover:bg-white/[0.05] disabled:opacity-50"><PencilSimpleIcon size={15} className="mr-1 inline" aria-hidden="true" />Editar</button>
+            <button type="button" disabled={busyId === item.id || bulkBusy} onClick={() => void mutateTask(item, 'COMPLETE')} className="min-h-10 rounded-lg border border-[var(--atelier-green)]/40 px-2.5 text-xs font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/[0.08] disabled:opacity-50">{busyId === item.id || bulkBusy ? 'Salvando…' : 'Concluir'}</button>
+            <button type="button" disabled={busyId === item.id || bulkBusy} onClick={() => void mutateTask(item, 'CANCEL')} aria-label={`Cancelar ação: ${item.title}`} className="min-h-10 rounded-lg border border-white/[0.12] px-2.5 text-xs font-semibold text-white/55 hover:border-red-200/30 hover:text-red-100 disabled:opacity-50"><XCircleIcon size={15} className="mr-1 inline" aria-hidden="true" />Cancelar</button>
           </div> : <Link href={`/crm?lead=${encodeURIComponent(item.leadId)}`} onClick={onOpenLead ? (event) => { event.preventDefault(); onOpenLead(item.leadId); } : undefined} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/[0.12] px-3 text-xs font-semibold text-white/65 hover:border-white/25 hover:text-white">Abrir empresa <ArrowRightIcon size={14} aria-hidden="true" /></Link>}
         </li>)}
       </ul> : <p className="rounded-xl border border-dashed border-white/[0.12] px-4 py-10 text-center text-sm text-white/45">Nenhuma ação neste filtro.</p>}
