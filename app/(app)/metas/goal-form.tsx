@@ -131,11 +131,15 @@ export function GoalForm({
   const [importPending, setImportPending] = useState(false);
   const [customGoalSavePending, setCustomGoalSavePending] = useState(false);
   const [cycleClosePending, setCycleClosePending] = useState(false);
+  const [cycleConfirmationOpen, setCycleConfirmationOpen] = useState(false);
+  const [cycleCloseError, setCycleCloseError] = useState<string | null>(null);
   const [customGoalsDirty, setCustomGoalsDirty] = useState(false);
   const [importerBusy, setImporterBusy] = useState(false);
   const [importerRevision, setImporterRevision] = useState(0);
   const [goalNotice, setGoalNotice] = useState<GoalActionState | null>(null);
   const [monthlyStartDayDraft, setMonthlyStartDayDraft] = useState(String(monthlyStartDay));
+  const cycleDialogRef = useRef<HTMLDialogElement>(null);
+  const cycleCancelButtonRef = useRef<HTMLButtonElement>(null);
   const legacyRedundantGoals = Boolean(goal && removeRedundantCustomGoals(goal.customGoals).length < goal.customGoals.length);
   const cleanupStarted = useRef(false);
   const numericStartDay = Number(monthlyStartDayDraft);
@@ -147,20 +151,40 @@ export function GoalForm({
   const daysLabel = progress.daysLeft === 1 ? '1 dia restante' : `${progress.daysLeft} dias restantes`;
   const panelTitle = kind === 'WEEKLY' ? 'Metas semanais da equipe' : 'Metas mensais da equipe';
 
-  async function closeCycle() {
-    if (pending || importPending || importerBusy || customGoalSavePending || customGoalsDirty || cycleClosePending) return;
-    const confirmed = window.confirm(kind === 'WEEKLY'
-      ? 'Encerrar o ciclo semanal agora? As metas e os resultados serão arquivados, e um novo ciclo vazio começará.'
-      : 'Encerrar o ciclo mensal agora? As metas e os resultados serão arquivados, e um novo ciclo vazio começará hoje, com virada mensal no mesmo dia.');
-    if (!confirmed) return;
+  useEffect(() => {
+    const dialog = cycleDialogRef.current;
+    if (!dialog) return;
+    if (cycleConfirmationOpen && !dialog.open) {
+      dialog.showModal();
+      cycleCancelButtonRef.current?.focus();
+    } else if (!cycleConfirmationOpen && dialog.open) {
+      dialog.close();
+    }
+    return () => { if (dialog.open) dialog.close(); };
+  }, [cycleConfirmationOpen]);
 
+  function closeCycle() {
+    if (pending || importPending || importerBusy || customGoalSavePending || customGoalsDirty || cycleClosePending) return;
+    setCycleCloseError(null);
+    setCycleConfirmationOpen(true);
+  }
+
+  async function confirmCycleClose() {
+    if (cycleClosePending) return;
     setCycleClosePending(true);
     try {
       const result = await closeGoalCycle(kind);
       setGoalNotice(result);
-      if (result.status === 'saved') router.refresh();
+      if (result.status === 'saved') {
+        setCycleConfirmationOpen(false);
+        router.refresh();
+      } else {
+        setCycleCloseError(result.message);
+      }
     } catch {
-      setGoalNotice({ status: 'error', message: 'Não foi possível encerrar o ciclo agora. Tente novamente.' });
+      const message = 'Não foi possível encerrar o ciclo agora. Tente novamente.';
+      setCycleCloseError(message);
+      setGoalNotice({ status: 'error', message });
     } finally {
       setCycleClosePending(false);
     }
@@ -301,7 +325,8 @@ export function GoalForm({
 
   const customGoalsByGroup = groupCustomGoals(customGoals);
 
-  return <form action={formAction} className="space-y-6 [&_button]:transition-[transform,opacity] [&_button]:duration-[var(--atelier-motion-duration)] [&_button]:ease-[var(--atelier-motion-easing)]">
+  return <>
+  <form action={formAction} className="space-y-6 [&_button]:transition-[transform,opacity] [&_button]:duration-[var(--atelier-motion-duration)] [&_button]:ease-[var(--atelier-motion-easing)]">
     <input type="hidden" name="customGoals" value={JSON.stringify(customGoals)} />
     <GoalImporter key={importerRevision} disabled={importPending || customGoalSavePending || pending} onActivityChange={setImporterBusy} onApply={applyImportedSuggestions} />
     <section aria-label={kind === 'WEEKLY' ? 'Ciclo semanal atual' : 'Ciclo mensal atual'} className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(118deg,#192224,#11161b)] p-4 sm:p-7">
@@ -322,7 +347,7 @@ export function GoalForm({
             disabled={pending || importPending || importerBusy || customGoalSavePending || customGoalsDirty || cycleClosePending}
             title="Arquiva metas e resultados deste período e inicia um ciclo vazio."
             className="inline-flex min-h-9 items-center justify-center rounded-lg border border-white/[0.1] px-3 py-2 text-xs font-medium text-white/65 hover:border-[var(--atelier-green)]/55 hover:text-[var(--atelier-green)] disabled:cursor-wait disabled:opacity-45"
-          >{cycleClosePending ? 'Encerrando…' : 'Encerrar ciclo'}</button>
+          >Encerrar ciclo</button>
         </div>
       </div>
 
@@ -518,5 +543,31 @@ export function GoalForm({
         {(goalNotice ?? state).message || 'Os resultados deste ciclo também aparecem no painel e nos relatórios.'}
       </p>
     </div>
-  </form>;
+  </form>
+  <dialog
+    ref={cycleDialogRef}
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="cycle-close-title"
+    aria-describedby="cycle-close-description"
+    onCancel={(event) => { event.preventDefault(); if (!cycleClosePending) setCycleConfirmationOpen(false); }}
+    onClick={(event) => { if (event.target === event.currentTarget && !cycleClosePending) setCycleConfirmationOpen(false); }}
+    className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none border-0 bg-transparent p-4 text-white backdrop:bg-[#030506]/80 open:grid open:place-items-center"
+  >
+    <section className="w-full max-w-md rounded-2xl border border-[var(--atelier-floating-border)] bg-[#151c20] p-6 shadow-[0_24px_70px_rgba(0,0,0,.42)] sm:p-7">
+      <div className="mb-5 grid size-11 place-items-center rounded-xl border border-[var(--atelier-green)]/25 bg-[var(--atelier-green)]/[0.08] text-[var(--atelier-green)]"><CalendarBlankIcon size={21} aria-hidden="true" /></div>
+      <h2 id="cycle-close-title" className="text-lg font-semibold tracking-[-0.025em]">Encerrar ciclo {kind === 'WEEKLY' ? 'semanal' : 'mensal'}?</h2>
+      <p id="cycle-close-description" className="mt-2 text-sm leading-relaxed text-white/60">
+        {kind === 'WEEKLY'
+          ? 'As metas e os resultados deste ciclo serão arquivados. Um novo ciclo vazio começará agora.'
+          : 'As metas e os resultados deste ciclo serão arquivados. Um novo ciclo vazio começará hoje e virará no mesmo dia do próximo mês.'}
+      </p>
+      {cycleCloseError ? <p role="alert" className="mt-4 rounded-lg border border-red-300/25 bg-red-300/[0.06] px-3 py-2 text-sm text-red-200">{cycleCloseError}</p> : null}
+      <div className="mt-6 grid gap-2 sm:grid-cols-2">
+        <button ref={cycleCancelButtonRef} type="button" disabled={cycleClosePending} onClick={() => setCycleConfirmationOpen(false)} className="min-h-11 rounded-lg border border-white/[0.17] px-4 text-sm font-semibold text-white/75 hover:bg-white/[0.06] active:scale-[0.98] disabled:opacity-50">Cancelar</button>
+        <button type="button" disabled={cycleClosePending} onClick={() => void confirmCycleClose()} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-4 text-sm font-semibold text-[#11170b] hover:bg-[var(--atelier-green-hover)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60">{cycleClosePending ? 'Encerrando…' : 'Encerrar ciclo'}</button>
+      </div>
+    </section>
+  </dialog>
+  </>;
 }
