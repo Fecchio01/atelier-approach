@@ -14,6 +14,7 @@ import type { CommercialServiceOption } from '@/lib/commercial-ui';
 import { synchronizeHorizontalScroll } from '@/lib/horizontal-scroll-sync';
 import { searchCrmLeads } from '@/lib/crm-search';
 import { filterCrmBoardLeads, sortCrmBoardLeads, type CrmBoardFilter, type CrmBoardSort } from '@/lib/crm-board-view';
+import { CrmSavedViewManager } from './crm-saved-views';
 import { CrmActionQueue } from './crm-action-queue';
 import type { CrmTaskFormMember } from './crm-task-form';
 
@@ -130,7 +131,10 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
     };
   }, [router]);
   const currentLeads = visibleLeads(leads, removedIds);
-  const filteredLeads = useMemo(() => filterCrmBoardLeads(searchCrmLeads(currentLeads, searchQuery), boardFilter), [currentLeads, searchQuery, boardFilter]);
+  const filteredLeads = useMemo(() => {
+    const leadsWithPendingStages = currentLeads.map((lead) => stageOverrides[lead.id] ? { ...lead, stage: stageOverrides[lead.id] } : lead);
+    return filterCrmBoardLeads(searchCrmLeads(leadsWithPendingStages, searchQuery), boardFilter);
+  }, [currentLeads, searchQuery, boardFilter, stageOverrides]);
   const hasSearch = Boolean(searchQuery.trim());
   const trashedLeads = currentLeads.filter((lead) => lead.stage === 'DISCARDED');
   const selectedLead = currentLeads.find((lead) => lead.id === selectedLeadId);
@@ -215,6 +219,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
             <option value="with-next-action">Com próxima ação</option>
             <option value="without-next-action">Sem próxima ação</option>
             <option value="has-contact">Com telefone ou WhatsApp</option>
+            <option value="proposals-without-next-action">Propostas sem retorno</option>
           </select>
         </label>
         <label className="grid w-full gap-1.5 text-xs font-medium text-white/55 sm:w-60">
@@ -233,6 +238,14 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
         </div> : null}
       </div>
     </div>
+    <CrmSavedViewManager scope="FUNNEL" enabled={Boolean(currentMemberId)} currentFilters={{ searchQuery: searchQuery.trim(), boardFilter, sortOrder }} presets={[
+      { id: 'proposal-no-return', name: 'Propostas sem retorno', filters: { searchQuery: '', boardFilter: 'proposals-without-next-action', sortOrder: 'oldest-stage' } }
+    ]} onApply={(filters) => {
+      if (!('boardFilter' in filters)) return;
+      setSearchQuery(filters.searchQuery);
+      setBoardFilter(filters.boardFilter);
+      setSortOrder(filters.sortOrder);
+    }} />
     <p className="mb-2 flex items-center gap-2 text-xs text-white/40 md:hidden"><ArrowsLeftRightIcon size={15} aria-hidden="true" />Deslize para ver todas as etapas</p>
     <div className="rounded-2xl border border-white/[0.1] bg-[#0d1216]/55 p-2.5 md:p-3">
       <div className="mb-3 flex justify-center px-2">

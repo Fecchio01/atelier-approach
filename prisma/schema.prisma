@@ -56,6 +56,11 @@ enum CrmTaskState {
   CANCELLED
 }
 
+enum CrmSavedViewScope {
+  FUNNEL
+  ACTIONS
+}
+
 enum ActivityType {
   CONTACT
   STAGE_CHANGE
@@ -307,13 +312,29 @@ model MetricImportRow {
 }
 
 model MemberProfile {
-  id         String            @id
-  name       String
-  email      String
-  avatarUrl  String?
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
-  credential MemberCredential?
+  id            String            @id
+  name          String
+  email         String
+  avatarUrl     String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  credential    MemberCredential?
+  crmSavedViews CrmSavedView[]
+}
+
+model CrmSavedView {
+  id             String            @id @default(cuid())
+  ownerId        String
+  scope          CrmSavedViewScope
+  name           String
+  normalizedName String
+  filters        Json
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  owner          MemberProfile     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, scope, normalizedName])
+  @@index([ownerId, scope, updatedAt])
 }
 
 model MemberCredential {

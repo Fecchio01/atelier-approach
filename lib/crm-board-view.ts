@@ -1,5 +1,5 @@
 export type CrmBoardSort = 'current' | 'next-action' | 'oldest-stage' | 'sale-value' | 'name';
-export type CrmBoardFilter = 'all' | 'with-next-action' | 'without-next-action' | 'has-contact';
+export type CrmBoardFilter = 'all' | 'with-next-action' | 'without-next-action' | 'has-contact' | 'proposals-without-next-action';
 
 type SortableLead = {
   id: string;
@@ -49,6 +49,7 @@ export function sortCrmBoardLeads<T extends SortableLead>(leads: T[], order: Crm
 }
 
 type FilterableLead = {
+  stage: string;
   nextActionAt?: string | Date | null;
   phone: string | null;
   whatsapp: string | null;
@@ -59,6 +60,7 @@ export function filterCrmBoardLeads<T extends FilterableLead>(leads: T[], filter
   if (filter === 'with-next-action') return leads.filter((lead) => Boolean(lead.nextActionAt));
   if (filter === 'without-next-action') return leads.filter((lead) => !lead.nextActionAt);
   if (filter === 'has-contact') return leads.filter((lead) => Boolean(lead.phone?.trim() || lead.whatsapp?.trim()));
+  if (filter === 'proposals-without-next-action') return leads.filter((lead) => lead.stage === 'PROPOSAL' && !lead.nextActionAt);
   return leads;
 }
 

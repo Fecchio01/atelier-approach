@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowRightIcon, CalendarBlankIcon, CaretLeftIcon, CaretRightIcon, CheckCircleIcon, ClockIcon, ListBulletsIcon, PencilSimpleIcon, PlusIcon, XCircleIcon } from '@phosphor-icons/react';
 import { formatCrmCalendarDayKey, getCrmCalendarDayKey, getCrmCalendarWeek, shiftCrmCalendarDayKey, type CrmCalendarDayKey } from '@/lib/crm-calendar';
 import { filterAndSortCrmQueue, type CrmQueueItem, type CrmQueuePeriod, type CrmTaskPriority } from '@/lib/crm-task-queue';
+import { CrmSavedViewManager } from './crm-saved-views';
 import { CrmTaskForm, type CrmTaskFormItem, type CrmTaskFormLead, type CrmTaskFormMember } from './crm-task-form';
 
 type AssignmentFilter = 'ALL' | 'MINE';
@@ -212,6 +213,16 @@ export function CrmActionQueue({ leads, members: initialMembers = [], currentMem
       <button type="button" aria-pressed={view === 'LIST'} onClick={() => setView('LIST')} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold ${view === 'LIST' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}><ListBulletsIcon size={15} aria-hidden="true" />Lista</button>
       <button type="button" aria-pressed={view === 'CALENDAR'} onClick={() => setView('CALENDAR')} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold ${view === 'CALENDAR' ? 'bg-white/[0.09] text-white' : 'text-white/50 hover:text-white/80'}`}><CalendarBlankIcon size={15} aria-hidden="true" />Calendário</button>
     </div>
+    <CrmSavedViewManager scope="ACTIONS" enabled={Boolean(currentMemberId)} currentFilters={{ assignment, period, view }} presets={[
+      { id: 'my-actions', name: 'Minhas ações', disabled: !currentMemberId, filters: { assignment: 'MINE', period: 'ALL', view: 'LIST' } },
+      { id: 'overdue-actions', name: 'Atrasadas', filters: { assignment: 'ALL', period: 'OVERDUE', view: 'LIST' } }
+    ]} onApply={(filters) => {
+      if (!('assignment' in filters)) return;
+      setAssignment(filters.assignment);
+      setPeriod(filters.period);
+      setView(filters.view);
+      if (filters.view === 'CALENDAR') setSelectedDayKey(getCrmCalendarDayKey(new Date()));
+    }} />
 
     {view === 'CALENDAR' ? <section aria-label="Calendário das ações" className="grid min-w-0 gap-3">
       <header className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-[#11171c] p-3 sm:p-4">
