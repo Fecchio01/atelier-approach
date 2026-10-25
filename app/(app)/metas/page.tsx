@@ -14,14 +14,13 @@ const teamOwnerId = '__team__';
 
 export default async function GoalsPage() {
   const now = new Date();
-  const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
   const [settings, goals] = await Promise.all([
     prisma.teamGoalSettings.findUnique({ where: { id: 'team' } }),
     prisma.goal.findMany({
     where: {
       ownerId: teamOwnerId,
       OR: [
-        { periodKind: 'WEEKLY', periodStart: currentWeek.start },
+        { periodKind: 'WEEKLY', periodStart: { lte: now }, periodEnd: { gt: now } },
         { periodKind: 'MONTHLY', periodStart: { lte: now }, periodEnd: { gt: now } }
       ]
     },
@@ -36,12 +35,15 @@ export default async function GoalsPage() {
   ]);
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
-  const weeklyPeriod = getGoalPeriodWindow('WEEKLY', now, monthlyStartDay);
+  const savedWeeklyGoal = goals.find((goal) => goal.periodKind === 'WEEKLY' && goal.periodStart <= now && goal.periodEnd > now);
+  const weeklyPeriod: GoalPeriodWindow = savedWeeklyGoal
+    ? { kind: 'WEEKLY', start: savedWeeklyGoal.periodStart, end: savedWeeklyGoal.periodEnd }
+    : getGoalPeriodWindow('WEEKLY', now, monthlyStartDay);
   const savedMonthlyGoal = goals.find((goal) => goal.periodKind === 'MONTHLY' && goal.periodStart <= now && goal.periodEnd > now);
   const monthlyPeriod: GoalPeriodWindow = savedMonthlyGoal
     ? { kind: 'MONTHLY', start: savedMonthlyGoal.periodStart, end: savedMonthlyGoal.periodEnd }
     : getGoalPeriodWindow('MONTHLY', now, monthlyStartDay);
-  const weeklyGoal = goals.find((goal) => goal.periodKind === 'WEEKLY' && goal.periodStart.getTime() === weeklyPeriod.start.getTime());
+  const weeklyGoal = savedWeeklyGoal;
   const withParsedCustomGoals = (goal: (typeof goals)[number] | undefined) => {
     if (!goal) return null;
     const parsed = parseCustomGoalMetrics(goal.customGoals);

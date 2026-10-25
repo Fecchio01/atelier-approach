@@ -58,7 +58,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const params = await searchParams;
   const period: Period = params.period === 'day' || params.period === 'month' ? params.period : 'week';
   const now = new Date();
-  const currentWeek = getGoalPeriodWindow('WEEKLY', now, 1);
   const today = getLocalDayWindow(now);
   const fetchWindow = getDashboardDataFetchWindow(now);
   const pendingActionsCutoff = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
@@ -73,7 +72,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     where: {
       ownerId: teamOwnerId,
       OR: [
-        { periodKind: 'WEEKLY', periodStart: currentWeek.start },
+        { periodKind: 'WEEKLY', periodStart: { lte: now }, periodEnd: { gt: now } },
         { periodKind: 'MONTHLY', periodStart: { lte: now }, periodEnd: { gt: now } }
       ]
     },
@@ -117,8 +116,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   ]);
 
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
-  const weeklyPeriod = getGoalPeriodWindow('WEEKLY', now, monthlyStartDay);
-  const weeklyGoal = goals.find((goal) => goal.periodKind === 'WEEKLY' && goal.periodStart.getTime() === weeklyPeriod.start.getTime());
+  const weeklyGoal = goals.find((goal) => goal.periodKind === 'WEEKLY' && goal.periodStart <= now && goal.periodEnd > now);
+  const weeklyPeriod: GoalPeriodWindow = weeklyGoal
+    ? { kind: 'WEEKLY', start: weeklyGoal.periodStart, end: weeklyGoal.periodEnd }
+    : getGoalPeriodWindow('WEEKLY', now, monthlyStartDay);
   const monthlyGoal = goals.find((goal) => goal.periodKind === 'MONTHLY' && goal.periodStart <= now && goal.periodEnd > now);
   const monthlyPeriod: GoalPeriodWindow = monthlyGoal
     ? { kind: 'MONTHLY', start: monthlyGoal.periodStart, end: monthlyGoal.periodEnd }

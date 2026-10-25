@@ -93,7 +93,12 @@ function sameRange(firstStart: Date, firstEnd: Date, secondStart: Date, secondEn
 async function isValidPeriodRange(period: 'week' | 'month', from: Date, to: Date) {
   if (period === 'week') {
     const expected = getGoalPeriodWindow('WEEKLY', from, 1);
-    return sameRange(from, to, expected.start, expected.end);
+    if (sameRange(from, to, expected.start, expected.end)) return true;
+    const savedGoal = await prisma.goal.findFirst({
+      where: { ownerId: teamOwnerId, periodKind: 'WEEKLY', periodStart: from },
+      select: { periodStart: true, periodEnd: true }
+    });
+    return Boolean(savedGoal && sameRange(from, to, savedGoal.periodStart, savedGoal.periodEnd));
   }
 
   const settings = await prisma.teamGoalSettings.findUnique({ where: { id: 'team' }, select: { monthlyStartDay: true } });
@@ -248,7 +253,7 @@ async function exportPdf(searchParams: URLSearchParams) {
   const rangeLabel = `${dateFormatter.format(from)} a ${dateFormatter.format(new Date(to.getTime() - 1))}`;
   const bytes = await createReportPdf({
     title: `Relatório ${kindLabel}`,
-    subtitle: `Período: ${rangeLabel} - ${kind === 'WEEKLY' ? 'semana de segunda a domingo' : 'ciclo mensal configurado pela equipe'}`,
+    subtitle: `Período: ${rangeLabel} - ${kind === 'WEEKLY' ? 'ciclo semanal da equipe' : 'ciclo mensal configurado pela equipe'}`,
     exportedAt,
     sections
   });

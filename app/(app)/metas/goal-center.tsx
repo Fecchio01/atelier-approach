@@ -87,10 +87,10 @@ export function GoalCenter({
     </div>
 
     <div id="goal-panel-weekly" role="tabpanel" aria-labelledby="goal-tab-weekly" aria-label="Metas semanais da equipe" hidden={selectedKind !== 'WEEKLY'} className="mt-5">
-      <GoalForm kind="WEEKLY" period={weeklyPeriod} goal={weeklyGoal} actuals={weeklyActuals} customActuals={weeklyCustomActuals} monthlyStartDay={monthlyStartDay} now={now} />
+      <GoalForm key={`WEEKLY:${weeklyPeriod.start.toISOString()}`} kind="WEEKLY" period={weeklyPeriod} goal={weeklyGoal} actuals={weeklyActuals} customActuals={weeklyCustomActuals} monthlyStartDay={monthlyStartDay} now={now} />
     </div>
     <div id="goal-panel-monthly" role="tabpanel" aria-labelledby="goal-tab-monthly" aria-label="Metas mensais da equipe" hidden={selectedKind !== 'MONTHLY'} className="mt-5">
-      <GoalForm kind="MONTHLY" period={monthlyPeriod} goal={monthlyGoal} actuals={monthlyActuals} customActuals={monthlyCustomActuals} monthlyStartDay={monthlyStartDay} now={now} />
+      <GoalForm key={`MONTHLY:${monthlyPeriod.start.toISOString()}`} kind="MONTHLY" period={monthlyPeriod} goal={monthlyGoal} actuals={monthlyActuals} customActuals={monthlyCustomActuals} monthlyStartDay={monthlyStartDay} now={now} />
     </div>
   </div>;
 }

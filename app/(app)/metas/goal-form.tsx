@@ -1,13 +1,14 @@
 'use client';
 
 import { useActionState, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowsClockwiseIcon, CalendarBlankIcon, CarProfileIcon, CurrencyCircleDollarIcon, PaperPlaneTiltIcon, PencilSimpleIcon, PlusIcon, TargetIcon, TrashIcon, WrenchIcon, XIcon } from '@phosphor-icons/react';
 
 import { applyGoalSuggestions, createGoalSaveFormData, removeCustomGoalsByGroup, removePdfImportedCustomGoals, removeRedundantCustomGoals } from '@/lib/goal-import-state';
 import { customGoalGroupKeys, customGoalGroups, getCustomGoalGroup, groupCustomGoals, inferCustomGoalGroup, updateCustomGoalDraft, type CustomGoalGroup, type CustomGoalMetric } from '@/lib/custom-goals';
 import type { GoalMetricActuals } from '@/lib/metrics';
 import { getGoalPeriodWindow, type GoalPeriodWindow } from '@/lib/goal-periods';
-import { removeImportedPdfGoals, removeRedundantGoalsFromCycle, saveCustomGoalsForCycle, saveMonthlyGoal, saveWeeklyGoal } from './actions';
+import { closeGoalCycle, removeImportedPdfGoals, removeRedundantGoalsFromCycle, saveCustomGoalsForCycle, saveMonthlyGoal, saveWeeklyGoal } from './actions';
 import { initialGoalActionState, type GoalActionState } from './goal-form-state';
 import { CustomGoalMetricRow } from './custom-goal-metrics';
 import { GoalImporter } from './goal-importer';
@@ -120,6 +121,7 @@ export function GoalForm({
   monthlyStartDay: number;
   now: Date;
 }) {
+  const router = useRouter();
   const action = kind === 'WEEKLY' ? saveWeeklyGoal : saveMonthlyGoal;
   const [state, formAction, pending] = useActionState<GoalActionState, FormData>(action, initialGoalActionState);
   const [draft, setDraft] = useState(() => goalDraftFromRecord(goal));
@@ -128,6 +130,7 @@ export function GoalForm({
   const [editingCustomGoalId, setEditingCustomGoalId] = useState<string | null>(null);
   const [importPending, setImportPending] = useState(false);
   const [customGoalSavePending, setCustomGoalSavePending] = useState(false);
+  const [cycleClosePending, setCycleClosePending] = useState(false);
   const [customGoalsDirty, setCustomGoalsDirty] = useState(false);
   const [importerBusy, setImporterBusy] = useState(false);
   const [importerRevision, setImporterRevision] = useState(0);
@@ -143,6 +146,25 @@ export function GoalForm({
   const endLabel = inclusiveEnd(displayedPeriod);
   const daysLabel = progress.daysLeft === 1 ? '1 dia restante' : `${progress.daysLeft} dias restantes`;
   const panelTitle = kind === 'WEEKLY' ? 'Metas semanais da equipe' : 'Metas mensais da equipe';
+
+  async function closeCycle() {
+    if (pending || importPending || importerBusy || customGoalSavePending || customGoalsDirty || cycleClosePending) return;
+    const confirmed = window.confirm(kind === 'WEEKLY'
+      ? 'Encerrar o ciclo semanal agora? As metas e os resultados serão arquivados, e um novo ciclo vazio começará.'
+      : 'Encerrar o ciclo mensal agora? As metas e os resultados serão arquivados, e um novo ciclo vazio começará hoje, com virada mensal no mesmo dia.');
+    if (!confirmed) return;
+
+    setCycleClosePending(true);
+    try {
+      const result = await closeGoalCycle(kind);
+      setGoalNotice(result);
+      if (result.status === 'saved') router.refresh();
+    } catch {
+      setGoalNotice({ status: 'error', message: 'Não foi possível encerrar o ciclo agora. Tente novamente.' });
+    } finally {
+      setCycleClosePending(false);
+    }
+  }
 
   useEffect(() => {
     if (!legacyRedundantGoals || cleanupStarted.current) return;
@@ -292,7 +314,16 @@ export function GoalForm({
             <p className="mt-1 text-sm text-white/55">Acompanhe o período da equipe e ajuste as metas quando precisar.</p>
           </div>
         </div>
-        <span className="rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-xs text-white/65">{daysLabel}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-xs text-white/65">{daysLabel}</span>
+          <button
+            type="button"
+            onClick={() => void closeCycle()}
+            disabled={pending || importPending || importerBusy || customGoalSavePending || customGoalsDirty || cycleClosePending}
+            title="Arquiva metas e resultados deste período e inicia um ciclo vazio."
+            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-white/[0.1] px-3 py-2 text-xs font-medium text-white/65 hover:border-[var(--atelier-green)]/55 hover:text-[var(--atelier-green)] disabled:cursor-wait disabled:opacity-45"
+          >{cycleClosePending ? 'Encerrando…' : 'Encerrar ciclo'}</button>
+        </div>
       </div>
 
       <div className="mt-7 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
@@ -321,7 +352,7 @@ export function GoalForm({
           </span>
           <span className="text-[11px] font-normal text-white/40">O próximo ciclo vira no dia {monthlyStartDayDraft || monthlyStartDay}.</span>
         </label> : <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] px-4 py-3 text-xs text-white/50">
-          Semana de segunda a domingo
+          Virada automática às segundas-feiras
         </div>}
       </div>
     </section>

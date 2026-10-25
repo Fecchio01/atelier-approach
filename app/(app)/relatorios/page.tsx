@@ -130,7 +130,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     <div className="mt-5"><ResultImporter customGoals={customGoals} /></div>
 
     <ReportsMotionCard as="section" aria-labelledby="goal-comparison-title" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 id="goal-comparison-title" className="text-xl font-semibold">Meta da equipe · realizado x alvo</h2><p className="mt-1 text-sm text-white/60">{period === 'week' ? 'Semana de segunda a domingo' : `Ciclo iniciado no dia ${monthlyStartDay}`}</p></div><Link href="/metas" className="text-sm text-[var(--atelier-green)]">Editar metas</Link></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 id="goal-comparison-title" className="text-xl font-semibold">Meta da equipe · realizado x alvo</h2><p className="mt-1 text-sm text-white/60">{period === 'week' ? 'Ciclo semanal da equipe' : `Ciclo iniciado no dia ${monthlyStartDay}`}</p></div><Link href="/metas" className="text-sm text-[var(--atelier-green)]">Editar metas</Link></div>
       <div className="mt-5"><TeamGoalProgress progress={progress} hasApproaches={report.goalActuals.approaches > 0} /></div>
     </ReportsMotionCard>
 

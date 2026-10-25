@@ -140,6 +140,35 @@ export function getGoalPeriodWindow(
   };
 }
 
+export function getLocalDayOfMonth(reference: Date): number {
+  if (Number.isNaN(reference.getTime())) throw new RangeError('A data de referência é inválida.');
+  return getLocalDate(reference).day;
+}
+
+export function getManualGoalPeriodWindowAfterClose(
+  kind: GoalPeriodKind,
+  closedAt: Date,
+  monthlyStartDay: number
+): GoalPeriodWindow {
+  if (Number.isNaN(closedAt.getTime())) throw new RangeError('A data de encerramento é inválida.');
+
+  const configuredWindow = getGoalPeriodWindow(
+    kind,
+    closedAt,
+    monthlyStartDay,
+    kind === 'MONTHLY' ? closedAt : undefined
+  );
+  let end = configuredWindow.end;
+
+  // Closing on Sunday should still leave a useful weekly cycle, instead of
+  // giving the team only a few hours before the normal Monday rollover.
+  if (kind === 'WEEKLY' && end.getTime() - closedAt.getTime() <= 24 * 60 * 60 * 1000) {
+    end = getGoalPeriodWindow('WEEKLY', end, monthlyStartDay).end;
+  }
+
+  return { kind, start: closedAt, end };
+}
+
 export function getLocalDayWindow(reference: Date): { start: Date; end: Date } {
   if (Number.isNaN(reference.getTime())) throw new RangeError('A data de referência é inválida.');
   const localDate = getLocalDate(reference);
