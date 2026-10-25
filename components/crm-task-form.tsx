@@ -25,11 +25,12 @@ const priorities: { value: CrmTaskPriority; label: string }[] = [
   { value: 'LOW', label: 'Baixa' }, { value: 'NORMAL', label: 'Normal' }, { value: 'HIGH', label: 'Alta' }
 ];
 
-export function CrmTaskForm({ leads, members, currentMemberId, initialLeadId, initialTask, onCancel, onSaved }: {
+export function CrmTaskForm({ leads, members, currentMemberId, initialLeadId, initialDueDate, initialTask, onCancel, onSaved }: {
   leads: CrmTaskFormLead[];
   members: CrmTaskFormMember[];
   currentMemberId?: string | null;
   initialLeadId?: string;
+  initialDueDate?: string;
   initialTask?: CrmTaskFormItem;
   onCancel: () => void;
   onSaved: () => void;
@@ -38,7 +39,7 @@ export function CrmTaskForm({ leads, members, currentMemberId, initialLeadId, in
   const [title, setTitle] = useState(initialTask?.title ?? '');
   const [type, setType] = useState<CrmTaskTypeValue>(initialTask?.taskType ?? 'WHATSAPP');
   const [priority, setPriority] = useState<CrmTaskPriority>(initialTask?.priority ?? 'NORMAL');
-  const [dueDate, setDueDate] = useState(initialTask ? formatCrmTaskDateTimeInput(initialTask.dueDate) : '');
+  const [dueDate, setDueDate] = useState(initialTask ? formatCrmTaskDateTimeInput(initialTask.dueDate) : initialDueDate ?? '');
   const [assigneeId, setAssigneeId] = useState(initialTask?.assigneeId ?? currentMemberId ?? members[0]?.id ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
