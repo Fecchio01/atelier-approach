@@ -14,7 +14,6 @@ import type { CommercialServiceOption } from '@/lib/commercial-ui';
 import { synchronizeHorizontalScroll } from '@/lib/horizontal-scroll-sync';
 import { searchCrmLeads } from '@/lib/crm-search';
 import { filterCrmBoardLeads, sortCrmBoardLeads, type CrmBoardFilter, type CrmBoardSort } from '@/lib/crm-board-view';
-import { CrmSavedViewManager } from './crm-saved-views';
 import { CrmActionQueue } from './crm-action-queue';
 import type { CrmTaskFormMember } from './crm-task-form';
 
@@ -238,14 +237,6 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
         </div> : null}
       </div>
     </div>
-    <CrmSavedViewManager scope="FUNNEL" enabled={Boolean(currentMemberId)} currentFilters={{ searchQuery: searchQuery.trim(), boardFilter, sortOrder }} presets={[
-      { id: 'proposal-no-return', name: 'Propostas sem retorno', filters: { searchQuery: '', boardFilter: 'proposals-without-next-action', sortOrder: 'oldest-stage' } }
-    ]} onApply={(filters) => {
-      if (!('boardFilter' in filters)) return;
-      setSearchQuery(filters.searchQuery);
-      setBoardFilter(filters.boardFilter);
-      setSortOrder(filters.sortOrder);
-    }} />
     <p className="mb-2 flex items-center gap-2 text-xs text-white/40 md:hidden"><ArrowsLeftRightIcon size={15} aria-hidden="true" />Deslize para ver todas as etapas</p>
     <div className="rounded-2xl border border-white/[0.1] bg-[#0d1216]/55 p-2.5 md:p-3">
       <div className="mb-3 flex justify-center px-2">
