@@ -125,8 +125,10 @@ model Lead {
   saleEvents     SaleEvent[]
 
   @@index([stage, stageEnteredAt])
+  @@index([stage, stageEnteredAt, id], map: "Lead_stage_stageEnteredAt_id_idx")
   @@index([discardedAt])
   @@index([postFollowUpAt, id])
+  @@index([postFollowUpAt, stage, id], map: "Lead_postFollowUpAt_stage_id_idx")
 }
 
 model Activity {
