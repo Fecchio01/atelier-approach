@@ -3,6 +3,8 @@ import { ActivityType, Prisma } from '@prisma/client';
 import { getCurrentUser } from '../../../../lib/auth';
 import { prisma } from '../../../../lib/db';
 import { filterAndSortCrmQueue, parseCrmTaskCreateInput, type CrmQueueItem } from '../../../../lib/crm-task-queue';
+import { createHumanCrmActor } from '../../../../lib/crm/actor';
+import { executeCrmCommand, withCrmActivityActor } from '../../../../lib/crm/commands';
 
 export async function GET(_request: Request) {
   const user = await getCurrentUser();
@@ -85,18 +87,17 @@ export async function POST(request: Request) {
   if (!assignee) return Response.json({ error: 'Responsável não encontrado na equipe.' }, { status: 404 });
 
   try {
-    const task = await prisma.$transaction(async (tx) => {
+    const task = await executeCrmCommand(prisma, createHumanCrmActor(user.id), async (tx, actor) => {
       const created = await tx.crmTask.create({ data: {
         ...parsed.value,
-        createdById: user.id,
-        updatedById: user.id
+        createdById: actor.id,
+        updatedById: actor.id
       } });
-      await tx.activity.create({ data: {
+      await tx.activity.create({ data: withCrmActivityActor(actor, {
         leadId: created.leadId,
-        actorId: user.id,
         type: ActivityType.CRM_TASK_CREATED,
         note: `Ação criada: ${created.title}.`
-      } });
+      }) });
       return created;
     });
 

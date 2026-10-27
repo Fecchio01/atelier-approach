@@ -30,7 +30,9 @@ export type CrmLead = {
   latitude: number | null;
   longitude: number | null;
   stage: LeadStage;
+  version?: number;
   stageEnteredAt?: string;
+  lastMeaningfulInteractionAt?: string | null;
   nextActionAt?: string | null;
   meetingAt?: string | null;
   postFollowUpAt?: string | null;
@@ -38,7 +40,7 @@ export type CrmLead = {
   followUpOriginStage?: LeadStage | null;
   saleValue: string | null;
   mrr: string | null;
-  activities: { id: string; type: string; actorId: string; actorName?: string | null; note: string; channel: string | null; createdAt: string }[];
+  activities: { id: string; type: string; actorId: string; actorName?: string | null; note: string; channel: string | null; createdAt: string; origin?: 'HUMAN' | 'AGENT' | 'SYSTEM' }[];
   followUps: { id: string; dueDate: string; state: string; returnStage?: LeadStage | null }[];
   detailsLoaded?: boolean;
 };

@@ -754,6 +754,8 @@ describe('lifecycle transition contract without database', () => {
     stageEnteredAt: Date;
     postFollowUpAt: Date | null;
     discardedAt: Date | null;
+    lastMeaningfulInteractionAt: Date | null;
+    version: number;
     saleValue: number | null;
     mrr: number | null;
     wonAt: Date | null;
@@ -775,10 +777,10 @@ describe('lifecycle transition contract without database', () => {
 
   let lead: LifecycleLead;
   let followUps: LifecycleFollowUp[];
-  let activities: { type: string; note: string }[];
+  let activities: { type: string; note: string; origin?: string; actorId?: string }[];
   let stageHistory: { fromStage: string; toStage: string }[];
   let creates: unknown[];
-  let updates: Partial<LifecycleLead>[];
+  let updates: (Omit<Partial<LifecycleLead>, 'version'> & { version?: number | { increment: number } })[];
   let saleEventWrites: string[];
   let lockQueries: string[];
 
@@ -790,6 +792,8 @@ describe('lifecycle transition contract without database', () => {
       stageEnteredAt: new Date('2026-09-01T10:00:00Z'),
       postFollowUpAt: null,
       discardedAt: null,
+      lastMeaningfulInteractionAt: null,
+      version: 1,
       saleValue: null,
       mrr: null,
       wonAt: null,
@@ -808,15 +812,22 @@ describe('lifecycle transition contract without database', () => {
       lead: {
         findUnique: async () => ({ ...lead }),
         findUniqueOrThrow: async () => ({ ...lead }),
-        updateMany: async ({ where, data }: { where: { id: string; stage: string; stageEnteredAt: Date }; data: Partial<LifecycleLead> }) => {
-          if (where.id !== lead.id || where.stage !== lead.stage || where.stageEnteredAt.valueOf() !== lead.stageEnteredAt.valueOf()) return { count: 0 };
+        updateMany: async ({ where, data }: { where: { id: string; stage: string; stageEnteredAt: Date; version?: number }; data: Omit<Partial<LifecycleLead>, 'version'> & { version?: number | { increment: number } } }) => {
+          if (where.id !== lead.id || where.stage !== lead.stage || where.stageEnteredAt.valueOf() !== lead.stageEnteredAt.valueOf() ||
+            (where.version !== undefined && where.version !== lead.version)) return { count: 0 };
           updates.push(data);
-          Object.assign(lead, data);
+          const { version, ...fields } = data;
+          Object.assign(lead, fields);
+          if (version && typeof version === 'object') lead.version += version.increment;
+          else if (typeof version === 'number') lead.version = version;
           return { count: 1 };
         },
-        update: async ({ data }: { data: Partial<LifecycleLead> }) => {
+        update: async ({ data }: { data: Omit<Partial<LifecycleLead>, 'version'> & { version?: number | { increment: number } } }) => {
           updates.push(data);
-          Object.assign(lead, data);
+          const { version, ...fields } = data;
+          Object.assign(lead, fields);
+          if (version && typeof version === 'object') lead.version += version.increment;
+          else if (typeof version === 'number') lead.version = version;
           return { ...lead };
         }
       },
@@ -840,7 +851,7 @@ describe('lifecycle transition contract without database', () => {
       },
       crmSettings: { findUnique: async () => ({ followUpDelayDays: 2 }) },
       stageHistory: { create: async ({ data }: { data: { fromStage: string; toStage: string } }) => { stageHistory.push(data); return data; } },
-      activity: { create: async ({ data }: { data: { type: string; note: string } }) => { activities.push(data); return data; } },
+      activity: { create: async ({ data }: { data: { type: string; note: string; origin?: string; actorId?: string } }) => { activities.push(data); return data; } },
       saleEvent: {
         findFirst: async () => null,
         update: async () => { saleEventWrites.push('update'); return null; },
@@ -882,6 +893,31 @@ describe('lifecycle transition contract without database', () => {
     expect(activities).toHaveLength(0);
     expect(creates).toHaveLength(0);
     expect(saleEventWrites).toHaveLength(0);
+  });
+
+  test('records a human-origin meaningful interaction and resets the post-follow-up timer', async () => {
+    lead.postFollowUpAt = new Date('2026-09-01T10:00:00Z');
+    const response = await patch({ activity: { channel: 'WHATSAPP', note: 'Conversei com a pessoa responsável.' } });
+
+    expect(response.status).toBe(200);
+    expect(activities).toEqual([expect.objectContaining({
+      type: 'CONTACT', origin: 'HUMAN', actorId: 'lifecycle-user'
+    })]);
+    expect(lead.lastMeaningfulInteractionAt).toBeInstanceOf(Date);
+    expect(lead.postFollowUpAt).toBeNull();
+  });
+
+  test('rejects a stale lead version before writing an activity', async () => {
+    lead.version = 2;
+    const response = await patch({
+      expectedVersion: 1,
+      activity: { channel: 'WHATSAPP', note: 'Não deve ser duplicado.' }
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: 'LEAD_VERSION_CONFLICT', currentVersion: 2 });
+    expect(activities).toHaveLength(0);
+    expect(lead.lastMeaningfulInteractionAt).toBeNull();
   });
 
   test.each(['INTEREST', 'CONTACTED'])('rejects stale expected state %s without transition or side effects', async (expectedStage) => {

@@ -125,11 +125,12 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
       const response = await fetch(`/api/leads/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           ...details,
-          ...(details.stage ? { expectedStage: lead.stage, expectedStageEnteredAt: lead.stageEnteredAt } : {})
+          ...(details.stage ? { expectedStage: lead.stage, expectedStageEnteredAt: lead.stageEnteredAt } : {}),
+          ...(typeof lead.version === 'number' ? { expectedVersion: lead.version } : {})
         })
       });
-      const payload = (await response.json()) as { code?: string; error?: string; lead?: { stage?: Stage } };
-      if (response.status === 409 && payload.code === 'STAGE_CONFLICT') {
+      const payload = (await response.json()) as { code?: string; error?: string; lead?: CrmLead; currentVersion?: number };
+      if (response.status === 409 && ['STAGE_CONFLICT', 'LEAD_VERSION_CONFLICT'].includes(payload.code ?? '')) {
         const message = 'Outra pessoa atualizou este lead. Confira a etapa atual antes de tentar novamente.';
         setError(message);
         setConfirmingDiscard(false);
@@ -147,7 +148,16 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
         return false;
       }
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível atualizar o lead.');
-      let updatedStage = payload.lead?.stage;
+      let updatedStage = payload.lead?.stage ? normalizeFunnelStage(payload.lead.stage) : undefined;
+      if (payload.lead) {
+        setLead((current) => current ? {
+          ...current,
+          ...payload.lead,
+          activities: current.activities,
+          followUps: current.followUps,
+          detailsLoaded: true
+        } : current);
+      }
       if (details.followUpAction) {
         try {
           const freshResponse = await fetch(`/api/leads/${encodeURIComponent(id)}`, { cache: 'no-store' });

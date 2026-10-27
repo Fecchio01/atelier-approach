@@ -2,6 +2,8 @@ import { ActivityType } from '@prisma/client';
 
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { createHumanCrmActor } from '@/lib/crm/actor';
+import { executeCrmCommand, withCrmActivityActor } from '@/lib/crm/commands';
 
 type BulkTaskAction = 'COMPLETE' | 'CANCEL' | 'REASSIGN';
 type VersionedTask = { id: string; updatedAt: Date };
@@ -50,7 +52,7 @@ export async function POST(request: Request) {
     if (!assignee) return Response.json({ error: 'Responsável não encontrado na equipe.' }, { status: 404 });
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await executeCrmCommand(prisma, createHumanCrmActor(user.id), async (tx, actor) => {
     let unchangedCount = 0;
     const now = new Date();
     const versionPairs = versionedTasks.map(({ id, updatedAt }) => ({ id, updatedAt }));
@@ -66,10 +68,10 @@ export async function POST(request: Request) {
 
     if (!candidatePairs.length) return { updatedCount: 0, skippedCount: versionedTasks.length - unchangedCount, unchangedCount };
     const data = input.action === 'COMPLETE'
-      ? { state: 'COMPLETED' as const, completedAt: now, completedById: user.id, updatedById: user.id }
+      ? { state: 'COMPLETED' as const, completedAt: now, completedById: actor.id, updatedById: actor.id }
       : input.action === 'CANCEL'
-        ? { state: 'CANCELLED' as const, cancelledAt: now, cancelledById: user.id, updatedById: user.id }
-        : { assigneeId: assignee!.id, updatedById: user.id };
+        ? { state: 'CANCELLED' as const, cancelledAt: now, cancelledById: actor.id, updatedById: actor.id }
+        : { assigneeId: assignee!.id, updatedById: actor.id };
     const updated = await tx.crmTask.updateManyAndReturn({
       where: { state: 'PENDING', OR: candidatePairs },
       data,
@@ -83,9 +85,8 @@ export async function POST(request: Request) {
           ? ActivityType.CRM_TASK_CANCELLED
           : ActivityType.CRM_TASK_UPDATED;
       await tx.activity.createMany({
-        data: updated.map((task) => ({
+        data: updated.map((task) => withCrmActivityActor(actor, {
           leadId: task.leadId,
-          actorId: user.id,
           type,
           note: input.action === 'COMPLETE'
             ? `Ação concluída: ${task.title}.`

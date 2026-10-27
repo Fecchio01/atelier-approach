@@ -21,6 +21,7 @@ TEST_DATABASE_URL="postgresql://atelier_app.PROJECT_REF:PASSWORD@POOLER_HOST:543
 AUTH_SECRET="gere-um-segredo-longo-e-aleatorio"
 AUTH_INTERNAL_EMAIL="equipe@exemplo.com"
 AUTH_INTERNAL_PASSWORD="uma-senha-forte"
+CRON_SECRET="um-segredo-aleatorio-para-o-cron-da-vercel"
 ```
 
 O banco está no projeto Supabase `gxvdqmfjawnktpqguvvr`, região `sa-east-1`. A aplicação acessa as tabelas no esquema privado `atelier` pelo servidor. As migrações atuais em `prisma/migrations` são PostgreSQL; o histórico antigo de SQLite está arquivado em `prisma/legacy-sqlite-migrations` e não deve ser aplicado ao PostgreSQL.
@@ -33,11 +34,19 @@ Os testes usam o esquema isolado `atelier_test` e apagam seus dados no início d
 
 As contas criadas no banco usam a tabela `MemberCredential` no esquema `atelier`, com senhas protegidas por scrypt. A tela de login usa essas contas; as credenciais internas configuradas no `.env` continuam disponíveis para membros antigos sem senha no banco. Cada pessoa pode atualizar nome e foto em **Meu perfil** e trocar a senha informando a senha atual. Depois da troca, o sistema pede um novo login.
 
-## Pesquisa OpenStreetMap
+## Pesquisa de empresas e fontes
 
-A pesquisa usa os serviços públicos Nominatim e Overpass do OpenStreetMap. Mantenha buscas moderadas: a aplicação limita cada pessoa autenticada a cinco buscas por minuto e comunica indisponibilidade temporária sem perder o contexto da tela. Para produção, informe um `User-Agent` identificável nas requisições e siga as políticas de uso dos serviços.
+As empresas são pesquisadas no Overture Maps Places, pelo catálogo STAC público, e lidas em GeoParquet com DuckDB. Nominatim e dados do OpenStreetMap fornecem limites e geocodificação de cidades. Overpass permanece como código legado e não é a fonte atual dos leads. O catálogo STAC é consultado durante a pesquisa, então uma campanha ainda não fixa a versão do dataset entre retomadas.
 
-Os resultados exibem a atribuição obrigatória ao OpenStreetMap. Empresas já inseridas no CRM são filtradas da pesquisa; se duas pessoas tentarem cadastrar a mesma empresa, a segunda é direcionada ao registro já existente.
+Os resultados exibem a atribuição das fontes usadas. Empresas já inseridas no CRM são filtradas da pesquisa; se duas pessoas tentarem cadastrar a mesma empresa, a segunda é direcionada ao registro já existente. O enriquecimento de site deve preencher apenas dados publicados pela própria empresa.
+
+## CRM compartilhado e ciclo de vida
+
+As alterações comerciais usam uma transação comum com autoria identificada como `HUMAN`, `AGENT` ou `SYSTEM`. Cada lead tem uma versão inteira para rejeitar alterações baseadas em dados desatualizados; clientes do CRM enviam a versão ao salvar.
+
+O follow-up automático considera a data mais recente entre a entrada na etapa e um contato significativo registrado. Um contato recente limpa um prazo antigo de descarte pós-follow-up. Leads em `PROPOSAL` ou `MEETING`, além de leads com reunião futura, são protegidos do descarte automático. A política mantém a lixeira manual e a retenção atual dos itens já descartados.
+
+O cron em `vercel.json` chama `/api/cron/crm-lifecycle` diariamente às 03:00 UTC. Configure `CRON_SECRET` no ambiente local e no projeto Vercel para autorizar a execução; a rota retorna 401 se o segredo estiver ausente ou não corresponder.
 
 ## Verificação
 

@@ -7,6 +7,8 @@ import { getStageLifecycleUpdate, isPostFollowUpCooldownActive } from '../../../
 import { getFollowUpDueDate } from '../../../../lib/follow-up-scheduling';
 import { parseMeetingAt } from '../../../../lib/meeting-scheduling';
 import { priceInCents, summarizeServiceItems } from '../../../../lib/service-sales';
+import { createHumanCrmActor } from '../../../../lib/crm/actor';
+import { executeCrmCommand, withCrmActivityActor } from '../../../../lib/crm/commands';
 
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
 
@@ -14,6 +16,7 @@ type CrmUpdate = {
   stage?: unknown;
   expectedStage?: unknown;
   expectedStageEnteredAt?: unknown;
+  expectedVersion?: unknown;
   followUpAt?: unknown;
   meetingAt?: unknown;
   followUpAction?: unknown;
@@ -28,6 +31,12 @@ type CrmUpdate = {
 class StageConflictError extends Error {
   constructor(readonly currentStage: LeadStage, readonly currentStageEnteredAt: Date) {
     super('STAGE_CONFLICT');
+  }
+}
+
+class LeadVersionConflictError extends Error {
+  constructor(readonly currentVersion: number) {
+    super('LEAD_VERSION_CONFLICT');
   }
 }
 
@@ -90,6 +99,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
+  const actor = createHumanCrmActor(user.id);
 
   let body: CrmUpdate;
   try {
@@ -109,6 +119,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const expectedStageEnteredAt = typeof body.expectedStageEnteredAt === 'string'
     && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(body.expectedStageEnteredAt)
     ? new Date(body.expectedStageEnteredAt) : undefined;
+  const hasExpectedVersion = Object.prototype.hasOwnProperty.call(body, 'expectedVersion');
+  const expectedVersion = typeof body.expectedVersion === 'number' && Number.isSafeInteger(body.expectedVersion)
+    && body.expectedVersion >= 1 && body.expectedVersion <= 2_147_483_647
+    ? body.expectedVersion : undefined;
+  if (hasExpectedVersion && expectedVersion === undefined) {
+    return Response.json({ error: 'A versão do lead é inválida. Atualize a empresa e tente novamente.' }, { status: 400 });
+  }
   if (hasStage && (!expectedStage || !expectedStageEnteredAt || Number.isNaN(expectedStageEnteredAt.valueOf())
     || expectedStageEnteredAt.toISOString() !== body.expectedStageEnteredAt)) {
     return Response.json({ error: 'Informe a etapa atual e a data de entrada válidas. Atualize o lead e tente novamente.' }, { status: 400 });
@@ -185,7 +202,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const updatedLead = await prisma.$transaction(async (tx) => {
+  const updatedLead = await executeCrmCommand(prisma, actor, async (tx, actor) => {
     // Serialize changes to this lead so repeated wins and legacy backfills cannot
     // create two sale events from the same persisted state.
     await tx.$queryRaw`
@@ -196,6 +213,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     `;
     const lead = await tx.lead.findUnique({ where: { id } });
     if (!lead) throw new Error('LEAD_NOT_FOUND');
+    if (expectedVersion !== undefined && lead.version !== expectedVersion) {
+      throw new LeadVersionConflictError(lead.version);
+    }
     if (stage && (lead.stage !== expectedStage || lead.stageEnteredAt.valueOf() !== expectedStageEnteredAt!.valueOf())) {
       throw new StageConflictError(lead.stage, lead.stageEnteredAt);
     }
@@ -210,7 +230,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     let updated = lead;
 
     if (stage && stage !== lead.stage) {
-      const leadData: Prisma.LeadUpdateManyMutationInput = { stage, ...getStageLifecycleUpdate(stage, now) };
+      const leadData: Prisma.LeadUpdateManyMutationInput = { stage, ...getStageLifecycleUpdate(stage, now), version: { increment: 1 } };
       if (stage === 'MEETING') leadData.meetingAt = hasMeetingAt ? meetingAt ?? null : null;
       else if (lead.stage === 'MEETING') leadData.meetingAt = null;
       let selectedServices: { id: string; name: string; price: Prisma.Decimal; billingType: 'ONE_TIME' | 'MONTHLY' }[] = [];
@@ -235,7 +255,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         leadData.saleValue = saleValue;
         leadData.mrr = mrr;
         leadData.wonAt = now;
-        leadData.wonById = user.id;
+        leadData.wonById = actor.id;
       } else if (lead.stage === 'WON') {
         leadData.saleValue = null;
         leadData.mrr = null;
@@ -243,7 +263,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         leadData.wonById = null;
       }
       const transition = await tx.lead.updateMany({
-        where: { id, stage: expectedStage, stageEnteredAt: expectedStageEnteredAt }, data: leadData
+        where: { id, stage: expectedStage, stageEnteredAt: expectedStageEnteredAt, version: lead.version }, data: leadData
       });
       if (transition.count !== 1) {
         const current = await tx.lead.findUnique({ where: { id }, select: { stage: true, stageEnteredAt: true } });
@@ -260,19 +280,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           await tx.saleEvent.update({ where: { id: activeSale.id }, data: { reversedAt: now, reversedById: user.id } });
         }
       }
-      await tx.stageHistory.create({ data: { leadId: id, actorId: user.id, fromStage: lead.stage, toStage: stage } });
+      await tx.stageHistory.create({ data: { leadId: id, actorId: actor.id, fromStage: lead.stage, toStage: stage } });
 
       if (lead.stage === 'FOLLOW_UP' && stage !== 'FOLLOW_UP') {
         await tx.followUp.updateMany({
           where: { leadId: id, state: 'PENDING' },
-          data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id }
+          data: { state: 'CANCELLED', cancelledAt: now, cancelledById: actor.id }
         });
       }
 
       if (stage === 'WON') {
         await tx.saleEvent.create({ data: {
           leadId: id,
-          actorId: user.id,
+          actorId: actor.id,
           saleValue: leadData.saleValue as number,
           mrr: leadData.mrr as number,
           occurredAt: now,
@@ -285,7 +305,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         } });
         await tx.followUp.updateMany({
           where: { leadId: id, state: 'PENDING' },
-          data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id }
+          data: { state: 'CANCELLED', cancelledAt: now, cancelledById: actor.id }
         });
       }
       const type: ActivityType = stage === 'WON'
@@ -302,15 +322,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           : lead.stage === 'WON'
             ? `Lead reaberto para ${stage}.`
             : `Etapa alterada para ${stage}.`;
-      await tx.activity.create({ data: { leadId: id, actorId: user.id, type, note } });
+      await tx.activity.create({ data: withCrmActivityActor(actor, { leadId: id, type, note }) });
       if (lead.stage === 'WON' && stage !== 'WON') {
-        await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'SALE_REVERSED', note: `Negócio reaberto para ${stage}; venda revertida.` } });
+        await tx.activity.create({ data: withCrmActivityActor(actor, { leadId: id, type: 'SALE_REVERSED', note: `Negócio reaberto para ${stage}; venda revertida.` }) });
       }
 
     }
 
     if (hasMeetingAt && (!stage || stage === lead.stage)) {
-      updated = await tx.lead.update({ where: { id }, data: { meetingAt: meetingAt ?? null } });
+      updated = await tx.lead.update({ where: { id, version: updated.version }, data: { meetingAt: meetingAt ?? null, version: { increment: 1 } } });
     }
 
     if (hasFinancials && lead.stage === 'WON' && !stage) {
@@ -322,12 +342,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (sale) {
         await tx.saleEvent.update({ where: { id: sale.id }, data: { saleValue, mrr } });
       } else {
-        await tx.saleEvent.create({ data: { leadId: id, actorId: lead.wonById ?? user.id, occurredAt: lead.wonAt ?? new Date(), saleValue, mrr } });
+        await tx.saleEvent.create({ data: { leadId: id, actorId: lead.wonById ?? actor.id, occurredAt: lead.wonAt ?? new Date(), saleValue, mrr } });
       }
-      updated = await tx.lead.update({ where: { id }, data: { saleValue, mrr } });
+      updated = await tx.lead.update({ where: { id, version: updated.version }, data: { saleValue, mrr, version: { increment: 1 } } });
       await tx.activity.create({ data: {
-        leadId: id, actorId: user.id, type: 'SALE_FINANCIALS_UPDATED',
+        ...withCrmActivityActor(actor, { leadId: id, type: 'SALE_FINANCIALS_UPDATED',
         note: `Valores da venda atualizados: venda de ${previousSaleValue} para ${saleValue}; MRR de ${previousMrr} para ${mrr}.`
+        })
       } });
     }
 
@@ -336,10 +357,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const scheduledDueDate = getFollowUpDueDate(now, delayDays);
       await tx.followUp.updateMany({
         where: { leadId: id, state: 'PENDING' },
-        data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id }
+        data: { state: 'CANCELLED', cancelledAt: now, cancelledById: actor.id }
       });
-      await tx.followUp.create({ data: { leadId: id, dueDate: scheduledDueDate, ownerId: user.id, returnStage: lead.stage, note: 'Retorno agendado pelo CRM.' } });
-      await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'FOLLOW_UP_SCHEDULED', note: 'Follow-up agendado.' } });
+      await tx.followUp.create({ data: { leadId: id, dueDate: scheduledDueDate, ownerId: actor.id, returnStage: lead.stage, note: 'Retorno agendado pelo CRM.' } });
+      await tx.activity.create({ data: withCrmActivityActor(actor, { leadId: id, type: 'FOLLOW_UP_SCHEDULED', note: 'Follow-up agendado.' }) });
     }
 
     if (followUpAction && followUpId) {
@@ -353,38 +374,44 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       } else if (followUp.state !== FollowUpState.PENDING) {
         throw new Error('FOLLOW_UP_NOT_PENDING');
       } else if (followUpAction === 'COMPLETE') {
-        await tx.followUp.update({ where: { id: followUpId }, data: { state: 'COMPLETED', completedAt: now, completedById: user.id } });
+        await tx.followUp.update({ where: { id: followUpId }, data: { state: 'COMPLETED', completedAt: now, completedById: actor.id } });
         const returnStage = followUp.returnStage;
         const restoredStage = returnStage ?? lead.stage;
         updated = await tx.lead.update({
-          where: { id },
+          where: { id, version: updated.version },
           data: {
             ...(returnStage ? { stage: returnStage } : {}),
             stageEnteredAt: now,
             postFollowUpAt: now,
-            ...(returnStage === 'DISCARDED' ? { discardedAt: now } : returnStage ? { discardedAt: null } : {})
+            ...(returnStage === 'DISCARDED' ? { discardedAt: now } : returnStage ? { discardedAt: null } : {}),
+            version: { increment: 1 }
           }
         });
         if (returnStage && restoredStage !== lead.stage) {
-          await tx.stageHistory.create({ data: { leadId: id, actorId: user.id, fromStage: lead.stage, toStage: returnStage } });
+          await tx.stageHistory.create({ data: { leadId: id, actorId: actor.id, fromStage: lead.stage, toStage: returnStage } });
         }
-        await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'FOLLOW_UP_COMPLETED', note: 'Follow-up concluído.' } });
+        await tx.activity.create({ data: withCrmActivityActor(actor, { leadId: id, type: 'FOLLOW_UP_COMPLETED', note: 'Follow-up concluído.' }) });
       } else {
-        await tx.followUp.update({ where: { id: followUpId }, data: { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id } });
-        await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'FOLLOW_UP_CANCELLED', note: followUpAction === 'RESCHEDULE' ? 'Follow-up reagendado.' : 'Follow-up cancelado.' } });
+        await tx.followUp.update({ where: { id: followUpId }, data: { state: 'CANCELLED', cancelledAt: now, cancelledById: actor.id } });
+        await tx.activity.create({ data: withCrmActivityActor(actor, { leadId: id, type: 'FOLLOW_UP_CANCELLED', note: followUpAction === 'RESCHEDULE' ? 'Follow-up reagendado.' : 'Follow-up cancelado.' }) });
         if (followUpAction === 'RESCHEDULE' && dueDate) {
-          await tx.followUp.create({ data: { leadId: id, dueDate, ownerId: user.id, returnStage: followUp.returnStage, note: 'Retorno reagendado pelo CRM.' } });
-          await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'FOLLOW_UP_SCHEDULED', note: 'Novo follow-up agendado.' } });
+          await tx.followUp.create({ data: { leadId: id, dueDate, ownerId: actor.id, returnStage: followUp.returnStage, note: 'Retorno reagendado pelo CRM.' } });
+          await tx.activity.create({ data: withCrmActivityActor(actor, { leadId: id, type: 'FOLLOW_UP_SCHEDULED', note: 'Novo follow-up agendado.' }) });
         }
       }
     }
 
     if (activityNote && activityChannel) {
-      await tx.activity.create({ data: { leadId: id, actorId: user.id, type: 'CONTACT', channel: activityChannel, note: activityNote } });
+      updated = await tx.lead.update({
+        where: { id, version: updated.version },
+        data: { lastMeaningfulInteractionAt: now, postFollowUpAt: null, version: { increment: 1 } }
+      });
+      await tx.activity.create({ data: withCrmActivityActor(actor, { leadId: id, type: 'CONTACT', channel: activityChannel, note: activityNote }) });
     }
     return updated;
   }).catch((error: unknown) => {
     if (error instanceof StageConflictError) return error;
+    if (error instanceof LeadVersionConflictError) return error;
     if (error instanceof Error && ['LEAD_NOT_FOUND', 'ALREADY_WON', 'WON_CANNOT_SCHEDULE_FOLLOW_UP', 'FINANCIALS_REQUIRE_WON', 'INVALID_SERVICE_SELECTION', 'POST_FOLLOW_UP_COOLDOWN', 'MEETING_DATE_REQUIRES_MEETING_STAGE'].includes(error.message)) return error.message;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_FOUND') return null;
     if (error instanceof Error && error.message === 'FOLLOW_UP_NOT_PENDING') return false;
@@ -394,6 +421,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (updatedLead instanceof StageConflictError) return Response.json({
     code: 'STAGE_CONFLICT', currentStage: updatedLead.currentStage,
     currentStageEnteredAt: updatedLead.currentStageEnteredAt.toISOString()
+  }, { status: 409 });
+  if (updatedLead instanceof LeadVersionConflictError) return Response.json({
+    code: 'LEAD_VERSION_CONFLICT', currentVersion: updatedLead.currentVersion
   }, { status: 409 });
   if (updatedLead === 'LEAD_NOT_FOUND') return Response.json({ error: 'Lead não encontrado.' }, { status: 404 });
   if (updatedLead === 'ALREADY_WON') return Response.json({ error: 'Este lead já está marcado como ganho. Reabra-o antes de registrar uma nova venda.' }, { status: 409 });

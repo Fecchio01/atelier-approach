@@ -3,6 +3,8 @@ import { Channel, Prisma } from '@prisma/client';
 import { getCurrentUser } from '../../../lib/auth';
 import { prisma } from '../../../lib/db';
 import { normalizePublishedPhone, toWhatsAppHref } from '../../../lib/contact-links';
+import { createHumanCrmActor } from '../../../lib/crm/actor';
+import { executeCrmCommand, withCrmActivityActor } from '../../../lib/crm/commands';
 
 type BusinessInput = {
   osmId?: unknown;
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const lead = await prisma.$transaction(async (tx) => {
+    const lead = await executeCrmCommand(prisma, createHumanCrmActor(user.id), async (tx, actor) => {
       const createdLead = await tx.lead.create({
         data: {
           osmId,
@@ -63,10 +65,10 @@ export async function POST(request: Request) {
         }
       });
       await tx.activity.create({
-        data: { leadId: createdLead.id, actorId: user.id, type: 'CONTACT', channel, note }
+        data: withCrmActivityActor(actor, { leadId: createdLead.id, type: 'CONTACT', channel, note })
       });
       await tx.stageHistory.create({
-        data: { leadId: createdLead.id, actorId: user.id, fromStage: 'NEW', toStage: 'CONTACTED' }
+        data: { leadId: createdLead.id, actorId: actor.id, fromStage: 'NEW', toStage: 'CONTACTED' }
       });
       return createdLead;
     });

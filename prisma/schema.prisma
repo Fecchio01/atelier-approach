@@ -78,6 +78,12 @@ enum ActivityType {
   CRM_TASK_CANCELLED
 }
 
+enum ActivityOrigin {
+  HUMAN
+  AGENT
+  SYSTEM
+}
+
 enum GoalPeriodKind {
   WEEKLY
   MONTHLY
@@ -90,6 +96,7 @@ enum ServiceBillingType {
 
 model Lead {
   id             String         @id @default(cuid())
+  version        Int            @default(1)
   osmId          String         @unique
   name           String?
   phone          String?
@@ -104,6 +111,7 @@ model Lead {
   stage          LeadStage      @default(CONTACTED)
   stageEnteredAt DateTime       @default(now())
   meetingAt      DateTime?
+  lastMeaningfulInteractionAt DateTime?
   postFollowUpAt DateTime?
   discardedAt    DateTime?
   saleValue      Decimal?
@@ -126,6 +134,7 @@ model Activity {
   leadId    String
   actorId   String
   type      ActivityType @default(CONTACT)
+  origin    ActivityOrigin @default(HUMAN)
   channel   Channel?
   note      String
   createdAt DateTime     @default(now())

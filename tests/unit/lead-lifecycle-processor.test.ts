@@ -3,10 +3,13 @@ import { processLeadLifecycle, type LifecycleDatabase } from '../../lib/process-
 
 type LeadFixture = {
   id: string;
+  version?: number;
   stage: string;
   stageEnteredAt: Date;
   postFollowUpAt: Date | null;
   discardedAt: Date | null;
+  lastMeaningfulInteractionAt?: Date | null;
+  meetingAt?: Date | null;
 };
 
 function makeDatabase(seed: {
@@ -35,17 +38,23 @@ function makeDatabase(seed: {
           if (Object.prototype.hasOwnProperty.call(where, 'postFollowUpAt') && where.postFollowUpAt === null && lead.postFollowUpAt !== null) return false;
           if (postClause?.lte && (!lead.postFollowUpAt || lead.postFollowUpAt > postClause.lte)) return false;
           return true;
-        }).map((lead) => ({ ...lead }));
+        }).map((lead) => ({ ...lead, version: lead.version ?? 1, lastMeaningfulInteractionAt: lead.lastMeaningfulInteractionAt ?? null, meetingAt: lead.meetingAt ?? null }));
       },
-      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Partial<LeadFixture> }) => {
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Omit<Partial<LeadFixture>, 'version'> & { version?: number | { increment: number } } }) => {
         const lead = leads.find((item) => item.id === where.id);
         if (!lead || lead.stage !== where.stage || lead.stageEnteredAt.getTime() !== (where.stageEnteredAt as Date).getTime() ||
-          (lead.postFollowUpAt?.getTime() ?? null) !== ((where.postFollowUpAt as Date | null | undefined)?.getTime() ?? null)) return { count: 0 };
-        Object.assign(lead, data);
+          (lead.postFollowUpAt?.getTime() ?? null) !== ((where.postFollowUpAt as Date | null | undefined)?.getTime() ?? null) ||
+          (where.version !== undefined && (lead.version ?? 1) !== where.version)) return { count: 0 };
+        const { version, ...fields } = data;
+        Object.assign(lead, fields);
+        if (version && typeof version === 'object') lead.version = (lead.version ?? 1) + version.increment;
+        else if (typeof version === 'number') lead.version = version;
         return { count: 1 };
       },
-      deleteMany: async ({ where }: { where: { stage: string; discardedAt: { lte: Date } } }) => {
-        const eligible = leads.filter((lead) => lead.stage === where.stage && lead.discardedAt !== null && lead.discardedAt <= where.discardedAt.lte);
+      deleteMany: async ({ where }: { where: { OR: { id: string; version: number; stage: string; discardedAt: { lte: Date } }[] } }) => {
+        const eligible = leads.filter((lead) => where.OR.some((candidate) =>
+          candidate.id === lead.id && candidate.stage === lead.stage && candidate.version === (lead.version ?? 1) &&
+          lead.discardedAt !== null && lead.discardedAt <= candidate.discardedAt.lte));
         eligible.forEach((lead) => { deleted.push(lead.id); leads.splice(leads.indexOf(lead), 1); });
         return { count: eligible.length };
       }
@@ -111,6 +120,7 @@ describe('lead lifecycle processor without database', () => {
     expect(fixture.cancelledFollowUps).toEqual([expect.objectContaining({ leadId: 'due', state: 'CANCELLED', cancelledById: '__team__' })]);
     expect(fixture.histories).toHaveLength(1);
     expect(fixture.activities).toHaveLength(1);
+    expect(fixture.activities[0]).toMatchObject({ origin: 'SYSTEM' });
   });
 
   test('does not auto-follow-up excluded stages and uses team owner for a missing activity actor', async () => {
@@ -135,6 +145,46 @@ describe('lead lifecycle processor without database', () => {
     await expect(processLeadLifecycle(fixture.db, now)).resolves.toEqual({ movedToFollowUp: 0, discardedForInactivity: 1, permanentlyDeleted: 0 });
     expect(fixture.leads[0]).toMatchObject({ stage: 'DISCARDED', stageEnteredAt: now, discardedAt: now, postFollowUpAt: null });
     expect(fixture.histories[0]).toMatchObject({ fromStage: 'INTEREST', toStage: 'DISCARDED', actorId: '__team__' });
+  });
+
+  test('resets a stale discard timer after a more recent meaningful interaction', async () => {
+    const fixture = makeDatabase({ leads: [{
+      id: 'recent-contact', stage: 'INTEREST', stageEnteredAt: at('2026-09-01T10:00:00Z'),
+      postFollowUpAt: at('2026-09-05T10:00:00Z'), discardedAt: null,
+      lastMeaningfulInteractionAt: at('2026-09-09T10:00:00Z')
+    }] });
+
+    await expect(processLeadLifecycle(fixture.db, now)).resolves.toEqual({
+      movedToFollowUp: 0, discardedForInactivity: 0, permanentlyDeleted: 0
+    });
+    expect(fixture.leads[0]).toMatchObject({ stage: 'INTEREST', postFollowUpAt: null });
+  });
+
+  test('does not auto-follow-up based on time elapsed before the latest meaningful interaction', async () => {
+    const fixture = makeDatabase({ leads: [{
+      id: 'recently-contacted', stage: 'CONTACTED', stageEnteredAt: at('2026-09-01T10:00:00Z'),
+      postFollowUpAt: null, discardedAt: null,
+      lastMeaningfulInteractionAt: at('2026-09-09T10:00:00Z')
+    }] });
+
+    await expect(processLeadLifecycle(fixture.db, now)).resolves.toEqual({
+      movedToFollowUp: 0, discardedForInactivity: 0, permanentlyDeleted: 0
+    });
+    expect(fixture.followUps).toHaveLength(0);
+    expect(fixture.leads[0].stage).toBe('CONTACTED');
+  });
+
+  test('protects proposal, meeting, and future-meeting negotiations from automatic discard', async () => {
+    const fixture = makeDatabase({ leads: [
+      { id: 'active-proposal', stage: 'PROPOSAL', stageEnteredAt: at('2026-08-01T10:00:00Z'), postFollowUpAt: at('2026-08-01T10:00:00Z'), discardedAt: null },
+      { id: 'active-meeting', stage: 'MEETING', stageEnteredAt: at('2026-08-01T10:00:00Z'), postFollowUpAt: at('2026-08-01T10:00:00Z'), discardedAt: null },
+      { id: 'future-meeting', stage: 'INTEREST', stageEnteredAt: at('2026-08-01T10:00:00Z'), postFollowUpAt: at('2026-08-01T10:00:00Z'), discardedAt: null, meetingAt: at('2026-09-11T10:00:00Z') }
+    ] });
+
+    await expect(processLeadLifecycle(fixture.db, now)).resolves.toEqual({
+      movedToFollowUp: 0, discardedForInactivity: 0, permanentlyDeleted: 0
+    });
+    expect(fixture.leads.map(({ stage }) => stage)).toEqual(['PROPOSAL', 'MEETING', 'INTEREST']);
   });
 
   test('expires legacy FOLLOW_UP and NO_RESPONSE post-follow-up timers without auto-scheduling them', async () => {

@@ -3,6 +3,8 @@ import { ActivityType, CrmTaskPriority, CrmTaskType, Prisma } from '@prisma/clie
 import { getCurrentUser } from '../../../../../lib/auth';
 import { prisma } from '../../../../../lib/db';
 import { parseCrmTaskDueDate } from '../../../../../lib/crm-task-queue';
+import { createHumanCrmActor } from '../../../../../lib/crm/actor';
+import { executeCrmCommand, withCrmActivityActor } from '../../../../../lib/crm/commands';
 
 type TaskAction = 'UPDATE' | 'COMPLETE' | 'CANCEL';
 
@@ -19,6 +21,7 @@ function parseExpectedUpdatedAt(value: unknown) {
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
+  const actor = createHumanCrmActor(user.id);
 
   let body: Record<string, unknown>;
   try {
@@ -69,7 +72,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (action === 'UPDATE' && !expectedUpdatedAt) return Response.json({ error: 'Atualize a fila antes de editar esta ação.' }, { status: 400 });
 
   const { id } = await params;
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await executeCrmCommand(prisma, actor, async (tx, actor) => {
     const current = await tx.crmTask.findUnique({ where: { id } });
     if (!current) return { kind: 'NOT_FOUND' as const };
 
@@ -79,9 +82,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const now = new Date();
     const updateData: Prisma.CrmTaskUpdateManyMutationInput = action === 'COMPLETE'
-      ? { state: 'COMPLETED', completedAt: now, completedById: user.id, updatedById: user.id }
+      ? { state: 'COMPLETED', completedAt: now, completedById: actor.id, updatedById: actor.id }
       : action === 'CANCEL'
-        ? { state: 'CANCELLED', cancelledAt: now, cancelledById: user.id, updatedById: user.id }
+        ? { state: 'CANCELLED', cancelledAt: now, cancelledById: actor.id, updatedById: actor.id }
         : data;
     const update = await tx.crmTask.updateMany({
       where: { id, state: 'PENDING', ...(action === 'UPDATE' ? { updatedAt: expectedUpdatedAt! } : {}) },
@@ -103,7 +106,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       : action === 'CANCEL'
         ? `Ação cancelada: ${current.title}.`
         : `Ação atualizada (${changes.join(', ')}): ${updated.title}.`;
-    await tx.activity.create({ data: { leadId: current.leadId, actorId: user.id, type, note } });
+    await tx.activity.create({ data: withCrmActivityActor(actor, { leadId: current.leadId, type, note }) });
     return { kind: 'OK' as const, task: updated };
   });
 
