@@ -1,10 +1,11 @@
-import { ActivityType, CrmTaskPriority, CrmTaskType, Prisma } from '@prisma/client';
+import { ActivityType, CadenceStatus, CrmTaskPriority, CrmTaskType, Prisma } from '@prisma/client';
 
 import { getCurrentUser } from '../../../../../lib/auth';
 import { prisma } from '../../../../../lib/db';
 import { parseCrmTaskDueDate } from '../../../../../lib/crm-task-queue';
 import { createHumanCrmActor } from '../../../../../lib/crm/actor';
 import { executeCrmCommand, withCrmActivityActor } from '../../../../../lib/crm/commands';
+import { cadencePolicy, getCadenceDueAt } from '@/lib/agents/specialists/follow-up';
 
 type TaskAction = 'UPDATE' | 'COMPLETE' | 'CANCEL';
 
@@ -107,6 +108,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         ? `Ação cancelada: ${current.title}.`
         : `Ação atualizada (${changes.join(', ')}): ${updated.title}.`;
     await tx.activity.create({ data: withCrmActivityActor(actor, { leadId: current.leadId, type, note }) });
+    const cadenceId = current.effectKey?.match(/^cadence:([^:]+):\d+$/)?.[1];
+    if (cadenceId && (action === 'COMPLETE' || action === 'CANCEL')) {
+      const cadence = await tx.cadenceEnrollment.findUnique({ where: { id: cadenceId } });
+      if (cadence?.status === CadenceStatus.WAITING_HUMAN && cadence.activeTaskId === current.id) {
+        await tx.cadenceEnrollment.update({ where: { id: cadence.id }, data: action === 'COMPLETE'
+          ? cadence.attempt >= cadencePolicy.maxAttempts
+            ? { status: CadenceStatus.COMPLETED, activeTaskId: null, pauseReason: null, lastActivityAt: now }
+            : { status: CadenceStatus.ACTIVE, activeTaskId: null, pauseReason: null, lastActivityAt: now, nextDueAt: getCadenceDueAt(now, cadencePolicy.nextBusinessDays) }
+          : { status: CadenceStatus.PAUSED, activeTaskId: null, pauseReason: 'A ação humana da cadência foi cancelada.' }
+        });
+      }
+    }
     return { kind: 'OK' as const, task: updated };
   });
 

@@ -1,10 +1,11 @@
 import { PageHeading } from '@/components/ui';
 import { AgentWorkspace, type AgentWorkspaceRun } from '@/components/agent-workspace';
+import { AgentAutomationControl } from '@/components/agent-automation-control';
 import { automationPolicy } from '@/lib/agents/policy';
 import { prisma } from '@/lib/db';
 
 export default async function AgentsPage() {
-  const [leads, records] = await Promise.all([
+  const [leads, records, settings, activeCadences, waitingTasks] = await Promise.all([
     prisma.lead.findMany({
       where: { stage: { notIn: ['WON', 'DISCARDED'] }, name: { not: null } },
       orderBy: [{ stageEnteredAt: 'desc' }, { name: 'asc' }],
@@ -18,7 +19,10 @@ export default async function AgentsPage() {
         lead: { select: { id: true, name: true, stage: true, version: true } },
         actions: { orderBy: { createdAt: 'desc' }, take: 1 }
       }
-    })
+    }),
+    prisma.agentAutomationSettings.findUnique({ where: { id: 'team' } }),
+    prisma.cadenceEnrollment.count({ where: { status: { in: ['ACTIVE', 'WAITING_HUMAN'] } } }),
+    prisma.crmTask.count({ where: { state: 'PENDING', effectKey: { startsWith: 'cadence:' } } })
   ]);
   const runs: AgentWorkspaceRun[] = records.map((run) => ({
     id: run.id,
@@ -46,6 +50,7 @@ export default async function AgentsPage() {
       <p className="mt-1">A análise usa somente os dados salvos no CRM. Não verifica informações externas, não muda etapa, venda ou MRR e não envia mensagens. Cada tarefa exige aprovação.</p>
       <p className="mt-2 text-xs text-white/45">Política {automationPolicy.version} · até {automationPolicy.maxRunsPerMemberPerDay} análises por membro/dia</p>
     </div>
+    <AgentAutomationControl initiallyPaused={settings?.paused ?? false} activeCadences={activeCadences} waitingTasks={waitingTasks} />
     <AgentWorkspace initialLeads={leads.map((lead) => ({ ...lead, name: lead.name ?? 'Empresa sem nome' }))} initialRuns={runs} />
   </section>;
 }

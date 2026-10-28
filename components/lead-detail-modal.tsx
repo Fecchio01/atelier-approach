@@ -17,10 +17,11 @@ import { formatReportNote } from '@/lib/report-notes';
 import { formatMeetingDateTimeLocal } from '@/lib/meeting-scheduling';
 import { CrmTaskForm, type CrmTaskFormMember } from './crm-task-form';
 import { LeadProposalsPanel } from './lead-proposals-panel';
+import { LeadCadencePanel } from './lead-cadence-panel';
 
 type Stage = FunnelStage;
 type FollowUpAction = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
-type DetailTab = 'CONTACT' | 'HISTORY' | 'SALE' | 'PROPOSAL';
+type DetailTab = 'CONTACT' | 'HISTORY' | 'SALE' | 'PROPOSAL' | 'CADENCE';
 const columns = mainFunnelStages.filter((stage) => stage !== 'WON').map((stage) => ({ stage, title: stageLabels[stage] }));
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -300,7 +301,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
     return (
       <div className="grid items-start gap-5">
         <nav className="flex flex-wrap gap-x-6 gap-y-1 border-b border-white/[0.11]" aria-label="Seções do lead">
-          {([['CONTACT', 'Contato'], ['HISTORY', 'Histórico'], ['SALE', 'Venda'], ['PROPOSAL', 'Proposta']] as const).map(([tab, label]) => <button key={tab} type="button" aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)} className={`relative min-h-11 whitespace-nowrap text-sm font-semibold ${activeTab === tab ? 'text-[var(--atelier-green)]' : 'text-white/50 hover:text-white/80'}`}>{label}{activeTab === tab ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--atelier-green)]" /> : null}</button>)}
+          {([['CONTACT', 'Contato'], ['HISTORY', 'Histórico'], ['SALE', 'Venda'], ['PROPOSAL', 'Proposta'], ['CADENCE', 'Cadência']] as const).map(([tab, label]) => <button key={tab} type="button" aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)} className={`relative min-h-11 whitespace-nowrap text-sm font-semibold ${activeTab === tab ? 'text-[var(--atelier-green)]' : 'text-white/50 hover:text-white/80'}`}>{label}{activeTab === tab ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--atelier-green)]" /> : null}</button>)}
         </nav>
         {activeTab === 'CONTACT' ? <section className="grid gap-5 pb-1">
           <div className="grid gap-5 sm:grid-cols-[74px_minmax(0,1fr)] sm:items-center"><div className="grid h-[74px] w-[74px] place-items-center rounded-full border border-white/15 bg-white/[0.035]" aria-hidden="true"><StorefrontIcon size={35} weight="regular" className="text-white/70" /></div><div className="min-w-0"><h3 className="text-base font-semibold text-white/90">Detalhes da empresa</h3><p className="mt-1 text-xs font-medium text-white/40">Nicho</p><p className="text-sm text-white/65">{getBusinessNicheLabel(lead.category)}</p>{lead.address ? <p className="mt-2 break-words text-sm text-white/65">{lead.address}</p> : null}</div></div>
@@ -415,6 +416,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
         </div>
         </section> : null}
         {activeTab === 'PROPOSAL' ? <LeadProposalsPanel leadId={lead.id} services={services} /> : null}
+        {activeTab === 'CADENCE' ? <LeadCadencePanel leadId={lead.id} /> : null}
         {activeTab === 'HISTORY' ? <section className="grid gap-4">{lead.activities.length ? (
           <ol className="grid max-h-60 gap-3 overflow-y-auto rounded-xl border border-white/[0.09] bg-black/10 p-4 text-sm text-white/70" aria-label="Histórico de atividades">
             {lead.activities.map((activity) => <li key={activity.id} className="rounded-md border border-white/10 p-2">

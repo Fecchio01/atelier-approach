@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { MessagingDirection, MessagingStatus, Prisma } from '@prisma/client';
+import { CadenceStatus, CrmTaskState, MessagingDirection, MessagingStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/db';
@@ -52,6 +52,11 @@ export async function processProviderEvent(provider: string, event: ProviderEven
             where: { leadId: priorMessage.leadId, direction: MessagingDirection.OUTBOUND, status: { in: [MessagingStatus.DRAFT, MessagingStatus.APPROVED] } },
             data: { status: MessagingStatus.CANCELLED }
           });
+          const cadence = await tx.cadenceEnrollment.findUnique({ where: { leadId: priorMessage.leadId } });
+          if (cadence && (cadence.status === CadenceStatus.ACTIVE || cadence.status === CadenceStatus.WAITING_HUMAN)) {
+            if (cadence.activeTaskId) await tx.crmTask.updateMany({ where: { id: cadence.activeTaskId, state: CrmTaskState.PENDING }, data: { state: CrmTaskState.CANCELLED, cancelledAt: new Date(), cancelledById: 'system:messaging' } });
+            await tx.cadenceEnrollment.update({ where: { id: cadence.id }, data: { status: CadenceStatus.PAUSED, activeTaskId: null, pauseReason: 'Resposta recebida; revise a conversa antes de retomar.' } });
+          }
         }
       }
       await tx.messagingWebhookEvent.update({ where: { id: saved.id }, data: { processedAt: new Date() } });

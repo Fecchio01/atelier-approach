@@ -142,6 +142,14 @@ enum ProposalVersionStatus {
   EXPIRED
 }
 
+enum CadenceStatus {
+  ACTIVE
+  WAITING_HUMAN
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
 enum ResearchCampaignStatus {
   QUEUED
   RUNNING
@@ -193,6 +201,7 @@ model Lead {
   commercialAnalyses          CompanyAnalysis[]
   messages                    MessagingMessage[]
   proposals                   Proposal[]
+  cadenceEnrollment           CadenceEnrollment?
 
   @@index([stage, stageEnteredAt])
   @@index([stage, stageEnteredAt, id], map: "Lead_stage_stageEnteredAt_id_idx")
@@ -431,6 +440,7 @@ model CrmTask {
   assigneeId    String
   createdById   String
   updatedById   String
+  effectKey     String?         @unique
   state         CrmTaskState    @default(PENDING)
   completedAt   DateTime?
   completedById String?
@@ -443,6 +453,31 @@ model CrmTask {
   @@index([state, dueDate])
   @@index([assigneeId, state, dueDate])
   @@index([leadId, createdAt])
+}
+
+model CadenceEnrollment {
+  id             String        @id @default(cuid())
+  leadId         String        @unique
+  ownerId        String
+  policyVersion  String
+  status         CadenceStatus @default(ACTIVE)
+  attempt        Int           @default(0)
+  nextDueAt      DateTime
+  lastActivityAt DateTime
+  activeTaskId   String?       @unique
+  pauseReason    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lead           Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextDueAt])
+}
+
+model AgentAutomationSettings {
+  id        String   @id @default("team")
+  paused    Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 }
 
 model Goal {

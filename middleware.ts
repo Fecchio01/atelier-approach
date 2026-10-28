@@ -9,7 +9,7 @@ export default auth((request) => {
   const { pathname } = request.nextUrl;
   const isRequiredAuthEndpoint =
     pathname === '/api/auth/csrf' || pathname === '/api/auth/callback/credentials';
-  const isPublicCronEndpoint = pathname === '/api/cron/crm-lifecycle';
+  const isPublicCronEndpoint = pathname === '/api/cron/crm-lifecycle' || pathname === '/api/cron/follow-up-cadence';
   const isMessagingWebhook = pathname === '/api/webhooks/messaging';
   const isPublicBrandAsset = pathname.startsWith('/brand/');
 

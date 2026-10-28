@@ -1,4 +1,4 @@
-import { isPurgeEligible, type LifecycleProcessingResult } from './lead-lifecycle';
+import { type LifecycleProcessingResult } from './lead-lifecycle';
 import {
   automaticFollowUpRules,
   getLifecycleReferenceAt,
@@ -55,6 +55,8 @@ export interface LifecycleTransaction {
     create(args: { data: { leadId: string; dueDate: Date; ownerId: string; returnStage: string; note: string } }): Promise<unknown>;
   };
   stageHistory: { create(args: { data: { leadId: string; actorId: string; fromStage: string; toStage: string } }): Promise<unknown> };
+  cadenceEnrollment?: { findFirst(args: { where: { leadId: string; status: { in: readonly string[] } }; select: { id: true } }): Promise<{ id: string } | null> };
+  proposalVersion?: { findFirst(args: { where: { status: 'APPROVED'; proposal: { leadId: string } }; select: { id: true } }): Promise<{ id: string } | null> };
 }
 
 export interface LifecycleDatabase extends LifecycleTransaction {
@@ -72,7 +74,6 @@ function snapshotWhere(lead: LifecycleLead): LeadWhere {
 export async function processLeadLifecycle(database: LifecycleDatabase, now: Date): Promise<LifecycleProcessingResult> {
   assertValidNow(now);
   const discardCutoff = new Date(now.valueOf() - 5 * 24 * 60 * 60 * 1000);
-  const purgeCutoff = new Date(now.valueOf() - 7 * 24 * 60 * 60 * 1000);
   let movedToFollowUp = 0;
   let discardedForInactivity = 0;
 
@@ -81,11 +82,17 @@ export async function processLeadLifecycle(database: LifecycleDatabase, now: Dat
     select: { id: true, version: true, stage: true, stageEnteredAt: true, postFollowUpAt: true, discardedAt: true, lastMeaningfulInteractionAt: true, meetingAt: true }
   });
   for (const candidate of discardCandidates) {
+    const [activeCadence, approvedProposal] = await Promise.all([
+      database.cadenceEnrollment?.findFirst({ where: { leadId: candidate.id, status: { in: ['ACTIVE', 'WAITING_HUMAN'] } }, select: { id: true } }),
+      database.proposalVersion?.findFirst({ where: { status: 'APPROVED', proposal: { leadId: candidate.id } }, select: { id: true } })
+    ]);
     if (isProtectedFromAutomaticDiscard({
       stage: candidate.stage,
       meetingAt: candidate.meetingAt,
       postFollowUpAt: candidate.postFollowUpAt,
       lastMeaningfulInteractionAt: candidate.lastMeaningfulInteractionAt,
+      hasActiveCadence: Boolean(activeCadence),
+      hasApprovedProposal: Boolean(approvedProposal),
       now
     })) {
       if (hasInteractionSincePostFollowUp(candidate)) {
@@ -96,6 +103,11 @@ export async function processLeadLifecycle(database: LifecycleDatabase, now: Dat
       continue;
     }
     const discarded = await database.$transaction(async (tx) => {
+      const [cadenceStillActive, proposalStillApproved] = await Promise.all([
+        tx.cadenceEnrollment?.findFirst({ where: { leadId: candidate.id, status: { in: ['ACTIVE', 'WAITING_HUMAN'] } }, select: { id: true } }),
+        tx.proposalVersion?.findFirst({ where: { status: 'APPROVED', proposal: { leadId: candidate.id } }, select: { id: true } })
+      ]);
+      if (cadenceStillActive || proposalStillApproved) return false;
       const changed = await tx.lead.updateMany({
         where: snapshotWhere(candidate),
         data: { stage: 'DISCARDED', stageEnteredAt: now, discardedAt: now, postFollowUpAt: null, version: { increment: 1 } }
@@ -160,16 +172,6 @@ export async function processLeadLifecycle(database: LifecycleDatabase, now: Dat
     }
   }
 
-  const eligibleDiscarded = await database.lead.findMany({
-    where: { stage: 'DISCARDED', discardedAt: { lte: purgeCutoff } },
-    select: { id: true, version: true, stage: true, stageEnteredAt: true, postFollowUpAt: true, discardedAt: true, lastMeaningfulInteractionAt: true, meetingAt: true }
-  });
-  const eligibleToPurge = eligibleDiscarded.filter((lead) => isPurgeEligible(lead.discardedAt, now));
-  const purge = eligibleToPurge.length
-    ? await database.lead.deleteMany({ where: { OR: eligibleToPurge.map(({ id, version }) => ({
-      id, version, stage: 'DISCARDED' as const, discardedAt: { lte: purgeCutoff }
-    })) } })
-    : { count: 0 };
-
-  return { movedToFollowUp, discardedForInactivity, permanentlyDeleted: purge.count };
+  // Discards remain reversible in the CRM; routine lifecycle processing never hard-deletes commercial history.
+  return { movedToFollowUp, discardedForInactivity, permanentlyDeleted: 0 };
 }

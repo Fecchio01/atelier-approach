@@ -18,10 +18,13 @@ export function isProtectedFromAutomaticDiscard(input: {
   meetingAt: Date | null;
   postFollowUpAt: Date | null;
   lastMeaningfulInteractionAt: Date | null;
+  hasActiveCadence?: boolean;
+  hasApprovedProposal?: boolean;
   now: Date;
 }): boolean {
   if (!Number.isFinite(input.now.valueOf())) throw new RangeError('A data atual deve ser válida.');
   if (input.stage === 'PROPOSAL' || input.stage === 'MEETING') return true;
+  if (input.hasActiveCadence || input.hasApprovedProposal) return true;
   if (input.meetingAt && input.meetingAt > input.now) return true;
   return Boolean(
     input.postFollowUpAt &&
