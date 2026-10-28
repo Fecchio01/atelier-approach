@@ -3,6 +3,9 @@ import { z } from 'zod';
 export const createAgentRunSchema = z.object({ leadId: z.string().trim().min(1).max(128) }).strict();
 
 export const leadAnalysisSchema = z.object({
+  engine: z.enum(['RULES', 'GEMINI']).default('RULES'),
+  model: z.string().max(80).nullable().default(null),
+  usage: z.object({ inputTokens: z.number().int().nonnegative().nullable(), outputTokens: z.number().int().nonnegative().nullable() }).strict().nullable().default(null),
   summary: z.string().min(1).max(500),
   dataCoverage: z.number().int().min(0).max(100),
   knownFacts: z.array(z.string().min(1).max(180)).max(8),

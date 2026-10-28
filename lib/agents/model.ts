@@ -39,6 +39,9 @@ export function analyzeLead(input: LeadModelInput, now = new Date()): LeadAnalys
   const channelLabel = input.whatsapp ? 'WhatsApp' : input.phone ? 'telefone' : 'contato';
 
   return leadAnalysisSchema.parse({
+    engine: 'RULES',
+    model: null,
+    usage: null,
     summary: `${input.name}: revisar o próximo contato usando os dados já disponíveis no CRM. Esta sugestão não confirma informações externas.`,
     dataCoverage: Math.round(availableFields / 5 * 100),
     knownFacts,

@@ -17,9 +17,11 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.107",
     "@duckdb/node-api": "^1.5.5-r.5",
     "@phosphor-icons/react": "^2.1.10",
     "@prisma/client": "^6.16.1",
+    "ai": "^7.0.155",
     "motion": "^14.0.0",
     "next": "^15.5.25",
     "next-auth": "^5.0.0-beta.29",

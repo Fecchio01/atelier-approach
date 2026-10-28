@@ -1,7 +1,8 @@
 import { createHook, getWorkflowMetadata } from 'workflow';
 
 import { prisma } from '@/lib/db';
-import { analyzeLead, hashApproval } from '@/lib/agents/model';
+import { hashApproval } from '@/lib/agents/model';
+import { analyzeLeadWithGeminiWhenAllowed } from '@/lib/agents/gemini';
 
 type WorkflowDecision = { decision: 'APPROVE' | 'REJECT'; approvalHash: string };
 
@@ -38,7 +39,20 @@ async function createReviewSuggestion(runId: string, workflowRunId: string, appr
     id: string; version: number; name: string; stage: string; phone: string | null; whatsapp: string | null;
     website: string | null; instagram: string | null; address: string | null; category: string | null;
   };
-  const result = analyzeLead(snapshot);
+  let result;
+  try {
+    result = await analyzeLeadWithGeminiWhenAllowed(snapshot);
+  } catch {
+    await prisma.agentRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'FAILED',
+        error: 'Não foi possível concluir a análise externa. Confira a chave do Gemini e a faixa gratuita do projeto.',
+        finishedAt: new Date()
+      }
+    });
+    return false;
+  }
   const recommendation = result.recommendation;
   const approvalHash = hashApproval(recommendation);
 
