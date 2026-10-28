@@ -115,6 +115,24 @@ enum AgentOutboxStatus {
   DELIVERED
 }
 
+enum MessagingDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum MessagingStatus {
+  DRAFT
+  APPROVED
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  UNKNOWN
+  BLOCKED
+  CANCELLED
+}
+
 enum ResearchCampaignStatus {
   QUEUED
   RUNNING
@@ -164,6 +182,7 @@ model Lead {
   agentActions                AgentAction[]
   prospectCandidate           ProspectCandidate?
   commercialAnalyses          CompanyAnalysis[]
+  messages                    MessagingMessage[]
 
   @@index([stage, stageEnteredAt])
   @@index([stage, stageEnteredAt, id], map: "Lead_stage_stageEnteredAt_id_idx")
@@ -180,6 +199,7 @@ model Activity {
   origin    ActivityOrigin @default(HUMAN)
   channel   Channel?
   note      String
+  effectKey String?        @unique
   createdAt DateTime       @default(now())
   lead      Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -244,6 +264,57 @@ model CompanyAnalysis {
 
   @@unique([leadId, evidenceFingerprint])
   @@index([leadId, createdAt])
+}
+
+model MessagingMessage {
+  id                String             @id @default(cuid())
+  leadId            String
+  leadVersion       Int
+  createdById       String
+  provider          String
+  channel           Channel
+  direction         MessagingDirection
+  status            MessagingStatus    @default(DRAFT)
+  idempotencyKey    String             @unique
+  recipient         String
+  providerMessageId String?
+  content           String             @db.Text
+  approvedById      String?
+  approvedAt        DateTime?
+  sentAt            DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  lead              Lead               @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerMessageId])
+  @@index([leadId, createdAt])
+  @@index([status, createdAt])
+}
+
+model MessagingWebhookEvent {
+  id              String    @id @default(cuid())
+  provider        String
+  externalEventId String
+  eventType       String
+  payload         Json
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  error           String?
+
+  @@unique([provider, externalEventId])
+  @@index([processedAt, receivedAt])
+}
+
+model ContactSuppression {
+  id                String   @id @default(cuid())
+  channel           Channel
+  normalizedContact String
+  reason            String
+  createdAt         DateTime @default(now())
+  createdById       String?
+
+  @@unique([channel, normalizedContact])
+  @@index([createdAt])
 }
 
 model SaleLineItem {
