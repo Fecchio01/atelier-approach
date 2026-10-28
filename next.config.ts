@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { withWorkflow } from 'workflow/next';
 
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? '.next',
@@ -7,4 +8,4 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['@duckdb/node-api', '@duckdb/node-bindings']
 };
 
-export default nextConfig;
+export default withWorkflow(nextConfig);

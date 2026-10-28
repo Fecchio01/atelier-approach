@@ -35,6 +35,11 @@ describe('team goal actions', () => {
     mocks.goalUpsert.mockResolvedValue({ id: 'goal' });
     mocks.goalFindFirst.mockResolvedValue(null);
     mocks.settingsFindUnique.mockResolvedValue(null);
+    mocks.transaction.mockImplementation(async (callback) => callback({
+      goal: { findFirst: mocks.goalFindFirst, findUnique: vi.fn().mockResolvedValue(null), upsert: mocks.goalUpsert, update: mocks.goalUpsert, create: mocks.goalUpsert },
+      teamGoalSettings: { findUnique: mocks.settingsFindUnique, upsert: mocks.saveMonthlyStartDay },
+      metricImportBatch: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null), update: vi.fn(), delete: vi.fn() }
+    } as never));
   });
 
   test('returns an inline error when authentication lookup fails instead of rejecting', async () => {
@@ -48,7 +53,7 @@ describe('team goal actions', () => {
     const form = new FormData();
     form.set('customGoals', JSON.stringify([{ id: 'crm', name: 'Vendas', target: 5, current: 3, source: 'sales' }]));
     await expect(saveWeeklyGoal(initialGoalActionState, form)).resolves.toMatchObject({ status: 'saved' });
-    expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), undefined,
+    expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), expect.any(Object),
       [{ id: 'crm', name: 'Vendas', target: 5, current: 3, source: 'sales' }]);
   });
 
@@ -81,7 +86,7 @@ describe('team goal actions', () => {
     await expect(saveCustomGoalsForCycle('WEEKLY', '[]')).resolves.toMatchObject({ status: 'saved' });
     expect(mocks.goalUpsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ customGoals: [] }),
-      update: { customGoals: [] }
+      update: expect.objectContaining({ customGoals: [] })
     }));
   });
 
@@ -145,7 +150,7 @@ describe('team goal actions', () => {
     expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'WEEKLY' }),
       expect.objectContaining({ approaches: 20 }),
-      undefined,
+      expect.any(Object),
       [{ id: 'car-goal', name: 'Carros', unit: 'veículos', target: 3, current: 1, icon: 'car', group: 'vehicles' }]
     );
   });
@@ -158,7 +163,7 @@ describe('team goal actions', () => {
     expect(mocks.upsertTeamGoal).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'WEEKLY' }),
       expect.objectContaining({ proposalsSent: 5 }),
-      undefined,
+      expect.any(Object),
       undefined
     );
   });

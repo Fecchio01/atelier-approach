@@ -37,7 +37,7 @@ describe('filterAndSortCrmQueue', () => {
     const items = [
       item('today-later', '2026-10-22T02:45:00.000Z'),
       item('today-past', '2026-10-22T01:00:00.000Z'),
-      item('yesterday', '2026-10-21T12:00:00.000Z'),
+      item('yesterday', '2026-10-20T12:00:00.000Z'),
       item('tomorrow-late', '2026-10-23T02:30:00.000Z')
     ];
 

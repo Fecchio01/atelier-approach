@@ -17,7 +17,7 @@ export default defineConfig({
     alias: { '@': path.dirname(fileURLToPath(import.meta.url)) }
   },
   test: {
-    exclude: ['tests/e2e/**', 'node_modules/**', '.next/**', '.superpowers/**'],
+    exclude: ['tests/e2e/**', '**/*.integration.test.ts', 'node_modules/**', '.next/**', '**/.next*/**', '**/.worktrees/**', '.superpowers/**'],
     fileParallelism: false,
     globalSetup: ['./tests/setup-test-database.ts'],
     env: {

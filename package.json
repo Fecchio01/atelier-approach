@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
+    "test:workflow": "vitest run --config vitest.workflow.config.ts",
     "pree2e": "node scripts/copy-pdfjs-assets.mjs",
     "test:e2e": "playwright test"
   },
@@ -25,7 +26,9 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "5.4.394",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "workflow": "^5.2.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -35,6 +38,7 @@
     "@types/react": "19.1.13",
     "@types/react-dom": "19.1.9",
     "@typescript-eslint/parser": "^8.0.0",
+    "@workflow/vitest": "^5.0.6",
     "esbuild": "0.28.2",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.25",

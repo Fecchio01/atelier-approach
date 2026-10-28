@@ -10,6 +10,7 @@ import {
   ListIcon,
   SignOutIcon,
   SquaresFourIcon,
+  SparkleIcon,
   TargetIcon,
   XIcon
 } from '@phosphor-icons/react';
@@ -18,6 +19,7 @@ import { ProfileAvatar } from './profile-avatar';
 export const appRoutes = [
   { href: '/', label: 'Painel', Icon: SquaresFourIcon },
   { href: '/crm', label: 'Funil', Icon: FunnelIcon },
+  { href: '/agentes', label: 'Assistente', Icon: SparkleIcon },
   { href: '/pesquisa', label: 'Empresas', Icon: BuildingsIcon },
   { href: '/metas', label: 'Metas', Icon: TargetIcon },
   { href: '/relatorios', label: 'Relatórios', Icon: ChartBarIcon }

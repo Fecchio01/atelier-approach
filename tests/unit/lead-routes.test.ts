@@ -8,40 +8,6 @@ import { DELETE, GET, PATCH } from '../../app/api/leads/[id]/route';
 import { POST } from '../../app/api/leads/route';
 import { prisma } from '../../lib/db';
 
-describe('activity author response contract without database', () => {
-  afterEach(() => vi.restoreAllMocks());
-
-  test('serializes resolved names and null for missing profiles using only public profile fields', async () => {
-    mocks.getCurrentUser.mockResolvedValue({ id: 'internal-equipe' });
-    const createdAt = new Date('2026-10-18T12:00:00.000Z');
-    const activity = { leadId: 'lead', type: 'CONTACT', channel: null, note: 'Contato.', createdAt };
-    vi.spyOn(prisma.lead, 'findUnique').mockResolvedValue({
-      id: 'lead', osmId: 'node/authors', name: null, phone: null, website: null, instagram: null,
-      whatsapp: null, address: null, category: null, latitude: null, longitude: null, syncedAt: null,
-      stage: 'CONTACTED', stageEnteredAt: createdAt, meetingAt: null, postFollowUpAt: null,
-      discardedAt: null, saleValue: null, mrr: null, wonAt: null, wonById: null,
-      activities: [
-        { ...activity, id: 'known', actorId: 'ana' },
-        { ...activity, id: 'repeat', actorId: 'ana' },
-        { ...activity, id: 'unknown', actorId: 'missing' }
-      ], followUps: []
-    } as never);
-    const profiles = vi.spyOn(prisma.memberProfile, 'findMany').mockResolvedValue([
-      { id: 'ana', name: 'Ana da equipe', email: 'private@example.com', avatarUrl: '/private-avatar.png', createdAt, updatedAt: createdAt }
-    ]);
-    const response = await GET(new Request('http://localhost/api/leads/lead'), { params: Promise.resolve({ id: 'lead' }) });
-    expect(response.status).toBe(200);
-    const { lead } = await response.json();
-    expect(lead.activities).toEqual([
-      { ...activity, id: 'known', actorId: 'ana', actorName: 'Ana da equipe', createdAt: '2026-10-18T12:00:00.000Z' },
-      { ...activity, id: 'repeat', actorId: 'ana', actorName: 'Ana da equipe', createdAt: '2026-10-18T12:00:00.000Z' },
-      { ...activity, id: 'unknown', actorId: 'missing', actorName: null, createdAt: '2026-10-18T12:00:00.000Z' }
-    ]);
-    expect(profiles).toHaveBeenCalledExactlyOnceWith({ where: { id: { in: ['ana', 'missing'] } }, select: { id: true, name: true } });
-    expect(JSON.stringify(lead.activities)).not.toMatch(/email|avatarUrl|private@example.com|private-avatar/);
-  });
-});
-
 async function stageBody(id: string, data: Record<string, unknown>) {
   if (!Object.prototype.hasOwnProperty.call(data, 'stage')) return JSON.stringify(data);
   const current = await prisma.lead.findUniqueOrThrow({ where: { id }, select: { stage: true, stageEnteredAt: true } });

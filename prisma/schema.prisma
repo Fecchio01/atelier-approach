@@ -94,6 +94,27 @@ enum ServiceBillingType {
   MONTHLY
 }
 
+enum AgentRunStatus {
+  QUEUED
+  RUNNING
+  NEEDS_APPROVAL
+  COMPLETED
+  FAILED
+}
+
+enum AgentActionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+  STALE
+}
+
+enum AgentOutboxStatus {
+  PENDING
+  DELIVERED
+}
+
 model Lead {
   id             String         @id @default(cuid())
   version        Int            @default(1)
@@ -123,6 +144,8 @@ model Lead {
   crmTasks       CrmTask[]
   stageHistory   StageHistory[]
   saleEvents     SaleEvent[]
+  agentRuns      AgentRun[]
+  agentActions   AgentAction[]
 
   @@index([stage, stageEnteredAt])
   @@index([stage, stageEnteredAt, id], map: "Lead_stage_stageEnteredAt_id_idx")
@@ -378,4 +401,69 @@ model ResearchDismissal {
 
   @@unique([ownerId, osmId])
   @@index([ownerId])
+}
+
+model AgentRun {
+  id             String         @id @default(cuid())
+  idempotencyKey String         @unique
+  leadId         String
+  createdById    String
+  workflowRunId  String?        @unique
+  status         AgentRunStatus @default(QUEUED)
+  policyVersion  String
+  leadVersion    Int
+  inputSnapshot  Json
+  result         Json?
+  error          String?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  lead           Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actions        AgentAction[]
+
+  @@index([status, createdAt])
+  @@index([leadId, createdAt])
+}
+
+model AgentAction {
+  id             String            @id @default(cuid())
+  runId          String
+  leadId         String
+  status         AgentActionStatus @default(PENDING)
+  approvalToken  String            @unique
+  approvalHash   String
+  leadVersion    Int
+  title          String
+  description    String
+  taskType       CrmTaskType
+  priority       CrmTaskPriority   @default(NORMAL)
+  dueDate        DateTime
+  approvedById   String?
+  approvedAt     DateTime?
+  rejectedAt     DateTime?
+  appliedAt      DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  run            AgentRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  lead           Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  outbox         AgentOutbox?
+
+  @@unique([runId, leadVersion])
+  @@index([status, createdAt])
+  @@index([leadId, createdAt])
+}
+
+model AgentOutbox {
+  id          String           @id @default(cuid())
+  actionId    String           @unique
+  payload     Json
+  status      AgentOutboxStatus @default(PENDING)
+  attempts    Int              @default(0)
+  lastError   String?
+  createdAt   DateTime         @default(now())
+  deliveredAt DateTime?
+  action      AgentAction      @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
 }

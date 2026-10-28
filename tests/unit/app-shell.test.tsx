@@ -50,7 +50,8 @@ describe('AppShell brand navigation', () => {
     expect(markup).toContain('w-full');
     expect(markup).not.toContain('Mais oficinas. Mais negócios.');
     const primaryNavigation = markup.match(/<nav aria-label="Navegação principal" class="[^"]*">([\s\S]*?)<\/nav>/);
-    expect(primaryNavigation?.[1]?.match(/<svg\b/g)).toHaveLength(5);
+    expect(primaryNavigation?.[1]?.match(/<svg\b/g)).toHaveLength(6);
+    expect(primaryNavigation?.[1]).toContain('Assistente');
   });
 
   test('renders a compact mobile header and keeps the desktop navigation separate', () => {
@@ -74,7 +75,7 @@ describe('AppShell brand navigation', () => {
     expect(desktopSidebar).toContain('aria-label="Navegação principal"');
     expect(desktopSidebar).toContain('Sair da conta');
     expect(desktopSidebar?.match(/<a\b[^>]*aria-current=/g)).toHaveLength(1);
-    expect(desktopNavigation?.match(/href="\/(?:crm|pesquisa|metas|relatorios)?"/g)).toHaveLength(5);
+    expect(desktopNavigation?.match(/href="\/(?:crm|agentes|pesquisa|metas|relatorios)?"/g)).toHaveLength(6);
   });
 
   test('does not prefetch every database-backed destination from desktop and mobile navigation', () => {
@@ -89,7 +90,7 @@ describe('AppShell brand navigation', () => {
     const desktopNavigation = markup.match(/<nav aria-label="Navegação principal" class="[^"]*">([\s\S]*?)<\/nav>/)?.[1] ?? '';
     const mobileNavigation = markup.match(/<nav aria-label="Navegação principal no menu mobile" class="[^"]*">([\s\S]*?)<\/nav>/)?.[1] ?? '';
 
-    expect(desktopNavigation.match(/data-prefetch="false"/g) ?? []).toHaveLength(5);
-    expect(mobileNavigation.match(/data-prefetch="false"/g) ?? []).toHaveLength(5);
+    expect(desktopNavigation.match(/data-prefetch="false"/g) ?? []).toHaveLength(6);
+    expect(mobileNavigation.match(/data-prefetch="false"/g) ?? []).toHaveLength(6);
   });
 });
