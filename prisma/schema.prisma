@@ -115,6 +115,22 @@ enum AgentOutboxStatus {
   DELIVERED
 }
 
+enum ResearchCampaignStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ProspectCandidateStatus {
+  NEW
+  REVIEW_IDENTITY
+  APPROVED
+  REJECTED
+  PROMOTED
+}
+
 model Lead {
   id             String         @id @default(cuid())
   version        Int            @default(1)
@@ -146,6 +162,7 @@ model Lead {
   saleEvents     SaleEvent[]
   agentRuns      AgentRun[]
   agentActions   AgentAction[]
+  prospectCandidate ProspectCandidate?
 
   @@index([stage, stageEnteredAt])
   @@index([stage, stageEnteredAt, id], map: "Lead_stage_stageEnteredAt_id_idx")
@@ -401,6 +418,92 @@ model ResearchDismissal {
 
   @@unique([ownerId, osmId])
   @@index([ownerId])
+}
+
+model ResearchCampaign {
+  id             String                 @id @default(cuid())
+  ownerId        String
+  idempotencyKey String                 @unique
+  requestFingerprint String
+  name           String
+  niche          String
+  region         String
+  city           String?
+  criteria       Json
+  checkpoint     Json
+  maxCandidates  Int                    @default(20)
+  maxAreas       Int                    @default(20)
+  release        String?
+  status         ResearchCampaignStatus @default(QUEUED)
+  checkpointVersion Int                 @default(0)
+  completedAreas Int                    @default(0)
+  candidateCount Int                    @default(0)
+  workflowRunId  String?                @unique
+  dispatchLeaseUntil DateTime?
+  error          String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  candidates     ResearchCampaignCandidate[]
+
+  @@index([ownerId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model ProspectCandidate {
+  id                  String                 @id @default(cuid())
+  source              String
+  externalId          String
+  name                String
+  normalizedName      String
+  identityFingerprint String
+  phone               String?
+  website             String?
+  instagram           String?
+  whatsapp            String?
+  address             String?
+  category            String?
+  latitude            Float?
+  longitude           Float?
+  imageUrl            String?
+  status              ProspectCandidateStatus @default(NEW)
+  leadId              String?                @unique
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  lead                Lead?                  @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  campaigns           ResearchCampaignCandidate[]
+  evidence            ResearchEvidence[]
+
+  @@unique([source, externalId])
+  @@index([normalizedName, latitude, longitude])
+  @@index([status, createdAt])
+}
+
+model ResearchCampaignCandidate {
+  campaignId  String
+  candidateId String
+  firstSeenAt DateTime          @default(now())
+  campaign    ResearchCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  candidate   ProspectCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, candidateId])
+  @@index([candidateId])
+}
+
+model ResearchEvidence {
+  id               String            @id @default(cuid())
+  candidateId      String
+  field            String
+  value            String?
+  source           String
+  sourceUrl        String            @default("")
+  release          String?
+  verified         Boolean           @default(false)
+  extractorVersion String
+  capturedAt       DateTime          @default(now())
+  candidate        ProspectCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, field, source, sourceUrl])
+  @@index([candidateId, field, capturedAt])
 }
 
 model AgentRun {

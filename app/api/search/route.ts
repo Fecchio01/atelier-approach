@@ -2,7 +2,6 @@ import { getCurrentUser } from '../../../lib/auth';
 import { prisma } from '../../../lib/db';
 import type { Prisma } from '@prisma/client';
 import { approachabilityRank, scoreBusiness } from '../../../lib/lead-score';
-import { enrichOvertureBusinesses } from '../../../lib/prospect-enrichment';
 import {
   createOsmSearchService,
   ExternalBusiness,
@@ -13,9 +12,9 @@ import {
   DEFAULT_OVERTURE_NICHE,
   matchesOvertureSearch,
   planOvertureSearchAreas,
-  searchOvertureArea,
   splitOvertureSearchArea
 } from '../../../lib/overture';
+import { enrichProspectBatch, searchProspectArea } from '../../../lib/research/search-service';
 
 export const runtime = 'nodejs';
 
@@ -164,7 +163,7 @@ async function consumeOverturePage(savedSearch: SavedSearch, ownerId: string) {
   ) {
     if (savedSearch.overtureQueue.length) {
       const candidates = savedSearch.overtureQueue.splice(0, INITIAL_RESULTS_PER_PAGE - businesses.length);
-      const verifiedCandidates = await enrichOvertureBusinesses(candidates);
+      const verifiedCandidates = await enrichProspectBatch(candidates);
       businesses.push(...await filterBusinessesForResponse(verifiedCandidates, savedSearch.filters, ownerId));
       continue;
     }
@@ -175,7 +174,7 @@ async function consumeOverturePage(savedSearch: SavedSearch, ownerId: string) {
     queriedAreas += 1;
 
     try {
-      const result = await searchOvertureArea(area, {
+      const result = await searchProspectArea(area, {
         niche: savedSearch.filters.niche,
         businessName: savedSearch.filters.businessName
       });

@@ -48,7 +48,7 @@ const NICHE_TAXONOMY_TERMS: Record<string, string[]> = {
   'estetica automotiva': ['auto detailing', 'car detailing', 'auto repair', 'car wash']
 };
 
-export type OvertureSearchCriteria = { niche: string; businessName?: string };
+export type OvertureSearchCriteria = { niche: string; businessName?: string; release?: string };
 
 const NATIONAL_FOCUS_POINTS = [
   { longitude: -43.2, latitude: -22.9 }, // Rio de Janeiro
@@ -129,11 +129,11 @@ export async function searchOvertureArea(
   bounds: SearchBounds,
   criteria: OvertureSearchCriteria = { niche: DEFAULT_OVERTURE_NICHE }
 ): Promise<OvertureAreaResult> {
-  const key = `${bounds.west},${bounds.south},${bounds.east},${bounds.north}:${normalizeSearchTerm(criteria.niche)}:${normalizeSearchTerm(criteria.businessName ?? '')}`;
+  const key = `${bounds.west},${bounds.south},${bounds.east},${bounds.north}:${normalizeSearchTerm(criteria.niche)}:${normalizeSearchTerm(criteria.businessName ?? '')}:${criteria.release ?? 'latest'}`;
   const cached = queryCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
-  const release = await getLatestRelease();
+  const release = criteria.release ?? await getLatestRelease();
   const files = (await executeDuckDbQuery(buildStacFileQuery(bounds, release)))
     .map((row) => stringValue(row.url))
     .filter((url): url is string => Boolean(url && isOverturePlaceFile(url, release)));
@@ -143,6 +143,10 @@ export async function searchOvertureArea(
   queryCache.set(key, { value: result, expiresAt: Date.now() + QUERY_CACHE_TTL_MS });
   removeExpiredQueries();
   return result;
+}
+
+export async function getOvertureRelease() {
+  return getLatestRelease();
 }
 
 export function normalizeOverturePlaces(
