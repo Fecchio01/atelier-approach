@@ -133,6 +133,15 @@ enum MessagingStatus {
   CANCELLED
 }
 
+enum ProposalVersionStatus {
+  DRAFT
+  APPROVED
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
 enum ResearchCampaignStatus {
   QUEUED
   RUNNING
@@ -183,6 +192,7 @@ model Lead {
   prospectCandidate           ProspectCandidate?
   commercialAnalyses          CompanyAnalysis[]
   messages                    MessagingMessage[]
+  proposals                   Proposal[]
 
   @@index([stage, stageEnteredAt])
   @@index([stage, stageEnteredAt, id], map: "Lead_stage_stageEnteredAt_id_idx")
@@ -237,17 +247,18 @@ model SaleEvent {
 }
 
 model ServiceCatalogItem {
-  id           String             @id @default(cuid())
-  name         String
-  price        Decimal            @db.Decimal(12, 2)
-  billingType  ServiceBillingType
-  isActive     Boolean            @default(true)
-  scope        String?            @db.Text
-  deliverables String?            @db.Text
-  restrictions String?            @db.Text
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  saleItems    SaleLineItem[]
+  id            String             @id @default(cuid())
+  name          String
+  price         Decimal            @db.Decimal(12, 2)
+  billingType   ServiceBillingType
+  isActive      Boolean            @default(true)
+  scope         String?            @db.Text
+  deliverables  String?            @db.Text
+  restrictions  String?            @db.Text
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  saleItems     SaleLineItem[]
+  proposalItems ProposalLineItem[]
 
   @@index([isActive, name])
 }
@@ -315,6 +326,58 @@ model ContactSuppression {
 
   @@unique([channel, normalizedContact])
   @@index([createdAt])
+}
+
+model Proposal {
+  id             String            @id @default(cuid())
+  leadId         String
+  createdById    String
+  currentVersion Int               @default(1)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  lead           Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  versions       ProposalVersion[]
+
+  @@index([leadId, updatedAt])
+}
+
+model ProposalVersion {
+  id           String                @id @default(cuid())
+  proposalId   String
+  leadVersion  Int
+  version      Int
+  status       ProposalVersionStatus @default(DRAFT)
+  customerName String
+  notes        String?               @db.Text
+  validUntil   DateTime?
+  saleValue    Decimal               @db.Decimal(12, 2)
+  mrr          Decimal               @db.Decimal(12, 2)
+  contentHash  String
+  createdById  String
+  approvedById String?
+  approvedAt   DateTime?
+  sentAt       DateTime?
+  createdAt    DateTime              @default(now())
+  proposal     Proposal              @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  lineItems    ProposalLineItem[]
+
+  @@unique([proposalId, version])
+  @@index([status, createdAt])
+}
+
+model ProposalLineItem {
+  id                String              @id @default(cuid())
+  proposalVersionId String
+  serviceId         String?
+  serviceName       String
+  description       String              @db.Text
+  price             Decimal             @db.Decimal(12, 2)
+  billingType       ServiceBillingType
+  quantity          Int                 @default(1)
+  proposalVersion   ProposalVersion     @relation(fields: [proposalVersionId], references: [id], onDelete: Cascade)
+  service           ServiceCatalogItem? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([proposalVersionId])
 }
 
 model SaleLineItem {
