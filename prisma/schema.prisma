@@ -132,37 +132,38 @@ enum ProspectCandidateStatus {
 }
 
 model Lead {
-  id             String         @id @default(cuid())
-  version        Int            @default(1)
-  osmId          String         @unique
-  name           String?
-  phone          String?
-  website        String?
-  instagram      String?
-  whatsapp       String?
-  address        String?
-  category       String?
-  latitude       Float?
-  longitude      Float?
-  syncedAt       DateTime?
-  stage          LeadStage      @default(CONTACTED)
-  stageEnteredAt DateTime       @default(now())
-  meetingAt      DateTime?
+  id                          String             @id @default(cuid())
+  version                     Int                @default(1)
+  osmId                       String             @unique
+  name                        String?
+  phone                       String?
+  website                     String?
+  instagram                   String?
+  whatsapp                    String?
+  address                     String?
+  category                    String?
+  latitude                    Float?
+  longitude                   Float?
+  syncedAt                    DateTime?
+  stage                       LeadStage          @default(CONTACTED)
+  stageEnteredAt              DateTime           @default(now())
+  meetingAt                   DateTime?
   lastMeaningfulInteractionAt DateTime?
-  postFollowUpAt DateTime?
-  discardedAt    DateTime?
-  saleValue      Decimal?
-  mrr            Decimal?
-  wonAt          DateTime?
-  wonById        String?
-  activities     Activity[]
-  followUps      FollowUp[]
-  crmTasks       CrmTask[]
-  stageHistory   StageHistory[]
-  saleEvents     SaleEvent[]
-  agentRuns      AgentRun[]
-  agentActions   AgentAction[]
-  prospectCandidate ProspectCandidate?
+  postFollowUpAt              DateTime?
+  discardedAt                 DateTime?
+  saleValue                   Decimal?
+  mrr                         Decimal?
+  wonAt                       DateTime?
+  wonById                     String?
+  activities                  Activity[]
+  followUps                   FollowUp[]
+  crmTasks                    CrmTask[]
+  stageHistory                StageHistory[]
+  saleEvents                  SaleEvent[]
+  agentRuns                   AgentRun[]
+  agentActions                AgentAction[]
+  prospectCandidate           ProspectCandidate?
+  commercialAnalyses          CompanyAnalysis[]
 
   @@index([stage, stageEnteredAt])
   @@index([stage, stageEnteredAt, id], map: "Lead_stage_stageEnteredAt_id_idx")
@@ -172,15 +173,15 @@ model Lead {
 }
 
 model Activity {
-  id        String       @id @default(cuid())
+  id        String         @id @default(cuid())
   leadId    String
   actorId   String
-  type      ActivityType @default(CONTACT)
+  type      ActivityType   @default(CONTACT)
   origin    ActivityOrigin @default(HUMAN)
   channel   Channel?
   note      String
-  createdAt DateTime     @default(now())
-  lead      Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  lead      Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId])
   @@index([actorId])
@@ -216,16 +217,33 @@ model SaleEvent {
 }
 
 model ServiceCatalogItem {
-  id          String             @id @default(cuid())
-  name        String
-  price       Decimal            @db.Decimal(12, 2)
-  billingType ServiceBillingType
-  isActive    Boolean            @default(true)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  saleItems   SaleLineItem[]
+  id           String             @id @default(cuid())
+  name         String
+  price        Decimal            @db.Decimal(12, 2)
+  billingType  ServiceBillingType
+  isActive     Boolean            @default(true)
+  scope        String?            @db.Text
+  deliverables String?            @db.Text
+  restrictions String?            @db.Text
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  saleItems    SaleLineItem[]
 
   @@index([isActive, name])
+}
+
+model CompanyAnalysis {
+  id                  String   @id @default(cuid())
+  leadId              String
+  leadVersion         Int
+  evidenceFingerprint String
+  promptVersion       String
+  result              Json
+  createdAt           DateTime @default(now())
+  lead                Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, evidenceFingerprint])
+  @@index([leadId, createdAt])
 }
 
 model SaleLineItem {
@@ -270,7 +288,7 @@ model FollowUp {
 }
 
 model CrmTask {
-  id            String         @id @default(cuid())
+  id            String          @id @default(cuid())
   leadId        String
   title         String
   type          CrmTaskType
@@ -279,14 +297,14 @@ model CrmTask {
   assigneeId    String
   createdById   String
   updatedById   String
-  state         CrmTaskState   @default(PENDING)
+  state         CrmTaskState    @default(PENDING)
   completedAt   DateTime?
   completedById String?
   cancelledAt   DateTime?
   cancelledById String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  lead          Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  lead          Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([state, dueDate])
   @@index([assigneeId, state, dueDate])
@@ -421,36 +439,36 @@ model ResearchDismissal {
 }
 
 model ResearchCampaign {
-  id             String                 @id @default(cuid())
-  ownerId        String
-  idempotencyKey String                 @unique
+  id                 String                      @id @default(cuid())
+  ownerId            String
+  idempotencyKey     String                      @unique
   requestFingerprint String
-  name           String
-  niche          String
-  region         String
-  city           String?
-  criteria       Json
-  checkpoint     Json
-  maxCandidates  Int                    @default(20)
-  maxAreas       Int                    @default(20)
-  release        String?
-  status         ResearchCampaignStatus @default(QUEUED)
-  checkpointVersion Int                 @default(0)
-  completedAreas Int                    @default(0)
-  candidateCount Int                    @default(0)
-  workflowRunId  String?                @unique
+  name               String
+  niche              String
+  region             String
+  city               String?
+  criteria           Json
+  checkpoint         Json
+  maxCandidates      Int                         @default(20)
+  maxAreas           Int                         @default(20)
+  release            String?
+  status             ResearchCampaignStatus      @default(QUEUED)
+  checkpointVersion  Int                         @default(0)
+  completedAreas     Int                         @default(0)
+  candidateCount     Int                         @default(0)
+  workflowRunId      String?                     @unique
   dispatchLeaseUntil DateTime?
-  error          String?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
-  candidates     ResearchCampaignCandidate[]
+  error              String?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+  candidates         ResearchCampaignCandidate[]
 
   @@index([ownerId, createdAt])
   @@index([status, updatedAt])
 }
 
 model ProspectCandidate {
-  id                  String                 @id @default(cuid())
+  id                  String                      @id @default(cuid())
   source              String
   externalId          String
   name                String
@@ -465,11 +483,11 @@ model ProspectCandidate {
   latitude            Float?
   longitude           Float?
   imageUrl            String?
-  status              ProspectCandidateStatus @default(NEW)
-  leadId              String?                @unique
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  lead                Lead?                  @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  status              ProspectCandidateStatus     @default(NEW)
+  leadId              String?                     @unique
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  lead                Lead?                       @relation(fields: [leadId], references: [id], onDelete: SetNull)
   campaigns           ResearchCampaignCandidate[]
   evidence            ResearchEvidence[]
 
@@ -482,7 +500,7 @@ model ResearchCampaignCandidate {
   campaignId  String
   candidateId String
   firstSeenAt DateTime          @default(now())
-  campaign    ResearchCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign    ResearchCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   candidate   ProspectCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   @@id([campaignId, candidateId])
@@ -530,27 +548,27 @@ model AgentRun {
 }
 
 model AgentAction {
-  id             String            @id @default(cuid())
-  runId          String
-  leadId         String
-  status         AgentActionStatus @default(PENDING)
-  approvalToken  String            @unique
-  approvalHash   String
-  leadVersion    Int
-  title          String
-  description    String
-  taskType       CrmTaskType
-  priority       CrmTaskPriority   @default(NORMAL)
-  dueDate        DateTime
-  approvedById   String?
-  approvedAt     DateTime?
-  rejectedAt     DateTime?
-  appliedAt      DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  run            AgentRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
-  lead           Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  outbox         AgentOutbox?
+  id            String            @id @default(cuid())
+  runId         String
+  leadId        String
+  status        AgentActionStatus @default(PENDING)
+  approvalToken String            @unique
+  approvalHash  String
+  leadVersion   Int
+  title         String
+  description   String
+  taskType      CrmTaskType
+  priority      CrmTaskPriority   @default(NORMAL)
+  dueDate       DateTime
+  approvedById  String?
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  appliedAt     DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  run           AgentRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  lead          Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  outbox        AgentOutbox?
 
   @@unique([runId, leadVersion])
   @@index([status, createdAt])
@@ -558,15 +576,15 @@ model AgentAction {
 }
 
 model AgentOutbox {
-  id          String           @id @default(cuid())
-  actionId    String           @unique
+  id          String            @id @default(cuid())
+  actionId    String            @unique
   payload     Json
   status      AgentOutboxStatus @default(PENDING)
-  attempts    Int              @default(0)
+  attempts    Int               @default(0)
   lastError   String?
-  createdAt   DateTime         @default(now())
+  createdAt   DateTime          @default(now())
   deliveredAt DateTime?
-  action      AgentAction      @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  action      AgentAction       @relation(fields: [actionId], references: [id], onDelete: Cascade)
 
   @@index([status, createdAt])
 }

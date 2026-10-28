@@ -21,7 +21,7 @@ export function summarizeServiceItems(items: readonly { price: string | number; 
   return { saleValue: saleCents / 100, mrr: mrrCents / 100 };
 }
 
-type ServiceData = { name?: string; price?: string; billingType?: BillingType; isActive?: boolean };
+type ServiceData = { name?: string; price?: string; billingType?: BillingType; isActive?: boolean; scope?: string | null; deliverables?: string | null; restrictions?: string | null };
 
 export function parseServiceData(body: unknown, partial = false): ServiceData | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
@@ -41,6 +41,14 @@ export function parseServiceData(body: unknown, partial = false): ServiceData | 
   if ('isActive' in input) {
     if (typeof input.isActive !== 'boolean') return null;
     data.isActive = input.isActive;
+  }
+  for (const field of ['scope', 'deliverables', 'restrictions'] as const) {
+    if (!partial || field in input) {
+      const value = input[field];
+      if (value !== undefined && value !== null && typeof value !== 'string') return null;
+      if (typeof value === 'string' && value.length > 3000) return null;
+      data[field] = typeof value === 'string' && value.trim() ? value.trim() : null;
+    }
   }
   return Object.keys(data).length ? data : null;
 }

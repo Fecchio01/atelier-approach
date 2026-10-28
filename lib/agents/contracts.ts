@@ -16,7 +16,21 @@ export const leadAnalysisSchema = z.object({
     dueDate: z.string().datetime(),
     taskType: z.enum(['WHATSAPP', 'PHONE', 'EMAIL', 'MEETING_PREP', 'OTHER']),
     priority: z.enum(['LOW', 'NORMAL', 'HIGH'])
-  }).strict()
+  }).strict(),
+  commercialAnalysis: z.object({
+    version: z.string().min(1),
+    fit: z.enum(['POTENTIAL_MATCH', 'NO_MATCH', 'NO_CATALOG', 'INSUFFICIENT_DATA']),
+    dataQuality: z.enum(['LIMITED', 'PARTIAL', 'GOOD']),
+    knownFacts: z.array(z.object({ label: z.string(), value: z.string(), evidenceId: z.string() }).strict()).max(12),
+    unknowns: z.array(z.string()).max(12),
+    serviceSuggestions: z.array(z.object({ serviceId: z.string(), serviceName: z.string(), reason: z.string() }).strict()).max(5)
+  }).strict().optional(),
+  strategy: z.object({
+    version: z.string().min(1),
+    nextStep: z.string().min(1),
+    reason: z.string().min(1),
+    requiresHumanReview: z.literal(true)
+  }).strict().optional()
 }).strict();
 
 const approvalHashSchema = z.string().regex(/^[a-f0-9]{64}$/);

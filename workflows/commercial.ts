@@ -3,6 +3,7 @@ import { createHook, getWorkflowMetadata } from 'workflow';
 import { prisma } from '@/lib/db';
 import { hashApproval } from '@/lib/agents/model';
 import { analyzeLeadWithGeminiWhenAllowed } from '@/lib/agents/gemini';
+import { analyzeCompany } from '@/lib/agents/specialists/commercial-analysis';
 
 type WorkflowDecision = { decision: 'APPROVE' | 'REJECT'; approvalHash: string };
 
@@ -24,7 +25,10 @@ export async function commercialLeadAnalysis(runId: string) {
 async function createReviewSuggestion(runId: string, workflowRunId: string, approvalToken: string) {
   'use step';
 
-  const run = await prisma.agentRun.findUnique({ where: { id: runId }, include: { lead: true } });
+  const run = await prisma.agentRun.findUnique({
+    where: { id: runId },
+    include: { lead: { include: { prospectCandidate: { include: { evidence: true } } } } }
+  });
   if (!run || run.status === 'COMPLETED' || run.status === 'FAILED') return false;
   const lead = run.lead;
   if (lead.version !== run.leadVersion || lead.stage === 'WON' || lead.stage === 'DISCARDED' || !lead.name?.trim()) {
@@ -54,6 +58,21 @@ async function createReviewSuggestion(runId: string, workflowRunId: string, appr
     return false;
   }
   const recommendation = result.recommendation;
+  const [services, latestEvidence] = await Promise.all([
+    prisma.serviceCatalogItem.findMany({ where: { isActive: true }, select: { id: true, name: true, scope: true, deliverables: true, restrictions: true } }),
+    prisma.researchEvidence.findMany({
+      where: { candidateId: lead.prospectCandidate?.id, verified: true },
+      orderBy: { capturedAt: 'desc' },
+      take: 30,
+      select: { id: true, field: true, value: true, sourceUrl: true, verified: true }
+    })
+  ]);
+  const diagnosis = analyzeCompany({
+    id: lead.id, version: lead.version, name: lead.name, category: lead.category, address: lead.address,
+    phone: lead.phone, whatsapp: lead.whatsapp, website: lead.website, instagram: lead.instagram, stage: lead.stage,
+    evidence: latestEvidence
+  }, services);
+  const completeResult = { ...result, ...diagnosis.result };
   const approvalHash = hashApproval(recommendation);
 
   await prisma.$transaction(async (tx) => {
@@ -78,10 +97,21 @@ async function createReviewSuggestion(runId: string, workflowRunId: string, appr
       data: {
         workflowRunId,
         status: 'NEEDS_APPROVAL',
-        result: JSON.parse(JSON.stringify(result)),
+        result: JSON.parse(JSON.stringify(completeResult)),
         startedAt: run.startedAt ?? new Date(),
         error: null
       }
+    });
+    await tx.companyAnalysis.upsert({
+      where: { leadId_evidenceFingerprint: { leadId: lead.id, evidenceFingerprint: diagnosis.evidenceFingerprint } },
+      create: {
+        leadId: lead.id,
+        leadVersion: lead.version,
+        evidenceFingerprint: diagnosis.evidenceFingerprint,
+        promptVersion: diagnosis.result.commercialAnalysis?.version ?? 'commercial-analysis-v1',
+        result: JSON.parse(JSON.stringify(diagnosis.result))
+      },
+      update: { leadVersion: lead.version, result: JSON.parse(JSON.stringify(diagnosis.result)) }
     });
   });
 

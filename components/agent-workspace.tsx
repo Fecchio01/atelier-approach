@@ -135,6 +135,14 @@ export function AgentWorkspace({ initialLeads, initialRuns }: { initialLeads: Le
                 <div><p className="text-xs font-semibold text-white/65">Cobertura do cadastro · {run.result.dataCoverage}%</p><ul className="mt-1 list-inside list-disc text-xs leading-5 text-white/50">{run.result.knownFacts.map((fact, index) => <li key={index}>{fact}</li>)}</ul></div>
                 <div><p className="text-xs font-semibold text-white/65">O que ainda é desconhecido</p><ul className="mt-1 list-inside list-disc text-xs leading-5 text-white/50">{run.result.unknowns.map((fact, index) => <li key={index}>{fact}</li>)}</ul></div>
               </div>
+              {run.result.commercialAnalysis && <div className="grid gap-3 rounded-xl border border-[var(--atelier-green)]/15 bg-[var(--atelier-green)]/[0.035] p-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold text-white/70">Diagnóstico comercial · {run.result.commercialAnalysis.fit === 'NO_CATALOG' ? 'sem catálogo de serviços' : run.result.commercialAnalysis.fit === 'POTENTIAL_MATCH' ? 'possível aderência' : run.result.commercialAnalysis.fit === 'NO_MATCH' ? 'sem correspondência cadastrada' : 'dados insuficientes'}</p>
+                  <p className="mt-1 text-xs text-white/45">Qualidade dos dados: {run.result.commercialAnalysis.dataQuality === 'GOOD' ? 'boa' : run.result.commercialAnalysis.dataQuality === 'PARTIAL' ? 'parcial' : 'limitada'}. Nenhum fato sem referência foi usado.</p>
+                  {!!run.result.commercialAnalysis.serviceSuggestions.length && <ul className="mt-2 list-inside list-disc text-xs leading-5 text-white/60">{run.result.commercialAnalysis.serviceSuggestions.map((service) => <li key={service.serviceId}>{service.serviceName}: {service.reason}</li>)}</ul>}
+                </div>
+                <div><p className="text-xs font-semibold text-white/70">Próxima ação sugerida · revisão humana obrigatória</p><p className="mt-1 text-xs text-white/60">{run.result.strategy?.nextStep}</p><p className="mt-1 text-xs text-white/40">{run.result.strategy?.reason}</p></div>
+              </div>}
             </div>}
             {action && <div className="mt-4 rounded-xl border border-white/[0.08] bg-black/10 p-3">
               <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--atelier-green)]">Tarefa sugerida</p><p className="mt-1 font-semibold">{action.title}</p><p className="mt-1 text-sm leading-5 text-white/55">{action.description}</p></div><span className="shrink-0 text-xs text-white/45">Para {formatDate(action.dueDate)}</span></div>

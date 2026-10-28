@@ -6,7 +6,7 @@ import type { CommercialServiceOption } from '@/lib/commercial-ui';
 import { parseServiceData } from '@/lib/service-sales';
 import { isValidFollowUpDelay, MAX_FOLLOW_UP_DELAY_DAYS } from '@/lib/follow-up-scheduling';
 
-type CatalogService = CommercialServiceOption & { isActive: boolean };
+type CatalogService = CommercialServiceOption & { isActive: boolean; scope: string | null; deliverables: string | null; restrictions: string | null };
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const inputClass = 'min-h-11 min-w-0 w-full rounded-lg border border-white/15 bg-[var(--atelier-surface-raised)] px-3 text-base outline-none focus:border-[var(--atelier-green)] sm:text-sm';
 const buttonClass = 'min-h-11 rounded-lg border border-white/20 px-4 text-sm font-semibold disabled:cursor-wait disabled:opacity-50';
@@ -17,6 +17,9 @@ export function CommercialSettingsForm({ services: initialServices, followUpDela
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [billingType, setBillingType] = useState<CommercialServiceOption['billingType']>('ONE_TIME');
+  const [scope, setScope] = useState('');
+  const [deliverables, setDeliverables] = useState('');
+  const [restrictions, setRestrictions] = useState('');
   const [delay, setDelay] = useState(String(followUpDelayDays));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,11 +48,14 @@ export function CommercialSettingsForm({ services: initialServices, followUpDela
     setName('');
     setPrice('');
     setBillingType('ONE_TIME');
+    setScope('');
+    setDeliverables('');
+    setRestrictions('');
   }
 
   async function saveService(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = parseServiceData({ name, price, billingType });
+    const data = parseServiceData({ name, price, billingType, scope, deliverables, restrictions });
     if (!data) {
       setMessage(null);
       setError('Informe nome, preço não negativo com até duas casas decimais e tipo de cobrança válido.');
@@ -68,6 +74,9 @@ export function CommercialSettingsForm({ services: initialServices, followUpDela
     setName(service.name);
     setPrice(service.price);
     setBillingType(service.billingType);
+    setScope(service.scope ?? '');
+    setDeliverables(service.deliverables ?? '');
+    setRestrictions(service.restrictions ?? '');
     setError(null);
     setMessage(null);
     nameRef.current?.focus();
@@ -135,6 +144,12 @@ export function CommercialSettingsForm({ services: initialServices, followUpDela
               <label className="grid min-w-0 gap-2 text-xs text-white/75">Nome<input ref={nameRef} required value={name} onChange={(event) => setName(event.target.value)} className={inputClass} /></label>
               <label className="grid min-w-0 gap-2 text-xs text-white/75">Preço<input aria-label="Preço" aria-describedby="service-price-hint" type="number" required min="0" max="9999999999.99" step="0.01" inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} className={inputClass} /><span id="service-price-hint" className="sr-only">Em reais (R$). Para mensal, informe o valor por mês.</span></label>
               <label className="grid min-w-0 gap-2 text-xs text-white/75">Cobrança<select value={billingType} onChange={(event) => setBillingType(event.target.value as CommercialServiceOption['billingType'])} className={inputClass}><option value="ONE_TIME">Cobrança única</option><option value="MONTHLY">Mensal</option></select></label>
+            </fieldset>
+            <fieldset disabled={busy} className="grid min-w-0 gap-3 md:grid-cols-3">
+              <legend className="sr-only">Detalhes do serviço para recomendações</legend>
+              <label className="grid gap-2 text-xs text-white/75">Escopo comercial<textarea maxLength={3000} rows={3} value={scope} onChange={(event) => setScope(event.target.value)} placeholder="Para quais necessidades este serviço serve?" className={`${inputClass} py-2`} /></label>
+              <label className="grid gap-2 text-xs text-white/75">Entregáveis<textarea maxLength={3000} rows={3} value={deliverables} onChange={(event) => setDeliverables(event.target.value)} placeholder="O que será entregue?" className={`${inputClass} py-2`} /></label>
+              <label className="grid gap-2 text-xs text-white/75">Restrições<textarea maxLength={3000} rows={3} value={restrictions} onChange={(event) => setRestrictions(event.target.value)} placeholder="Limites e condições importantes" className={`${inputClass} py-2`} /></label>
             </fieldset>
             <div className="grid gap-2 sm:flex sm:flex-wrap">
               <button disabled={busy} className={`${buttonClass} border-transparent bg-[var(--atelier-green)] text-black`}>{busy ? 'Salvando…' : editingId ? 'Salvar serviço' : 'Adicionar serviço'}</button>

@@ -72,7 +72,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <button className="min-h-11 w-full min-w-36 rounded-lg bg-[var(--atelier-green)] px-5 font-semibold text-[#101507] transition-[transform,opacity] duration-[var(--atelier-motion-duration)] ease-[var(--atelier-motion-easing)] hover:bg-[var(--atelier-green-hover)] sm:w-fit">Atualizar senha</button>
         </form>
       </PasswordSettingsPanel>}
-      commercialPanel={<CommercialSettingsForm services={services.map(({ id, name, price, billingType, isActive }) => ({ id, name, price: price.toString(), billingType, isActive }))} followUpDelayDays={followUpDelayDays} />}
+      commercialPanel={<CommercialSettingsForm services={services.map(({ id, name, price, billingType, isActive, scope, deliverables, restrictions }) => ({ id, name, price: price.toString(), billingType, isActive, scope, deliverables, restrictions }))} followUpDelayDays={followUpDelayDays} />}
     />
   </section>;
 }
