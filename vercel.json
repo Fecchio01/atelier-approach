@@ -15,7 +15,7 @@
       "schedule": "0 12 * * *"
     },
     {
-      "path": "/api/cron/autonomous-prospecting",
+      "path": "/api/cron/autonomous-prospecting-retry",
       "schedule": "0 13 * * *"
     }
   ]
