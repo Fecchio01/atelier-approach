@@ -74,10 +74,20 @@ export function analyzeProspect(input: {
   longitude: number | null;
   status: 'NEW' | 'REVIEW_IDENTITY' | 'APPROVED' | 'REJECTED' | 'PROMOTED';
 }) {
-  const normalized = normalize(`${input.name} ${input.category ?? ''}`);
   const target = chooseTermsForNiche(input.niche);
-  const matchedTerms = target.filter((term) => normalized.includes(normalize(term)));
-  const fitScore = matchedTerms.length ? 85 : input.category ? 58 : 45;
+  const normalizedName = normalize(input.name);
+  const normalizedCategory = normalize(input.category ?? '');
+  const nameMatches = target.filter((term) => normalizedName.includes(normalize(term)));
+  const categoryMatches = target.filter((term) => normalizedCategory.includes(normalize(term)));
+  const matchedTerms = Array.from(new Set([...categoryMatches, ...nameMatches]));
+  const matchBasis = categoryMatches.length && nameMatches.length ? 'NAME_AND_CATEGORY'
+    : categoryMatches.length ? 'CATEGORY' : nameMatches.length ? 'NAME' : 'NONE';
+  const baseFitScore = matchBasis === 'NAME_AND_CATEGORY' ? 96
+    : matchBasis === 'CATEGORY' ? 88
+      : matchBasis === 'NAME' ? 66
+        : input.category ? 42 : 30;
+  // Identity conflicts lower trust in the association even when terms match.
+  const fitScore = input.status === 'REVIEW_IDENTITY' ? Math.min(baseFitScore, 45) : baseFitScore;
   const dataPoints = [
     input.name.trim().length > 2,
     Boolean(input.category), Boolean(input.address),
@@ -92,22 +102,23 @@ export function analyzeProspect(input: {
     input.whatsapp ? 'WhatsApp' : null
   ].filter((value): value is string => Boolean(value));
   const summary = input.status === 'REVIEW_IDENTITY'
-    ? 'Há divergência de identidade nos dados coletados; confira o perfil da empresa antes de abordar.'
-    : matchedTerms.length
-      ? `O nome ou categoria contém correspondência com ${matchedTerms.slice(0, 2).join(' / ')}.`
+    ? `Há divergência de identidade nos dados coletados${matchedTerms.length ? `; termos relacionados encontrados em ${matchBasis === 'NAME_AND_CATEGORY' ? 'nome e categoria' : matchBasis === 'CATEGORY' ? 'categoria' : 'nome'} (${matchedTerms.slice(0, 2).join(' / ')})` : ''}. Confira o perfil da empresa antes de adicionar ao funil.`
+    : matchBasis !== 'NONE'
+      ? `Correspondência encontrada em ${matchBasis === 'NAME_AND_CATEGORY' ? 'nome e categoria' : matchBasis === 'CATEGORY' ? 'categoria' : 'nome'}: ${matchedTerms.slice(0, 3).join(' / ')}.`
       : input.category
-        ? `A fonte classifica a empresa como ${input.category}; a correspondência com o nicho precisa de conferência.`
-        : 'A categoria não veio informada pela fonte; confira a empresa antes de priorizar.';
+        ? `A fonte classifica como ${input.category}, mas não há correspondência textual direta com ${input.niche}; confira antes de priorizar.`
+        : `Não há correspondência textual direta com ${input.niche} e a categoria não veio informada; confira antes de priorizar.`;
   const recommendation = input.status === 'REVIEW_IDENTITY'
     ? 'Conferir identidade'
     : fitScore >= 80
-      ? 'Boa candidata para avaliação comercial'
+      ? 'Boa correspondência para revisar'
       : 'Validar dados antes de priorizar';
 
   const result = {
     version: 'prospect-analysis-v1',
     niche: input.niche,
     fitScore,
+    matchBasis,
     dataCompleteness: completeness,
     recommendation,
     summary,

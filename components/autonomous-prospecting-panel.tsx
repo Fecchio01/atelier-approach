@@ -6,6 +6,8 @@ import { normalizePublishedPhone, toWhatsAppHref } from '@/lib/contact-links';
 
 export type ProspectAnalysis = {
   fitScore: number;
+  matchBasis: 'NAME_AND_CATEGORY' | 'CATEGORY' | 'NAME' | 'NONE';
+  matchedTerms: string[];
   dataCompleteness: number;
   recommendation: string;
   summary: string;
@@ -14,6 +16,7 @@ export type ProspectAnalysis = {
 };
 export type AutonomousCandidate = {
   id: string;
+  leadId: string | null;
   name: string;
   status: 'NEW' | 'REVIEW_IDENTITY' | 'APPROVED' | 'REJECTED' | 'PROMOTED';
   category: string | null;
@@ -56,6 +59,9 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [promotingId, setPromotingId] = useState<string | null>(null);
+  const [promotionError, setPromotionError] = useState<Record<string, string>>({});
+  const [identityConfirmId, setIdentityConfirmId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -85,6 +91,35 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
       setCampaigns(data.campaigns.filter((campaign) => campaign.idempotencyKey?.startsWith('autonomous:')));
     } catch (refreshError) { setError(refreshError instanceof Error ? refreshError.message : 'Falha ao atualizar.'); }
     finally { setBusy(false); }
+  }
+
+  async function addToFunnel(candidateId: string, confirmIdentityReview = false) {
+    setPromotingId(candidateId);
+    setPromotionError((current) => ({ ...current, [candidateId]: '' }));
+    try {
+      const response = await fetch(`/api/agents/candidates/${encodeURIComponent(candidateId)}/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmIdentityReview })
+      });
+      const data = await response.json() as { error?: string; leadId?: string; requiresIdentityReview?: boolean };
+      if (response.status === 409 && data.requiresIdentityReview) {
+        setIdentityConfirmId(candidateId);
+        return;
+      }
+      if (!response.ok || !data.leadId) throw new Error(data.error ?? 'Não foi possível adicionar ao funil.');
+      setCampaigns((current) => current.map((campaign) => ({
+        ...campaign,
+        candidates: campaign.candidates.map((item) => item.candidate.id === candidateId
+          ? { ...item, candidate: { ...item.candidate, leadId: data.leadId!, status: 'PROMOTED' as const } }
+          : item)
+      })));
+      setIdentityConfirmId(null);
+    } catch (promotionFailure) {
+      setPromotionError((current) => ({ ...current, [candidateId]: promotionFailure instanceof Error ? promotionFailure.message : 'Falha ao adicionar. Tente novamente.' }));
+    } finally {
+      setPromotingId(null);
+    }
   }
 
   return <section aria-labelledby="autonomous-research-heading" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
@@ -125,7 +160,17 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
           </div> : null}
           {campaign.error ? <p className="mt-3 text-sm text-amber-100">{campaign.error}</p> : null}
           {campaign.candidates.length ? <ul className="mt-4 divide-y divide-white/[0.08]">
-            {campaign.candidates.map(({ candidate }) => <CandidateCard key={candidate.id} candidate={candidate} />)}
+            {campaign.candidates.map(({ candidate }) => <CandidateCard
+              key={candidate.id}
+              candidate={candidate}
+              promoting={promotingId === candidate.id}
+              error={promotionError[candidate.id] ?? ''}
+              confirmingIdentity={identityConfirmId === candidate.id}
+              onAdd={() => void addToFunnel(candidate.id)}
+              onConfirmIdentity={() => void addToFunnel(candidate.id, true)}
+              onRequestIdentityConfirmation={() => setIdentityConfirmId(candidate.id)}
+              onCancelIdentityConfirmation={() => setIdentityConfirmId(null)}
+            />)}
           </ul> : campaign.status === 'COMPLETED' ? <p className="mt-4 rounded-lg border border-dashed border-white/10 p-4 text-sm text-white/50">Nenhuma empresa passou pelos critérios da pesquisa nessa execução.</p> : null}
           {index > 0 ? <p className="mt-3 text-xs text-white/35">Execução anterior · {formatDate(campaign.createdAt)}</p> : null}
         </article>
@@ -135,7 +180,16 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   </section>;
 }
 
-function CandidateCard({ candidate }: { candidate: AutonomousCandidate }) {
+function CandidateCard({ candidate, promoting, error, confirmingIdentity, onAdd, onConfirmIdentity, onRequestIdentityConfirmation, onCancelIdentityConfirmation }: {
+  candidate: AutonomousCandidate;
+  promoting: boolean;
+  error: string;
+  confirmingIdentity: boolean;
+  onAdd: () => void;
+  onConfirmIdentity: () => void;
+  onRequestIdentityConfirmation: () => void;
+  onCancelIdentityConfirmation: () => void;
+}) {
   const analysis = candidate.commercialAnalysis;
   const mapQuery = encodeURIComponent(`${candidate.name}${candidate.address ? `, ${candidate.address}` : ''}`);
   const whatsappHref = toWhatsAppHref(candidate.whatsapp);
@@ -161,13 +215,30 @@ function CandidateCard({ candidate }: { candidate: AutonomousCandidate }) {
         {safeExternalUrl(candidate.instagram) ? <a className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.instagram)!} target="_blank" rel="noreferrer">Instagram <ArrowSquareOutIcon size={13} /></a> : null}
       </div>
       {whatsappNumber ? <p className="mt-2 text-xs text-white/55">{whatsappHref ? 'WhatsApp publicado' : 'Telefone disponível para WhatsApp'}: <a className="underline underline-offset-2 hover:text-white" href={actionableWhatsAppHref!} target="_blank" rel="noreferrer">{whatsappNumber}</a></p> : candidate.whatsapp ? <p className="mt-2 text-xs text-white/45">Link de WhatsApp indisponível</p> : null}
+      <div className="mt-3">
+        {candidate.leadId ? <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/30 px-3 text-sm font-medium text-[var(--atelier-green)]">No funil</span>
+          <a className="inline-flex min-h-11 items-center rounded-lg border border-white/15 px-3 text-sm text-white/80 transition-colors hover:border-white/35 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]" href={`/crm?lead=${encodeURIComponent(candidate.leadId)}`}>Abrir no CRM <ArrowSquareOutIcon size={14} className="ml-1" /></a>
+        </div> : candidate.status === 'REJECTED' ? <p className="text-xs text-white/45">Candidata descartada da pesquisa.</p>
+          : confirmingIdentity ? <div className="rounded-lg border border-amber-200/25 bg-amber-100/[0.04] p-3">
+            <p className="text-sm text-amber-100">A identidade tem divergências. Confira o perfil antes de confirmar a inclusão no funil.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" disabled={promoting} onClick={onConfirmIdentity} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-amber-300 px-3 text-sm font-semibold text-[#17130b] disabled:opacity-60">{promoting ? 'Adicionando…' : 'Adicionar mesmo assim'}</button>
+              <button type="button" onClick={onCancelIdentityConfirmation} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-white/15 px-3 text-sm text-white/75">Cancelar</button>
+            </div>
+          </div> : <button type="button" disabled={promoting} onClick={candidate.status === 'REVIEW_IDENTITY' ? onRequestIdentityConfirmation : onAdd} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--atelier-green)] px-4 text-sm font-semibold text-[#11150d] transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)] disabled:cursor-wait disabled:opacity-60">
+            {promoting ? <><CircleNotchIcon size={16} className="mr-2 animate-spin" /> Adicionando…</> : 'Adicionar ao funil'}
+          </button>}
+        {error ? <p role="alert" className="mt-2 text-sm text-red-200">{error}</p> : null}
+      </div>
       <p className="mt-3 text-xs text-white/40">{candidate.evidence.length} evidências guardadas · fonte: Overture</p>
     </div>
     <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
-      <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Análise do agente</p><span className="text-xs text-white/55">Correspondência textual {analysis?.fitScore ?? 0}%</span></div>
-      <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-[var(--atelier-green)]" style={{ width: `${analysis?.fitScore ?? 0}%` }} /></div>
-      <p className="mt-2 text-xs font-medium text-[var(--atelier-green)]">{analysis?.recommendation ?? 'Análise não disponível'}</p>
+      <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Análise do agente</p><span className="text-xs text-white/55">Aderência textual {analysis?.fitScore ?? 0}%</span></div>
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${candidate.status === 'REVIEW_IDENTITY' ? 'bg-amber-300' : 'bg-[var(--atelier-green)]'}`} style={{ width: `${analysis?.fitScore ?? 0}%` }} /></div>
+      <p className={`mt-2 text-xs font-medium ${candidate.status === 'REVIEW_IDENTITY' ? 'text-amber-200' : 'text-[var(--atelier-green)]'}`}>{analysis?.recommendation ?? 'Análise não disponível'}</p>
       <p className="mt-1 text-xs leading-5 text-white/55">{analysis?.summary ?? 'Aguardando análise dos dados publicados.'}</p>
+      <p className="mt-2 text-[11px] leading-4 text-white/35">Pontuação heurística de aderência textual; não representa probabilidade de conversão.</p>
       <p className="mt-2 text-[11px] leading-4 text-white/35">Completude dos campos: {analysis?.dataCompleteness ?? 0}%</p>
     </div>
   </li>;

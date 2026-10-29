@@ -3,6 +3,7 @@ import { AgentAutomationControl } from '@/components/agent-automation-control';
 import { AutonomousProspectingPanel, type AutonomousCampaign, type ProspectAnalysis } from '@/components/autonomous-prospecting-panel';
 import { automationPolicy } from '@/lib/agents/policy';
 import { prisma } from '@/lib/db';
+import { analyzeProspect } from '@/lib/research/autonomous';
 
 export default async function AgentsPage() {
   const [settings, activeCadences, waitingTasks, records] = await Promise.all([
@@ -34,6 +35,7 @@ export default async function AgentsPage() {
       firstSeenAt: firstSeenAt.toISOString(),
       candidate: {
         id: candidate.id,
+        leadId: candidate.leadId,
         name: candidate.name,
         status: candidate.status,
         category: candidate.category,
@@ -43,7 +45,19 @@ export default async function AgentsPage() {
         instagram: candidate.instagram,
         whatsapp: candidate.whatsapp,
         imageUrl: candidate.imageUrl,
-        commercialAnalysis: candidate.commercialAnalysis as unknown as ProspectAnalysis | null,
+        commercialAnalysis: analyzeProspect({
+          niche: campaign.niche,
+          name: candidate.name,
+          category: candidate.category,
+          address: candidate.address,
+          phone: candidate.phone,
+          website: candidate.website,
+          instagram: candidate.instagram,
+          whatsapp: candidate.whatsapp,
+          latitude: candidate.latitude,
+          longitude: candidate.longitude,
+          status: candidate.status
+        }) as unknown as ProspectAnalysis,
         evidence: candidate.evidence.map(({ id, field, source, verified }) => ({ id, field, source, verified }))
       }
     }))
