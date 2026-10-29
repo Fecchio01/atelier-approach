@@ -55,7 +55,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           latitude: candidate.latitude,
           longitude: candidate.longitude,
           syncedAt: new Date(),
-          stage: 'NEW'
+          stage: 'CONTACTED'
         },
         select: { id: true }
       });
