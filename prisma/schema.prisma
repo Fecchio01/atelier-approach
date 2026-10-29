@@ -480,6 +480,7 @@ model AgentAutomationSettings {
   prospectingDailyLimit   Int      @default(10)
   prospectingTime         String   @default("09:00")
   prospectingTimeUpdatedAt DateTime?
+  prospectingNiches       String[] @default([])
   updatedAt               DateTime @updatedAt
   updatedBy               String?
 }

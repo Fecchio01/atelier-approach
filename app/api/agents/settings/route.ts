@@ -3,10 +3,14 @@ import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
+function normalizeNiche(niche: string) {
+  return niche.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+}
+
 export async function GET() {
   if (!await getCurrentUser()) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
   const settings = await prisma.agentAutomationSettings.findUnique({ where: { id: 'team' } });
-  return Response.json({ settings: settings ?? { id: 'team', paused: false, prospectingEnabled: true, prospectingDailyLimit: 10, prospectingTime: '09:00' } });
+  return Response.json({ settings: settings ?? { id: 'team', paused: false, prospectingEnabled: true, prospectingDailyLimit: 10, prospectingTime: '09:00', prospectingNiches: [] } });
 }
 
 export async function PATCH(request: Request) {
@@ -16,7 +20,9 @@ export async function PATCH(request: Request) {
     paused: z.boolean().optional(),
     prospectingEnabled: z.boolean().optional(),
     prospectingDailyLimit: z.number().int().min(1).max(20).optional(),
-    prospectingTime: z.string().regex(/^(?:[01]\d|2[0-3]):00$/).optional()
+    prospectingTime: z.string().regex(/^(?:[01]\d|2[0-3]):00$/).optional(),
+    prospectingNiches: z.array(z.string().trim().min(2).max(80)).max(10)
+      .refine((niches) => new Set(niches.map(normalizeNiche)).size === niches.length).optional()
   }).strict().refine((value) => Object.keys(value).length > 0).safeParse(await request.json().catch(() => null));
   if (!body.success) return Response.json({ error: 'Revise as configurações de automação.' }, { status: 400 });
   const currentSettings = body.data.prospectingTime !== undefined

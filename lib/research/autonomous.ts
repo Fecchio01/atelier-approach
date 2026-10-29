@@ -15,6 +15,8 @@ const NICHE_CYCLE = [
   { name: 'estética automotiva', terms: ['auto detailing', 'car detailing', 'auto repair', 'car wash'] }
 ] as const;
 
+export const AUTONOMOUS_PROSPECTING_NICHE_SUGGESTIONS = NICHE_CYCLE.map(({ name }) => name);
+
 const CITY_CYCLE = [
   ['Rio de Janeiro', 'RJ'], ['São Paulo', 'SP'], ['Salvador', 'BA'], ['Belo Horizonte', 'MG'],
   ['Curitiba', 'PR'], ['Porto Alegre', 'RS'], ['Brasília', 'DF'], ['Recife', 'PE'],
@@ -33,15 +35,30 @@ export function getSaoPauloDateKey(now = new Date()) {
   return `${value('year')}-${value('month')}-${value('day')}`;
 }
 
-export function chooseDailyProspectingTarget(dateKey: string) {
+export function chooseDailyProspectingTarget(dateKey: string, configuredNiches: string[] = []) {
   const [year, month, day] = dateKey.split('-').map(Number);
   const date = Date.UTC(year, month - 1, day);
   const origin = Date.UTC(2026, 0, 1);
   const ordinal = Math.floor((date - origin) / 86_400_000);
-  const niche = NICHE_CYCLE[((ordinal % NICHE_CYCLE.length) + NICHE_CYCLE.length) % NICHE_CYCLE.length];
-  const cityIndex = Math.floor(Math.max(0, ordinal) / NICHE_CYCLE.length) % CITY_CYCLE.length;
+  const nicheCycle = configuredNiches.length
+    ? configuredNiches.map((name) => ({ name, terms: [name] }))
+    : NICHE_CYCLE;
+  const nicheIndex = configuredNiches.length
+    ? ((ordinal % nicheCycle.length) + nicheCycle.length) % nicheCycle.length
+    : hashDateSeed(dateKey) % nicheCycle.length;
+  const niche = nicheCycle[nicheIndex];
+  const cityIndex = Math.floor(Math.max(0, ordinal) / nicheCycle.length) % CITY_CYCLE.length;
   const [city, state] = CITY_CYCLE[cityIndex];
   return { niche: niche.name, nicheTerms: [...niche.terms], city, region: `${city}, ${state}` };
+}
+
+function hashDateSeed(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 export function analyzeProspect(input: {
@@ -107,6 +124,15 @@ function normalize(value: string) {
 }
 
 function chooseTermsForNiche(niche: string) {
-  const entry = NICHE_CYCLE.find((candidate) => normalize(candidate.name) === normalize(niche));
-  return entry ? [entry.name, ...entry.terms] : [niche];
+  const normalized = normalize(niche).replace(/\s+/g, ' ').trim();
+  const entry = NICHE_CYCLE.find((candidate) => normalize(candidate.name) === normalized);
+  if (entry) return [entry.name, ...entry.terms];
+  const nicheAliases: Record<string, string[]> = {
+    pilates: ['pilates studio', 'pilates studios'],
+    'estudio de pilates': ['pilates', 'pilates studio'],
+    'estudios de pilates': ['pilates', 'pilates studio'],
+    'studio de pilates': ['pilates', 'pilates studio'],
+    'studios de pilates': ['pilates', 'pilates studio']
+  };
+  return nicheAliases[normalized] ?? [niche];
 }

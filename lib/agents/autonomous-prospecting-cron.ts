@@ -52,7 +52,7 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
       return Response.json({ skipped: true, reason: 'schedule_was_changed_after_its_window' });
     }
     if (!campaign) {
-      const target = chooseDailyProspectingTarget(dateKey);
+      const target = chooseDailyProspectingTarget(dateKey, settings?.prospectingNiches ?? []);
       const plan = await resolveProspectSearchPlan({ region: target.region, city: target.city, maxAreas: MAX_AREAS });
       if (!plan.areas.length) throw new Error('Não foi possível definir uma área para a pesquisa diária.');
 
