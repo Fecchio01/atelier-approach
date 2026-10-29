@@ -77,7 +77,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </form>
       </PasswordSettingsPanel>}
       commercialPanel={<CommercialSettingsForm services={services.map(({ id, name, price, billingType, isActive, scope, deliverables, restrictions }) => ({ id, name, price: price.toString(), billingType, isActive, scope, deliverables, restrictions }))} followUpDelayDays={followUpDelayDays} />}
-      automationPanel={<AutonomousProspectingSettings initialEnabled={automationSettings?.prospectingEnabled ?? true} initialDailyLimit={automationSettings?.prospectingDailyLimit ?? 10} />}
+      automationPanel={<AutonomousProspectingSettings initialEnabled={automationSettings?.prospectingEnabled ?? true} initialDailyLimit={automationSettings?.prospectingDailyLimit ?? 10} initialTime={automationSettings?.prospectingTime ?? '09:00'} />}
     />
   </section>;
 }

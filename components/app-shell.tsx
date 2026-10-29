@@ -10,6 +10,7 @@ import { appRoutes as routes, MobileNavigation } from './mobile-navigation';
 import { ReportPeriodNavigationProvider } from './report-period-navigation-state';
 import { BrandLogo } from './brand-logo';
 import { ProfileAvatar } from './profile-avatar';
+import { AgentChat } from './agent-chat';
 
 export function AppShell({ children, user, onSignOut }: { children: React.ReactNode; user: { name: string; email: string; image?: string | null }; onSignOut: () => Promise<void> }) {
   const pathname = usePathname();
@@ -82,5 +83,6 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
       <ReportPeriodNavigationProvider>{children}</ReportPeriodNavigationProvider>
     </div>
     </main>
+    <AgentChat />
   </></MotionConfig>;
 }

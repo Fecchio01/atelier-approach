@@ -478,6 +478,8 @@ model AgentAutomationSettings {
   paused                  Boolean  @default(false)
   prospectingEnabled      Boolean  @default(true)
   prospectingDailyLimit   Int      @default(10)
+  prospectingTime         String   @default("09:00")
+  prospectingTimeUpdatedAt DateTime?
   updatedAt               DateTime @updatedAt
   updatedBy               String?
 }
@@ -629,6 +631,7 @@ model ResearchCampaign {
   candidateCount     Int                         @default(0)
   workflowRunId      String?                     @unique
   dispatchLeaseUntil DateTime?
+  dispatchAttemptedAt DateTime?
   error              String?
   createdAt          DateTime                    @default(now())
   updatedAt          DateTime                    @updatedAt

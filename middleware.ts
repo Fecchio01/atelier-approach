@@ -12,7 +12,8 @@ export default auth((request) => {
   const isPublicCronEndpoint = pathname === '/api/cron/crm-lifecycle'
     || pathname === '/api/cron/follow-up-cadence'
     || pathname === '/api/cron/autonomous-prospecting'
-    || pathname === '/api/cron/autonomous-prospecting-retry';
+    || pathname === '/api/cron/autonomous-prospecting-retry'
+    || pathname.startsWith('/api/cron/autonomous-prospecting-hour/');
   const isMessagingWebhook = pathname === '/api/webhooks/messaging';
   const isPublicBrandAsset = pathname.startsWith('/brand/');
 
