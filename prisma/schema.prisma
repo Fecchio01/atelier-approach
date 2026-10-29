@@ -474,10 +474,12 @@ model CadenceEnrollment {
 }
 
 model AgentAutomationSettings {
-  id        String   @id @default("team")
-  paused    Boolean  @default(false)
-  updatedAt DateTime @updatedAt
-  updatedBy String?
+  id                      String   @id @default("team")
+  paused                  Boolean  @default(false)
+  prospectingEnabled      Boolean  @default(true)
+  prospectingDailyLimit   Int      @default(10)
+  updatedAt               DateTime @updatedAt
+  updatedBy               String?
 }
 
 model Goal {
@@ -653,6 +655,8 @@ model ProspectCandidate {
   longitude           Float?
   imageUrl            String?
   status              ProspectCandidateStatus     @default(NEW)
+  commercialAnalysis  Json?
+  analyzedAt          DateTime?
   leadId              String?                     @unique
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt

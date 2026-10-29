@@ -17,7 +17,7 @@ export async function GET() {
   if (!user) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
 
   const campaigns = await prisma.researchCampaign.findMany({
-    where: { ownerId: user.id },
+    where: { OR: [{ ownerId: user.id }, { ownerId: 'team' }] },
     orderBy: { createdAt: 'desc' },
     take: 20,
     include: {

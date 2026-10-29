@@ -11,6 +11,7 @@ import { SettingsTabs } from '@/components/settings-tabs';
 import { getSettingsInitialTab } from '@/lib/settings-tabs';
 import { getFollowUpDelayDays } from '@/lib/commercial-settings';
 import { prisma } from '@/lib/db';
+import { AutonomousProspectingSettings } from '@/components/autonomous-prospecting-settings';
 
 async function changePassword(formData: FormData) {
   'use server';
@@ -39,11 +40,12 @@ const passwordErrors: Record<string, string> = {
 };
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ password?: string }> }) {
-  const [user, params, services, followUpDelayDays] = await Promise.all([
+  const [user, params, services, followUpDelayDays, automationSettings] = await Promise.all([
     getCurrentUser(),
     searchParams,
     prisma.serviceCatalogItem.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
-    getFollowUpDelayDays()
+    getFollowUpDelayDays(),
+    prisma.agentAutomationSettings.findUnique({ where: { id: 'team' } })
   ]);
   if (!user) redirect('/login');
   const initialTab = getSettingsInitialTab(params.password);
@@ -62,6 +64,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       email={user.email ?? ''}
       serviceCount={services.length}
       followUpDelayDays={followUpDelayDays}
+      prospectingEnabled={automationSettings?.prospectingEnabled ?? true}
+      prospectingDailyLimit={automationSettings?.prospectingDailyLimit ?? 10}
       accountPanel={<ProfileForm name={user.name ?? ''} avatarUrl={user.image ?? ''} email={user.email ?? ''} />}
       securityPanel={<PasswordSettingsPanel initiallyExpanded={Boolean(params.password && passwordErrors[params.password])} error={params.password ? passwordErrors[params.password] : undefined}>
         <form action={changePassword} className="grid gap-4">
@@ -73,6 +77,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </form>
       </PasswordSettingsPanel>}
       commercialPanel={<CommercialSettingsForm services={services.map(({ id, name, price, billingType, isActive, scope, deliverables, restrictions }) => ({ id, name, price: price.toString(), billingType, isActive, scope, deliverables, restrictions }))} followUpDelayDays={followUpDelayDays} />}
+      automationPanel={<AutonomousProspectingSettings initialEnabled={automationSettings?.prospectingEnabled ?? true} initialDailyLimit={automationSettings?.prospectingDailyLimit ?? 10} />}
     />
   </section>;
 }

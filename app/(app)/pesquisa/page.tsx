@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { LeadCard } from '@/components/lead-card';
-import { ResearchCampaignPanel } from '@/components/research-campaign-panel';
 import { DEFAULT_SEARCH_FILTERS, SearchForm, type SearchFilters, type SearchResultBatch } from '@/components/search-form';
 import { PageHeading, Surface } from '@/components/ui';
 import { approachabilityRank, scoreBusiness } from '@/lib/lead-score';
@@ -166,8 +165,6 @@ export default function PesquisaPage() {
   return (
     <section className="mx-auto max-w-6xl px-5 py-12 md:px-8">
       <PageHeading eyebrow="Pesquisa de prospecção" title="Encontre novas empresas." description="Empresas identificadas exclusivamente na base Overture e priorizadas pelos canais de contato disponíveis. Empresas já trabalhadas ficam fora da busca padrão." />
-
-      <ResearchCampaignPanel />
 
       <div className="mt-8">
         <SearchForm onResults={handleResults} onSearchStart={handleSearchStart} onFailure={handleFailure} filters={filters} onFiltersChange={setFilters} />

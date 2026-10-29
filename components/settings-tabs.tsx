@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { LockKeyIcon, StorefrontIcon, UserCircleIcon } from '@phosphor-icons/react';
+import { GearSixIcon, LockKeyIcon, StorefrontIcon, UserCircleIcon } from '@phosphor-icons/react';
 import type { SettingsTab } from '@/lib/settings-tabs';
 
 const tabs = [
   { id: 'account', label: 'Conta', description: 'Dados pessoais', Icon: UserCircleIcon },
   { id: 'security', label: 'Segurança', description: 'Senha de acesso', Icon: LockKeyIcon },
-  { id: 'commercial', label: 'Comercial', description: 'Serviços e retorno', Icon: StorefrontIcon }
+  { id: 'commercial', label: 'Comercial', description: 'Serviços e retorno', Icon: StorefrontIcon },
+  { id: 'automation', label: 'Automação', description: 'Pesquisa diária', Icon: GearSixIcon }
 ] as const;
 
 export function SettingsTabs({
@@ -15,6 +16,9 @@ export function SettingsTabs({
   accountPanel,
   securityPanel,
   commercialPanel,
+  automationPanel,
+  prospectingEnabled,
+  prospectingDailyLimit,
   displayName,
   email,
   serviceCount,
@@ -24,6 +28,9 @@ export function SettingsTabs({
   accountPanel: ReactNode;
   securityPanel: ReactNode;
   commercialPanel: ReactNode;
+  automationPanel: ReactNode;
+  prospectingEnabled: boolean;
+  prospectingDailyLimit: number;
   displayName: string;
   email: string;
   serviceCount: number;
@@ -56,17 +63,19 @@ export function SettingsTabs({
   const summaries: Record<SettingsTab, string> = {
     account: `${displayName || 'Seu perfil'}${email ? ` · ${email}` : ''}`,
     security: 'Atualize a senha usada para entrar no sistema.',
-    commercial: `${serviceCount} ${serviceCount === 1 ? 'serviço' : 'serviços'} · retorno padrão em ${followUpDelayDays} ${followUpDelayDays === 1 ? 'dia' : 'dias'}`
+    commercial: `${serviceCount} ${serviceCount === 1 ? 'serviço' : 'serviços'} · retorno padrão em ${followUpDelayDays} ${followUpDelayDays === 1 ? 'dia' : 'dias'}`,
+    automation: `${prospectingEnabled ? 'Pesquisa ativa' : 'Pesquisa pausada'} · até ${prospectingDailyLimit} por dia`
   };
 
   const panels: Record<SettingsTab, ReactNode> = {
     account: accountPanel,
     security: securityPanel,
-    commercial: commercialPanel
+    commercial: commercialPanel,
+    automation: automationPanel
   };
 
   return <div className="mt-7 min-w-0">
-    <div role="tablist" aria-label="Categorias de configurações" className="grid grid-cols-3 gap-2 border-b border-white/10 pb-2">
+    <div role="tablist" aria-label="Categorias de configurações" className="grid grid-cols-2 gap-2 border-b border-white/10 pb-2 sm:grid-cols-4">
       {tabs.map(({ id, label, description, Icon }, index) => {
         const selected = activeTab === id;
         return <button

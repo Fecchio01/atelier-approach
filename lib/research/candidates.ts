@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 import type { ExternalBusiness } from '@/lib/osm';
+import { analyzeProspect } from '@/lib/research/autonomous';
 
 const EXTRACTOR_VERSION = 'overture-enrichment-v1';
 
@@ -21,7 +22,8 @@ export async function persistCampaignCandidates(
   tx: Prisma.TransactionClient,
   campaignId: string,
   businesses: ExternalBusiness[],
-  release: string | null
+  release: string | null,
+  niche: string
 ) {
   const linkedCandidateIds: string[] = [];
 
@@ -31,6 +33,21 @@ export async function persistCampaignCandidates(
     const normalizedName = normalizeCandidateName(business.name);
     const ambiguous = await hasNearbyIdentityConflict(tx, business, normalizedName, source, externalId);
     const existing = await tx.prospectCandidate.findUnique({ where: { source_externalId: { source, externalId } } });
+    const status = ambiguous || existing?.status === 'REVIEW_IDENTITY' ? 'REVIEW_IDENTITY' : existing?.status ?? 'NEW';
+    const commercialAnalysis = analyzeProspect({
+      niche,
+      name: business.name,
+      category: business.category ?? null,
+      address: business.address ?? null,
+      phone: business.phone ?? null,
+      website: business.website ?? null,
+      instagram: business.instagram ?? null,
+      whatsapp: business.whatsapp ?? null,
+      latitude: business.latitude ?? null,
+      longitude: business.longitude ?? null,
+      status
+    });
+    const analyzedAt = new Date();
     const candidate = await tx.prospectCandidate.upsert({
       where: { source_externalId: { source, externalId } },
       create: {
@@ -48,7 +65,9 @@ export async function persistCampaignCandidates(
         latitude: business.latitude ?? null,
         longitude: business.longitude ?? null,
         imageUrl: business.imageUrl?.slice(0, 1000) ?? null,
-        status: ambiguous ? 'REVIEW_IDENTITY' : 'NEW'
+        status,
+        commercialAnalysis,
+        analyzedAt
       },
       update: {
         name: business.name.slice(0, 180),
@@ -63,7 +82,9 @@ export async function persistCampaignCandidates(
         ...(business.latitude != null ? { latitude: business.latitude } : {}),
         ...(business.longitude != null ? { longitude: business.longitude } : {}),
         ...(business.imageUrl ? { imageUrl: business.imageUrl.slice(0, 1000) } : {}),
-        ...(ambiguous && existing?.status === 'NEW' ? { status: 'REVIEW_IDENTITY' as const } : {})
+        status,
+        commercialAnalysis,
+        analyzedAt
       }
     });
 

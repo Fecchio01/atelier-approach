@@ -9,6 +9,14 @@
     {
       "path": "/api/cron/follow-up-cadence",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/autonomous-prospecting",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/autonomous-prospecting",
+      "schedule": "0 13 * * *"
     }
   ]
 }

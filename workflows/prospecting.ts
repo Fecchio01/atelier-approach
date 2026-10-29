@@ -41,7 +41,7 @@ async function processProspectingCampaignArea(campaignId: string) {
     const nextAreas = [...(result.hitLimit ? splitProspectSearchArea(area) : []), ...checkpoint.areas.slice(1)]
       .slice(0, Math.max(0, campaign.maxAreas - campaign.completedAreas - 1));
     await prisma.$transaction(async (tx) => {
-      await persistCampaignCandidates(tx, campaign.id, batch, campaign.release);
+      await persistCampaignCandidates(tx, campaign.id, batch, campaign.release, campaign.niche);
       const candidateCount = await tx.researchCampaignCandidate.count({ where: { campaignId: campaign.id } });
       await tx.researchCampaign.updateMany({
         where: { id: campaign.id, status: 'RUNNING', checkpointVersion: campaign.checkpointVersion },

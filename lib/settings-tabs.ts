@@ -1,4 +1,4 @@
-export type SettingsTab = 'account' | 'security' | 'commercial';
+export type SettingsTab = 'account' | 'security' | 'commercial' | 'automation';
 
 const passwordErrorCodes = new Set(['length', 'confirm', 'same', 'current']);
 
