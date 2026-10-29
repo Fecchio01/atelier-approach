@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowClockwiseIcon, ArrowSquareOutIcon, CircleNotchIcon, MapPinIcon, SparkleIcon } from '@phosphor-icons/react';
+import { normalizePublishedPhone, toWhatsAppHref } from '@/lib/contact-links';
 
 export type ProspectAnalysis = {
   fitScore: number;
@@ -137,6 +138,13 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
 function CandidateCard({ candidate }: { candidate: AutonomousCandidate }) {
   const analysis = candidate.commercialAnalysis;
   const mapQuery = encodeURIComponent(`${candidate.name}${candidate.address ? `, ${candidate.address}` : ''}`);
+  const whatsappHref = toWhatsAppHref(candidate.whatsapp);
+  const publishedPhone = normalizePublishedPhone(candidate.phone);
+  const phoneAsWhatsAppHref = !whatsappHref ? toWhatsAppHref(publishedPhone) : null;
+  const actionableWhatsAppHref = whatsappHref ?? phoneAsWhatsAppHref;
+  const whatsappNumber = actionableWhatsAppHref
+    ? `+${new URL(actionableWhatsAppHref).pathname.replace(/\D/g, '')}`
+    : null;
   return <li className="grid gap-3 py-4 first:pt-0 last:pb-0 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.8fr)]">
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
@@ -146,10 +154,13 @@ function CandidateCard({ candidate }: { candidate: AutonomousCandidate }) {
       <p className="mt-1 text-sm text-white/50">{candidate.category ?? 'Categoria não informada'}{candidate.address ? ` · ${candidate.address}` : ''}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <a className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer">Google Maps <ArrowSquareOutIcon size={13} /></a>
-        {candidate.phone ? <a className="inline-flex min-h-9 items-center rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={`tel:${candidate.phone}`}>Ligar</a> : null}
+        {whatsappHref ? <a className="inline-flex min-h-9 items-center rounded-lg border border-[var(--atelier-green)]/50 px-3 text-xs font-medium text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/10" href={whatsappHref} target="_blank" rel="noreferrer">Abrir WhatsApp</a> : null}
+        {!whatsappHref && phoneAsWhatsAppHref ? <a className="inline-flex min-h-9 items-center rounded-lg border border-[var(--atelier-green)]/50 px-3 text-xs font-medium text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/10" href={phoneAsWhatsAppHref} target="_blank" rel="noreferrer">WhatsApp</a> : null}
+        {publishedPhone ? <a className="inline-flex min-h-9 items-center rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={`tel:${publishedPhone}`} aria-label={`Ligar para ${candidate.name}`}>Ligar</a> : null}
         {safeExternalUrl(candidate.website) ? <a className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.website)!} target="_blank" rel="noreferrer">Site <ArrowSquareOutIcon size={13} /></a> : null}
         {safeExternalUrl(candidate.instagram) ? <a className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.instagram)!} target="_blank" rel="noreferrer">Instagram <ArrowSquareOutIcon size={13} /></a> : null}
       </div>
+      {whatsappNumber ? <p className="mt-2 text-xs text-white/55">{whatsappHref ? 'WhatsApp publicado' : 'Telefone disponível para WhatsApp'}: <a className="underline underline-offset-2 hover:text-white" href={actionableWhatsAppHref!} target="_blank" rel="noreferrer">{whatsappNumber}</a></p> : candidate.whatsapp ? <p className="mt-2 text-xs text-white/45">Link de WhatsApp indisponível</p> : null}
       <p className="mt-3 text-xs text-white/40">{candidate.evidence.length} evidências guardadas · fonte: Overture</p>
     </div>
     <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
