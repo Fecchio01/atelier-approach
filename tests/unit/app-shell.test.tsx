@@ -51,7 +51,7 @@ describe('AppShell brand navigation', () => {
     expect(markup).not.toContain('Mais oficinas. Mais negócios.');
     const primaryNavigation = markup.match(/<nav aria-label="Navegação principal" class="[^"]*">([\s\S]*?)<\/nav>/);
     expect(primaryNavigation?.[1]?.match(/<svg\b/g)).toHaveLength(6);
-    expect(primaryNavigation?.[1]).toContain('Assistente');
+    expect(primaryNavigation?.[1]).toContain('Darwin');
   });
 
   test('renders a compact mobile header and keeps the desktop navigation separate', () => {

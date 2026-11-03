@@ -128,7 +128,7 @@ export function AgentChat() {
           <div className="flex min-w-0 items-start gap-3">
             <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><SparkleIcon size={20} weight="fill" /></span>
             <div className="min-w-0">
-              <h2 ref={titleRef} tabIndex={-1} id="agent-chat-title" className="font-semibold outline-none">Assistente do CRM</h2>
+              <h2 ref={titleRef} tabIndex={-1} id="agent-chat-title" className="font-semibold outline-none">Darwin</h2>
               <p className="mt-1 text-xs leading-5 text-white/45">Pesquisa, relatório semanal e dicas de abordagem</p>
             </div>
           </div>
@@ -139,7 +139,7 @@ export function AgentChat() {
           Consulto o status da pesquisa diária e o relatório semanal do CRM; não é uma auditoria completa. Esta conversa não é salva e se apaga ao fechar.
         </div>
 
-        <div ref={messagesRef} role="log" aria-label="Conversa com o assistente" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
+        <div ref={messagesRef} role="log" aria-label="Conversa com Darwin" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           <div className="max-w-[92%] rounded-2xl rounded-tl-md border border-white/[0.08] bg-white/[0.035] p-3.5">
             <p className="text-sm leading-6 text-white/80">Posso consultar se a pesquisa de hoje rodou, resumir os números do CRM ou sugerir próximos passos com base nos dados disponíveis.</p>
           </div>
