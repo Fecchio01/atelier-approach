@@ -17,6 +17,8 @@ export type ProspectAnalysis = {
 export type AutonomousCandidate = {
   id: string;
   leadId: string | null;
+  leadIsDiscarded: boolean;
+  discardedAt: string | null;
   name: string;
   status: 'NEW' | 'REVIEW_IDENTITY' | 'APPROVED' | 'REJECTED' | 'PROMOTED';
   category: string | null;
@@ -62,12 +64,14 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   const [promotingId, setPromotingId] = useState<string | null>(null);
   const [promotionError, setPromotionError] = useState<Record<string, string>>({});
   const [identityConfirmId, setIdentityConfirmId] = useState<string | null>(null);
+  const [discardingId, setDiscardingId] = useState<string | null>(null);
+  const [showDiscarded, setShowDiscarded] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch('/api/agents/campaigns', { cache: 'no-store' });
+      const response = await fetch('/api/agents/campaigns?scope=autonomous-today', { cache: 'no-store' });
       const data = await response.json() as { campaigns?: AutonomousCampaign[] };
-      if (response.ok && Array.isArray(data.campaigns)) setCampaigns(data.campaigns.filter((campaign) => campaign.idempotencyKey?.startsWith('autonomous:')));
+      if (response.ok && Array.isArray(data.campaigns)) setCampaigns(data.campaigns);
     } catch { /* a later refresh can recover a temporary network failure */ }
   }, []);
 
@@ -85,10 +89,10 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
     setBusy(true);
     setError('');
     try {
-      const response = await fetch('/api/agents/campaigns', { cache: 'no-store' });
+      const response = await fetch('/api/agents/campaigns?scope=autonomous-today', { cache: 'no-store' });
       const data = await response.json() as { campaigns?: AutonomousCampaign[]; error?: string };
       if (!response.ok || !Array.isArray(data.campaigns)) throw new Error(data.error ?? 'Não foi possível atualizar os resultados.');
-      setCampaigns(data.campaigns.filter((campaign) => campaign.idempotencyKey?.startsWith('autonomous:')));
+      setCampaigns(data.campaigns);
     } catch (refreshError) { setError(refreshError instanceof Error ? refreshError.message : 'Falha ao atualizar.'); }
     finally { setBusy(false); }
   }
@@ -122,13 +126,40 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
     }
   }
 
+  async function setDiscarded(candidateId: string, discard: boolean) {
+    setDiscardingId(candidateId);
+    setPromotionError((current) => ({ ...current, [candidateId]: '' }));
+    try {
+      const response = await fetch(`/api/agents/candidates/${encodeURIComponent(candidateId)}/discard`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: discard ? 'discard' : 'restore' })
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? 'Não foi possível atualizar esta empresa.');
+      setCampaigns((current) => current.map((campaign) => ({
+        ...campaign,
+        candidates: campaign.candidates.map((item) => item.candidate.id === candidateId
+          ? { ...item, candidate: { ...item.candidate, discardedAt: discard ? new Date().toISOString() : null } }
+          : item)
+      })));
+    } catch (discardFailure) {
+      setPromotionError((current) => ({ ...current, [candidateId]: discardFailure instanceof Error ? discardFailure.message : 'Falha ao atualizar a empresa.' }));
+    } finally {
+      setDiscardingId(null);
+    }
+  }
+
+  const discardedCount = campaigns.reduce((count, campaign) => count + campaign.candidates.filter(({ candidate }) => candidate.discardedAt && !candidate.leadId).length, 0);
+  const activeCount = campaigns.reduce((count, campaign) => count + campaign.candidates.filter(({ candidate }) => !candidate.discardedAt && candidate.status !== 'REJECTED').length, 0);
+
   return <section aria-labelledby="autonomous-research-heading" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.08] pb-4">
       <div className="flex min-w-0 items-start gap-3">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><SparkleIcon size={21} weight="fill" /></span>
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--atelier-green)]">Pesquisa autônoma</p>
-          <h2 id="autonomous-research-heading" className="mt-1 text-lg font-semibold">Empresas pesquisadas pelo agente</h2>
+          <h2 id="autonomous-research-heading" className="mt-1 text-lg font-semibold">Pesquisa de hoje</h2>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-white/55">Todos os dias o agente escolhe um nicho e uma capital, pesquisa empresas e analisa os dados disponíveis. Ele não cria abordagens nem envia mensagens.</p>
         </div>
       </div>
@@ -137,15 +168,37 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
       </button>
     </header>
 
-    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <StatusItem label="Automação" value={stateLabel} />
-      <StatusItem label="Limite diário" value={`${dailyLimit} empresas`} />
+      <StatusItem label="Limite de hoje" value={`${dailyLimit} empresas`} />
+      <StatusItem label="Ativas hoje" value={`${Math.min(dailyLimit, activeCount)} / ${dailyLimit}`} />
       <StatusItem label="Última execução" value={latest ? formatDate(latest.createdAt) : 'Aguardando a execução diária'} />
     </div>
     {error ? <p role="alert" className="mt-4 rounded-lg border border-red-300/25 bg-[#281a1e] p-3 text-sm text-red-100">{error}</p> : null}
 
-    <div className="mt-5 space-y-3">
-      {campaigns.length ? campaigns.slice(0, 7).map((campaign, index) => (
+    <div id="autonomous-discarded-results" className="mt-5 space-y-3">
+      {discardedCount > 0 ? <button type="button" aria-expanded={showDiscarded} aria-controls="autonomous-discarded-results" onClick={() => setShowDiscarded((value) => !value)} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/65 transition-colors duration-150 hover:border-white/25 hover:text-white motion-reduce:transition-none">
+        {showDiscarded ? 'Ocultar' : 'Ver'} descartadas ({discardedCount})
+      </button> : null}
+      {campaigns.length ? campaigns.map((campaign) => {
+        const campaignLimit = Math.min(dailyLimit, campaign.maxCandidates);
+        const activeCandidates = campaign.candidates.filter(({ candidate }) => !candidate.discardedAt && candidate.status !== 'REJECTED').slice(0, campaignLimit);
+        const discardedCandidates = campaign.candidates.filter(({ candidate }) => Boolean(candidate.discardedAt) && !candidate.leadId);
+        const renderCandidate = ({ candidate }: { candidate: AutonomousCandidate }) => <CandidateCard
+          key={candidate.id}
+          candidate={candidate}
+          promoting={promotingId === candidate.id}
+          discarding={discardingId === candidate.id}
+          error={promotionError[candidate.id] ?? ''}
+          confirmingIdentity={identityConfirmId === candidate.id}
+          onAdd={() => void addToFunnel(candidate.id)}
+          onDiscard={() => void setDiscarded(candidate.id, !candidate.discardedAt)}
+          onConfirmIdentity={() => void addToFunnel(candidate.id, true)}
+          onRequestIdentityConfirmation={() => setIdentityConfirmId(candidate.id)}
+          onCancelIdentityConfirmation={() => setIdentityConfirmId(null)}
+        />;
+
+        return (
         <article key={campaign.id} className="rounded-xl border border-white/[0.08] bg-black/10 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -159,33 +212,27 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-[var(--atelier-green)] transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${Math.min(100, Math.round(campaign.completedAreas / Math.max(1, campaign.maxAreas) * 100))}%` }} /></div>
           </div> : null}
           {campaign.error ? <p className="mt-3 text-sm text-amber-100">{campaign.error}</p> : null}
-          {campaign.candidates.length ? <ul className="mt-4 divide-y divide-white/[0.08]">
-            {campaign.candidates.map(({ candidate }) => <CandidateCard
-              key={candidate.id}
-              candidate={candidate}
-              promoting={promotingId === candidate.id}
-              error={promotionError[candidate.id] ?? ''}
-              confirmingIdentity={identityConfirmId === candidate.id}
-              onAdd={() => void addToFunnel(candidate.id)}
-              onConfirmIdentity={() => void addToFunnel(candidate.id, true)}
-              onRequestIdentityConfirmation={() => setIdentityConfirmId(candidate.id)}
-              onCancelIdentityConfirmation={() => setIdentityConfirmId(null)}
-            />)}
-          </ul> : campaign.status === 'COMPLETED' ? <p className="mt-4 rounded-lg border border-dashed border-white/10 p-4 text-sm text-white/50">Nenhuma empresa passou pelos critérios da pesquisa nessa execução.</p> : null}
-          {index > 0 ? <p className="mt-3 text-xs text-white/35">Execução anterior · {formatDate(campaign.createdAt)}</p> : null}
+          {activeCandidates.length ? <ul className="mt-4 divide-y divide-white/[0.08]">{activeCandidates.map(renderCandidate)}</ul>
+            : campaign.status === 'COMPLETED' ? <p className="mt-4 rounded-lg border border-dashed border-white/10 p-4 text-sm text-white/50">Nenhuma empresa passou pelos critérios da pesquisa nessa execução.</p> : null}
+          {showDiscarded && discardedCandidates.length ? <div className="mt-4 rounded-lg border border-white/[0.08] p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/45">Descartadas nesta pesquisa</p>
+            <ul className="mt-3 divide-y divide-white/[0.08]">{discardedCandidates.map(renderCandidate)}</ul>
+          </div> : null}
         </article>
-      )) : <p className="rounded-xl border border-dashed border-white/10 p-6 text-center text-sm text-white/50">{paused || !enabled ? 'A pesquisa diária está pausada. Você pode reativá-la em Configurações.' : 'A primeira pesquisa automática será executada no próximo ciclo diário.'}</p>}
+      ); }) : <p className="rounded-xl border border-dashed border-white/10 p-6 text-center text-sm text-white/50">{paused || !enabled ? 'A pesquisa diária está pausada. Você pode reativá-la em Configurações.' : 'A primeira pesquisa automática será executada no próximo ciclo diário.'}</p>}
     </div>
     <p className="mt-4 text-xs leading-5 text-white/40">A análise usa apenas os dados publicados pela fonte de pesquisa; a pontuação não confirma intenção de compra. Resultados ambíguos devem ser conferidos antes de usar.</p>
   </section>;
 }
 
-function CandidateCard({ candidate, promoting, error, confirmingIdentity, onAdd, onConfirmIdentity, onRequestIdentityConfirmation, onCancelIdentityConfirmation }: {
+function CandidateCard({ candidate, promoting, discarding, error, confirmingIdentity, onAdd, onDiscard, onConfirmIdentity, onRequestIdentityConfirmation, onCancelIdentityConfirmation }: {
   candidate: AutonomousCandidate;
   promoting: boolean;
+  discarding: boolean;
   error: string;
   confirmingIdentity: boolean;
   onAdd: () => void;
+  onDiscard: () => void;
   onConfirmIdentity: () => void;
   onRequestIdentityConfirmation: () => void;
   onCancelIdentityConfirmation: () => void;
@@ -217,9 +264,9 @@ function CandidateCard({ candidate, promoting, error, confirmingIdentity, onAdd,
       {whatsappNumber ? <p className="mt-2 text-xs text-white/55">{whatsappHref ? 'WhatsApp publicado' : 'Telefone disponível para WhatsApp'}: <a className="underline underline-offset-2 hover:text-white" href={actionableWhatsAppHref!} target="_blank" rel="noreferrer">{whatsappNumber}</a></p> : candidate.whatsapp ? <p className="mt-2 text-xs text-white/45">Link de WhatsApp indisponível</p> : null}
       <div className="mt-3">
         {candidate.leadId ? <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/30 px-3 text-sm font-medium text-[var(--atelier-green)]">No funil</span>
+          <span className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/30 px-3 text-sm font-medium text-[var(--atelier-green)]">{candidate.leadIsDiscarded ? 'Na lixeira do CRM' : 'Já no funil'}</span>
           <a className="inline-flex min-h-11 items-center rounded-lg border border-white/15 px-3 text-sm text-white/80 transition-colors hover:border-white/35 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]" href={`/crm?lead=${encodeURIComponent(candidate.leadId)}`}>Abrir no CRM <ArrowSquareOutIcon size={14} className="ml-1" /></a>
-        </div> : candidate.status === 'REJECTED' ? <p className="text-xs text-white/45">Candidata descartada da pesquisa.</p>
+        </div> : candidate.discardedAt || candidate.status === 'REJECTED' ? <div className="flex flex-wrap items-center gap-2"><p className="text-xs text-white/45">Empresa descartada da pesquisa.</p>{candidate.discardedAt ? <button type="button" disabled={discarding} onClick={onDiscard} className="inline-flex min-h-9 items-center rounded-lg border border-white/15 px-3 text-xs text-white/65 transition-colors duration-150 hover:border-white/30 hover:text-white motion-reduce:transition-none disabled:opacity-50">{discarding ? 'Restaurando…' : 'Restaurar'}</button> : null}</div>
           : confirmingIdentity ? <div className="rounded-lg border border-amber-200/25 bg-amber-100/[0.04] p-3">
             <p className="text-sm text-amber-100">A identidade tem divergências. Confira o perfil antes de confirmar a inclusão no funil.</p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -230,6 +277,7 @@ function CandidateCard({ candidate, promoting, error, confirmingIdentity, onAdd,
             {promoting ? <><CircleNotchIcon size={16} className="mr-2 animate-spin" /> Adicionando…</> : 'Adicionar ao funil'}
           </button>}
         {error ? <p role="alert" className="mt-2 text-sm text-red-200">{error}</p> : null}
+        {!candidate.leadId && !candidate.discardedAt && candidate.status !== 'REJECTED' ? <button type="button" disabled={discarding || promoting} onClick={onDiscard} className="mt-2 inline-flex min-h-11 items-center rounded-lg border border-white/10 px-3 text-xs text-white/45 transition-colors duration-150 hover:border-red-200/30 hover:text-red-100 motion-reduce:transition-none disabled:opacity-50">{discarding ? 'Descartando…' : 'Descartar empresa'}</button> : null}
       </div>
       <p className="mt-3 text-xs text-white/40">{candidate.evidence.length} evidências guardadas · fonte: Overture</p>
     </div>

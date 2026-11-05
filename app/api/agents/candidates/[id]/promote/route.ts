@@ -19,10 +19,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   try {
     const result = await executeCrmCommand(prisma, actor, async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "atelier"."ProspectCandidate" WHERE "id" = ${id} FOR UPDATE`;
       const candidate = await tx.prospectCandidate.findUnique({ where: { id } });
       if (!candidate) return { kind: 'not_found' as const };
 
-      if (candidate.status === 'REJECTED') return { kind: 'rejected' as const };
+      if (candidate.status === 'REJECTED' || candidate.discardedAt) return { kind: 'rejected' as const };
       if (candidate.status === 'REVIEW_IDENTITY' && !body.data.confirmIdentityReview) {
         return { kind: 'identity_review_required' as const };
       }

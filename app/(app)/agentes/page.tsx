@@ -3,7 +3,7 @@ import { AgentAutomationControl } from '@/components/agent-automation-control';
 import { AutonomousProspectingPanel, type AutonomousCampaign, type ProspectAnalysis } from '@/components/autonomous-prospecting-panel';
 import { automationPolicy } from '@/lib/agents/policy';
 import { prisma } from '@/lib/db';
-import { analyzeProspect } from '@/lib/research/autonomous';
+import { analyzeProspect, getSaoPauloDateKey } from '@/lib/research/autonomous';
 
 export default async function AgentsPage() {
   const [settings, activeCadences, waitingTasks, records] = await Promise.all([
@@ -11,12 +11,17 @@ export default async function AgentsPage() {
     prisma.cadenceEnrollment.count({ where: { status: { in: ['ACTIVE', 'WAITING_HUMAN'] } } }),
     prisma.crmTask.count({ where: { state: 'PENDING', effectKey: { startsWith: 'cadence:' } } }),
     prisma.researchCampaign.findMany({
-      where: { ownerId: 'team', idempotencyKey: { startsWith: 'autonomous:' } },
+      where: { ownerId: 'team', idempotencyKey: `autonomous:${getSaoPauloDateKey()}` },
       orderBy: { createdAt: 'desc' },
-      take: 10,
+      take: 1,
       include: { candidates: { orderBy: { firstSeenAt: 'desc' }, take: 20, include: { candidate: { include: { evidence: { orderBy: { capturedAt: 'desc' }, take: 8 } } } } } }
     })
   ]);
+  const matchingLeads = await prisma.lead.findMany({
+    where: { osmId: { in: records.flatMap((campaign) => campaign.candidates.map(({ candidate }) => candidate.externalId)) } },
+    select: { id: true, osmId: true, discardedAt: true }
+  });
+  const leadByExternalId = new Map(matchingLeads.map((lead) => [lead.osmId, lead]));
   const campaigns: AutonomousCampaign[] = records.map((campaign) => ({
     id: campaign.id,
     idempotencyKey: campaign.idempotencyKey,
@@ -35,7 +40,9 @@ export default async function AgentsPage() {
       firstSeenAt: firstSeenAt.toISOString(),
       candidate: {
         id: candidate.id,
-        leadId: candidate.leadId,
+        leadId: candidate.leadId ?? leadByExternalId.get(candidate.externalId)?.id ?? null,
+        leadIsDiscarded: Boolean(leadByExternalId.get(candidate.externalId)?.discardedAt),
+        discardedAt: candidate.discardedAt?.toISOString() ?? null,
         name: candidate.name,
         status: candidate.status,
         category: candidate.category,

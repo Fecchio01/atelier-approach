@@ -659,6 +659,7 @@ model ProspectCandidate {
   longitude           Float?
   imageUrl            String?
   status              ProspectCandidateStatus     @default(NEW)
+  discardedAt         DateTime?
   commercialAnalysis  Json?
   analyzedAt          DateTime?
   leadId              String?                     @unique
@@ -671,6 +672,7 @@ model ProspectCandidate {
   @@unique([source, externalId])
   @@index([normalizedName, latitude, longitude])
   @@index([status, createdAt])
+  @@index([discardedAt])
 }
 
 model ResearchCampaignCandidate {

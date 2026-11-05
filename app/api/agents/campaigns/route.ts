@@ -6,20 +6,25 @@ import { prisma } from '@/lib/db';
 import { createResearchCampaignSchema } from '@/lib/research/contracts';
 import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { startProspectingCampaign } from '@/lib/research/runtime';
+import { getSaoPauloDateKey } from '@/lib/research/autonomous';
 
 export const runtime = 'nodejs';
 
 const MAX_DAILY_CANDIDATE_BUDGET = 20;
 const DISPATCH_LEASE_MS = 60_000;
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) return Response.json({ error: 'Não autorizado.' }, { status: 401 });
 
+  const url = new URL(request.url);
+  const autonomousToday = url.searchParams.get('scope') === 'autonomous-today';
   const campaigns = await prisma.researchCampaign.findMany({
-    where: { OR: [{ ownerId: user.id }, { ownerId: 'team' }] },
+    where: autonomousToday
+      ? { ownerId: 'team', idempotencyKey: `autonomous:${getSaoPauloDateKey()}` }
+      : { OR: [{ ownerId: user.id }, { ownerId: 'team' }] },
     orderBy: { createdAt: 'desc' },
-    take: 20,
+    take: autonomousToday ? 1 : 20,
     include: {
       candidates: {
         orderBy: { firstSeenAt: 'desc' },
@@ -28,7 +33,23 @@ export async function GET() {
       }
     }
   });
-  return Response.json({ campaigns });
+  const matchingLeads = await prisma.lead.findMany({
+    where: { osmId: { in: campaigns.flatMap((campaign) => campaign.candidates.map(({ candidate }) => candidate.externalId)) } },
+    select: { id: true, osmId: true, discardedAt: true }
+  });
+  const leadByExternalId = new Map(matchingLeads.map((lead) => [lead.osmId, lead]));
+  const campaignsWithLeadState = campaigns.map((campaign) => ({
+    ...campaign,
+    candidates: campaign.candidates.map((item) => {
+      const lead = leadByExternalId.get(item.candidate.externalId);
+      return { ...item, candidate: {
+        ...item.candidate,
+        leadId: item.candidate.leadId ?? lead?.id ?? null,
+        leadIsDiscarded: Boolean(lead?.discardedAt)
+      } };
+    })
+  }));
+  return Response.json({ campaigns: campaignsWithLeadState });
 }
 
 export async function POST(request: Request) {
