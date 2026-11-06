@@ -6,7 +6,10 @@ import { getCurrentUser } from '@/lib/auth';
 export const runtime = 'nodejs';
 
 const MAX_BODY_BYTES = 8_192;
-const requestSchema = z.object({ message: z.string().trim().min(2).max(500) }).strict();
+const requestSchema = z.object({
+  message: z.string().trim().min(2).max(500),
+  leadId: z.string().trim().min(1).max(128).optional()
+}).strict();
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -24,7 +27,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Escreva uma pergunta de até 500 caracteres.' }, { status: 400, headers: noStoreHeaders });
     }
 
-    const answer = await answerAssistantChat(parsed.data.message);
+    const answer = await answerAssistantChat(parsed.data.message, parsed.data.leadId);
     return Response.json(answer, { headers: noStoreHeaders });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) {

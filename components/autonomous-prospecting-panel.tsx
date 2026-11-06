@@ -3,6 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowClockwiseIcon, ArrowSquareOutIcon, CircleNotchIcon, MapPinIcon, SparkleIcon } from '@phosphor-icons/react';
 import { normalizePublishedPhone, toWhatsAppHref } from '@/lib/contact-links';
+type FeedbackReason = 'DUPLICATE' | 'WRONG_NICHE' | 'INVALID_BUSINESS' | 'INSUFFICIENT_DATA' | 'OTHER';
+type FeedbackSelection = FeedbackReason | '';
+const feedbackReasonLabels: Record<FeedbackReason, string> = {
+  DUPLICATE: 'Duplicada',
+  WRONG_NICHE: 'Nicho incorreto',
+  INVALID_BUSINESS: 'Empresa inválida',
+  INSUFFICIENT_DATA: 'Dados insuficientes',
+  OTHER: 'Outro motivo'
+};
 
 export type ProspectAnalysis = {
   fitScore: number;
@@ -29,6 +38,8 @@ export type AutonomousCandidate = {
   whatsapp: string | null;
   imageUrl: string | null;
   commercialAnalysis: ProspectAnalysis | null;
+  feedbackReason?: FeedbackReason | null;
+  calibrationHint?: string | null;
   evidence: Array<{ id: string; field: string; source: string; verified: boolean }>;
 };
 export type AutonomousCampaign = {
@@ -66,6 +77,7 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   const [identityConfirmId, setIdentityConfirmId] = useState<string | null>(null);
   const [discardingId, setDiscardingId] = useState<string | null>(null);
   const [showDiscarded, setShowDiscarded] = useState(false);
+  const [discardReasons, setDiscardReasons] = useState<Record<string, FeedbackSelection>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -127,20 +139,24 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   }
 
   async function setDiscarded(candidateId: string, discard: boolean) {
+    const reason = discardReasons[candidateId];
+    if (discard && !reason) return;
     setDiscardingId(candidateId);
     setPromotionError((current) => ({ ...current, [candidateId]: '' }));
     try {
       const response = await fetch(`/api/agents/candidates/${encodeURIComponent(candidateId)}/discard`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: discard ? 'discard' : 'restore' })
+        body: JSON.stringify(discard
+          ? { action: 'discard', reason }
+          : { action: 'restore' })
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Não foi possível atualizar esta empresa.');
       setCampaigns((current) => current.map((campaign) => ({
         ...campaign,
         candidates: campaign.candidates.map((item) => item.candidate.id === candidateId
-          ? { ...item, candidate: { ...item.candidate, discardedAt: discard ? new Date().toISOString() : null } }
+          ? { ...item, candidate: { ...item.candidate, discardedAt: discard ? new Date().toISOString() : null, feedbackReason: discard ? reason as FeedbackReason : null } }
           : item)
       })));
     } catch (discardFailure) {
@@ -193,6 +209,8 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
           confirmingIdentity={identityConfirmId === candidate.id}
           onAdd={() => void addToFunnel(candidate.id)}
           onDiscard={() => void setDiscarded(candidate.id, !candidate.discardedAt)}
+          discardReason={discardReasons[candidate.id] ?? ''}
+          onDiscardReasonChange={(reason) => setDiscardReasons((current) => ({ ...current, [candidate.id]: reason }))}
           onConfirmIdentity={() => void addToFunnel(candidate.id, true)}
           onRequestIdentityConfirmation={() => setIdentityConfirmId(candidate.id)}
           onCancelIdentityConfirmation={() => setIdentityConfirmId(null)}
@@ -225,12 +243,14 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   </section>;
 }
 
-function CandidateCard({ candidate, promoting, discarding, error, confirmingIdentity, onAdd, onDiscard, onConfirmIdentity, onRequestIdentityConfirmation, onCancelIdentityConfirmation }: {
+function CandidateCard({ candidate, promoting, discarding, error, confirmingIdentity, discardReason, onDiscardReasonChange, onAdd, onDiscard, onConfirmIdentity, onRequestIdentityConfirmation, onCancelIdentityConfirmation }: {
   candidate: AutonomousCandidate;
   promoting: boolean;
   discarding: boolean;
   error: string;
   confirmingIdentity: boolean;
+  discardReason: FeedbackSelection;
+  onDiscardReasonChange: (reason: FeedbackSelection) => void;
   onAdd: () => void;
   onDiscard: () => void;
   onConfirmIdentity: () => void;
@@ -254,19 +274,19 @@ function CandidateCard({ candidate, promoting, discarding, error, confirmingIden
       </div>
       <p className="mt-1 text-sm text-white/50">{candidate.category ?? 'Categoria não informada'}{candidate.address ? ` · ${candidate.address}` : ''}</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <a className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer">Google Maps <ArrowSquareOutIcon size={13} /></a>
-        {whatsappHref ? <a className="inline-flex min-h-9 items-center rounded-lg border border-[var(--atelier-green)]/50 px-3 text-xs font-medium text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/10" href={whatsappHref} target="_blank" rel="noreferrer">Abrir WhatsApp</a> : null}
-        {!whatsappHref && phoneAsWhatsAppHref ? <a className="inline-flex min-h-9 items-center rounded-lg border border-[var(--atelier-green)]/50 px-3 text-xs font-medium text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/10" href={phoneAsWhatsAppHref} target="_blank" rel="noreferrer">WhatsApp</a> : null}
-        {publishedPhone ? <a className="inline-flex min-h-9 items-center rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={`tel:${publishedPhone}`} aria-label={`Ligar para ${candidate.name}`}>Ligar</a> : null}
-        {safeExternalUrl(candidate.website) ? <a className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.website)!} target="_blank" rel="noreferrer">Site <ArrowSquareOutIcon size={13} /></a> : null}
-        {safeExternalUrl(candidate.instagram) ? <a className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.instagram)!} target="_blank" rel="noreferrer">Instagram <ArrowSquareOutIcon size={13} /></a> : null}
+        <a className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer">Google Maps <ArrowSquareOutIcon size={13} /></a>
+        {whatsappHref ? <a className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/50 px-3 text-xs font-medium text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/10" href={whatsappHref} target="_blank" rel="noreferrer">Abrir WhatsApp</a> : null}
+        {!whatsappHref && phoneAsWhatsAppHref ? <a className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/50 px-3 text-xs font-medium text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/10" href={phoneAsWhatsAppHref} target="_blank" rel="noreferrer">WhatsApp</a> : null}
+        {publishedPhone ? <a className="inline-flex min-h-11 items-center rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={`tel:${publishedPhone}`} aria-label={`Ligar para ${candidate.name}`}>Ligar</a> : null}
+        {safeExternalUrl(candidate.website) ? <a className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.website)!} target="_blank" rel="noreferrer">Site <ArrowSquareOutIcon size={13} /></a> : null}
+        {safeExternalUrl(candidate.instagram) ? <a className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.instagram)!} target="_blank" rel="noreferrer">Instagram <ArrowSquareOutIcon size={13} /></a> : null}
       </div>
       {whatsappNumber ? <p className="mt-2 text-xs text-white/55">{whatsappHref ? 'WhatsApp publicado' : 'Telefone disponível para WhatsApp'}: <a className="underline underline-offset-2 hover:text-white" href={actionableWhatsAppHref!} target="_blank" rel="noreferrer">{whatsappNumber}</a></p> : candidate.whatsapp ? <p className="mt-2 text-xs text-white/45">Link de WhatsApp indisponível</p> : null}
       <div className="mt-3">
         {candidate.leadId ? <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2">
           <span className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/30 px-3 text-sm font-medium text-[var(--atelier-green)]">{candidate.leadIsDiscarded ? 'Na lixeira do CRM' : 'Já no funil'}</span>
           <a className="inline-flex min-h-11 items-center rounded-lg border border-white/15 px-3 text-sm text-white/80 transition-colors hover:border-white/35 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]" href={`/crm?lead=${encodeURIComponent(candidate.leadId)}`}>Abrir no CRM <ArrowSquareOutIcon size={14} className="ml-1" /></a>
-        </div> : candidate.discardedAt || candidate.status === 'REJECTED' ? <div className="flex flex-wrap items-center gap-2"><p className="text-xs text-white/45">Empresa descartada da pesquisa.</p>{candidate.discardedAt ? <button type="button" disabled={discarding} onClick={onDiscard} className="inline-flex min-h-9 items-center rounded-lg border border-white/15 px-3 text-xs text-white/65 transition-colors duration-150 hover:border-white/30 hover:text-white motion-reduce:transition-none disabled:opacity-50">{discarding ? 'Restaurando…' : 'Restaurar'}</button> : null}</div>
+        </div> : candidate.discardedAt || candidate.status === 'REJECTED' ? <div className="flex flex-wrap items-center gap-2"><p className="text-xs text-white/45">Empresa descartada da pesquisa{candidate.feedbackReason ? ` · ${feedbackReasonLabels[candidate.feedbackReason]}` : ''}.</p>{candidate.discardedAt ? <button type="button" disabled={discarding} onClick={onDiscard} className="inline-flex min-h-11 items-center rounded-lg border border-white/15 px-3 text-xs text-white/65 transition-colors duration-150 hover:border-white/30 hover:text-white motion-reduce:transition-none disabled:opacity-50">{discarding ? 'Restaurando…' : 'Restaurar'}</button> : null}</div>
           : confirmingIdentity ? <div className="rounded-lg border border-amber-200/25 bg-amber-100/[0.04] p-3">
             <p className="text-sm text-amber-100">A identidade tem divergências. Confira o perfil antes de confirmar a inclusão no funil.</p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -277,7 +297,14 @@ function CandidateCard({ candidate, promoting, discarding, error, confirmingIden
             {promoting ? <><CircleNotchIcon size={16} className="mr-2 animate-spin" /> Adicionando…</> : 'Adicionar ao funil'}
           </button>}
         {error ? <p role="alert" className="mt-2 text-sm text-red-200">{error}</p> : null}
-        {!candidate.leadId && !candidate.discardedAt && candidate.status !== 'REJECTED' ? <button type="button" disabled={discarding || promoting} onClick={onDiscard} className="mt-2 inline-flex min-h-11 items-center rounded-lg border border-white/10 px-3 text-xs text-white/45 transition-colors duration-150 hover:border-red-200/30 hover:text-red-100 motion-reduce:transition-none disabled:opacity-50">{discarding ? 'Descartando…' : 'Descartar empresa'}</button> : null}
+        {!candidate.leadId && !candidate.discardedAt && candidate.status !== 'REJECTED' ? <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor={`discard-reason-${candidate.id}`}>Motivo do descarte de {candidate.name}</label>
+          <select id={`discard-reason-${candidate.id}`} value={discardReason} onChange={(event) => onDiscardReasonChange(event.target.value as FeedbackSelection)} disabled={discarding || promoting} className="min-h-11 max-w-full rounded-lg border border-white/10 bg-[#161b1f] px-3 text-xs text-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
+            <option value="">Selecione o motivo</option>
+            {Object.entries(feedbackReasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <button type="button" disabled={discarding || promoting || !discardReason} onClick={onDiscard} className="inline-flex min-h-11 items-center rounded-lg border border-white/10 px-3 text-xs text-white/45 transition-colors duration-150 hover:border-red-200/30 hover:text-red-100 motion-reduce:transition-none disabled:opacity-50">{discarding ? 'Descartando…' : 'Descartar empresa'}</button>
+        </div> : null}
       </div>
       <p className="mt-3 text-xs text-white/40">{candidate.evidence.length} evidências guardadas · fonte: Overture</p>
     </div>
@@ -287,6 +314,7 @@ function CandidateCard({ candidate, promoting, discarding, error, confirmingIden
       <p className={`mt-2 text-xs font-medium ${candidate.status === 'REVIEW_IDENTITY' ? 'text-amber-200' : 'text-[var(--atelier-green)]'}`}>{analysis?.recommendation ?? 'Análise não disponível'}</p>
       <p className="mt-1 text-xs leading-5 text-white/55">{analysis?.summary ?? 'Aguardando análise dos dados publicados.'}</p>
       <p className="mt-2 text-[11px] leading-4 text-white/35">Pontuação heurística de aderência textual; não representa probabilidade de conversão.</p>
+      {candidate.calibrationHint ? <p className="mt-2 text-[11px] leading-4 text-white/55">{candidate.calibrationHint}</p> : null}
       <p className="mt-2 text-[11px] leading-4 text-white/35">Completude dos campos: {analysis?.dataCompleteness ?? 0}%</p>
     </div>
   </li>;

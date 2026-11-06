@@ -6,6 +6,7 @@ import { createHumanCrmActor } from '@/lib/crm/actor';
 import { executeCrmCommand } from '@/lib/crm/commands';
 import { prisma } from '@/lib/db';
 import { normalizePublishedPhone, toWhatsAppHref } from '@/lib/contact-links';
+import { saveCandidateFeedback } from '@/lib/research/feedback';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -40,6 +41,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (existingLead) {
         if (existingLead.discardedAt) return { kind: 'lead_discarded' as const, leadId: existingLead.id };
         await tx.prospectCandidate.update({ where: { id: candidate.id }, data: { leadId: existingLead.id, status: 'PROMOTED' } });
+        await saveCandidateFeedback(tx, { candidateId: candidate.id, outcome: 'ACCEPTED', category: candidate.category, updatedById: user.id });
         return { kind: 'already_in_crm' as const, leadId: existingLead.id };
       }
 
@@ -61,6 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         select: { id: true }
       });
       await tx.prospectCandidate.update({ where: { id: candidate.id }, data: { leadId: lead.id, status: 'PROMOTED' } });
+      await saveCandidateFeedback(tx, { candidateId: candidate.id, outcome: 'ACCEPTED', category: candidate.category, updatedById: user.id });
       return { kind: 'created' as const, leadId: lead.id };
     });
 
@@ -81,10 +84,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const { id } = await params;
-      const candidate = await prisma.prospectCandidate.findUnique({ where: { id }, select: { externalId: true } });
+      const candidate = await prisma.prospectCandidate.findUnique({ where: { id }, select: { externalId: true, category: true } });
       const lead = candidate ? await prisma.lead.findUnique({ where: { osmId: candidate.externalId }, select: { id: true, discardedAt: true } }) : null;
       if (lead && !lead.discardedAt) {
-        await prisma.prospectCandidate.update({ where: { id }, data: { leadId: lead.id, status: 'PROMOTED' } });
+        await prisma.$transaction(async (tx) => {
+          await tx.prospectCandidate.update({ where: { id }, data: { leadId: lead.id, status: 'PROMOTED' } });
+          await saveCandidateFeedback(tx, { candidateId: id, outcome: 'ACCEPTED', category: candidate?.category, updatedById: user.id });
+        });
         return Response.json({ leadId: lead.id, href: `/crm?lead=${encodeURIComponent(lead.id)}`, alreadyInCrm: true });
       }
     }

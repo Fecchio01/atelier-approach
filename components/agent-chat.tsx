@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { ChatCircleDotsIcon, CircleNotchIcon, PaperPlaneTiltIcon, SparkleIcon, XIcon } from '@phosphor-icons/react';
+import { ChatCircleDotsIcon, CircleNotchIcon, CopyIcon, PaperPlaneTiltIcon, SparkleIcon, XIcon } from '@phosphor-icons/react';
 
 type ChatSources = {
   preparedAt: string;
@@ -14,9 +14,10 @@ type ChatSources = {
   reportTo: string | null;
   reportAvailable: boolean;
   engine: 'GEMINI' | 'LOCAL';
+  lead: { id: string; name: string; category: string | null; stage: string; hasWebsite: boolean; hasInstagram: boolean; hasWhatsapp: boolean } | null;
 };
 
-type Message = { id: string; role: 'user' | 'assistant'; text: string; sources?: ChatSources };
+type Message = { id: string; role: 'user' | 'assistant'; text: string; draftText?: string; sources?: ChatSources };
 
 const quickQuestions = [
   'A pesquisa de hoje já rodou?',
@@ -31,12 +32,21 @@ export function AgentChat() {
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedLead, setSelectedLead] = useState<{ id: string; name: string } | null>(null);
+  const [copiedDraftId, setCopiedDraftId] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<AbortController | null>(null);
   const sessionRef = useRef(0);
+
+  function cancelPendingRequest() {
+    sessionRef.current += 1;
+    requestRef.current?.abort();
+    requestRef.current = null;
+    setLoading(false);
+  }
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -51,18 +61,28 @@ export function AgentChat() {
   }, [open]);
 
   useEffect(() => {
+    function handleOpenContext(event: Event) {
+      const detail = (event as CustomEvent<{ leadId?: string; leadName?: string }>).detail;
+      if (!detail?.leadId) return;
+      cancelPendingRequest();
+      setMessages([]);
+      setSelectedLead({ id: detail.leadId, name: detail.leadName?.trim() || 'Empresa selecionada' });
+      setError('');
+      setOpen(true);
+    }
+    window.addEventListener('darwin:open-chat', handleOpenContext);
+    return () => window.removeEventListener('darwin:open-chat', handleOpenContext);
+  }, []);
+
+  useEffect(() => {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: reducedMotion ? 'auto' : 'smooth' });
   }, [messages, loading]);
 
   function closeChat() {
-    sessionRef.current += 1;
-    requestRef.current?.abort();
-    requestRef.current = null;
-    setLoading(false);
+    cancelPendingRequest();
     setError('');
     setDraft('');
-    setMessages([]);
     setOpen(false);
   }
 
@@ -80,13 +100,13 @@ export function AgentChat() {
       const response = await fetch('/api/agents/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, ...(selectedLead ? { leadId: selectedLead.id } : {}) }),
         signal: controller.signal
       });
-      const payload = await response.json() as { reply?: string; sources?: ChatSources; error?: string };
+      const payload = await response.json() as { reply?: string; draftText?: string; sources?: ChatSources; error?: string };
       if (!response.ok || !payload.reply || !payload.sources) throw new Error(payload.error ?? 'Não foi possível consultar o agente.');
       if (session !== sessionRef.current) return;
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'assistant', text: payload.reply!, sources: payload.sources }]);
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'assistant', text: payload.reply!, draftText: payload.draftText, sources: payload.sources }]);
     } catch (sendError) {
       if (controller.signal.aborted || session !== sessionRef.current) return;
       setError(sendError instanceof Error ? sendError.message : 'Não foi possível enviar a pergunta.');
@@ -101,6 +121,17 @@ export function AgentChat() {
     void sendMessage(draft);
   }
 
+  async function copyDraft(message: Message) {
+    if (!message.draftText) return;
+    try {
+      await navigator.clipboard.writeText(message.draftText);
+      setCopiedDraftId(message.id);
+      window.setTimeout(() => setCopiedDraftId((current) => current === message.id ? null : current), 1800);
+    } catch {
+      setError('Não consegui copiar o rascunho. Selecione o texto e copie manualmente.');
+    }
+  }
+
   return <>
     <button
       type="button"
@@ -108,7 +139,7 @@ export function AgentChat() {
       aria-haspopup="dialog"
       aria-expanded={open}
       aria-controls="agent-chat-dialog"
-      className="fixed bottom-4 right-4 z-40 inline-flex min-h-12 items-center gap-2 rounded-full border border-[var(--atelier-green)]/40 bg-[#18201c] px-4 text-sm font-semibold text-white shadow-[0_12px_36px_rgba(0,0,0,0.38)] transition-colors hover:border-[var(--atelier-green)] hover:bg-[#202b24] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)] motion-reduce:transition-none sm:bottom-6 sm:right-6"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-[calc(env(safe-area-inset-right)+1rem)] z-40 inline-flex min-h-12 items-center gap-2 rounded-full border border-[var(--atelier-green)]/40 bg-[#18201c] px-4 text-sm font-semibold text-white shadow-[0_12px_36px_rgba(0,0,0,0.38)] transition-colors hover:border-[var(--atelier-green)] hover:bg-[#202b24] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)] motion-reduce:transition-none sm:bottom-6 sm:right-6"
     >
       <ChatCircleDotsIcon size={19} weight="fill" className="text-[var(--atelier-green)]" />
       Perguntar ao agente
@@ -132,23 +163,35 @@ export function AgentChat() {
               <p className="mt-1 text-xs leading-5 text-white/45">Pesquisa, relatório semanal e dicas de abordagem</p>
             </div>
           </div>
-          <button type="button" onClick={closeChat} aria-label="Fechar conversa e apagar histórico" className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-white/10 text-white/65 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]"><XIcon size={18} /></button>
+          <div className="flex shrink-0 items-center gap-1">
+            {messages.length ? <button type="button" onClick={() => { cancelPendingRequest(); setMessages([]); setSelectedLead(null); setError(''); }} className="min-h-11 rounded-lg px-2 text-xs text-white/50 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">Limpar</button> : null}
+            <button type="button" onClick={closeChat} aria-label="Fechar conversa" className="flex size-11 items-center justify-center rounded-lg border border-white/10 text-white/65 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]"><XIcon size={18} /></button>
+          </div>
         </header>
 
         <div className="border-b border-white/[0.07] px-4 py-2.5 text-xs leading-5 text-white/55 sm:px-5">
-          Consulto o status da pesquisa diária e o relatório semanal do CRM; não é uma auditoria completa. Esta conversa não é salva e se apaga ao fechar.
+          Consulto o status da pesquisa diária e os dados disponíveis do CRM; não é uma auditoria completa. A conversa fica nesta sessão até você limpá-la.
         </div>
 
         <div ref={messagesRef} role="log" aria-label="Conversa com Darwin" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           <div className="max-w-[92%] rounded-2xl rounded-tl-md border border-white/[0.08] bg-white/[0.035] p-3.5">
-            <p className="text-sm leading-6 text-white/80">Posso consultar se a pesquisa de hoje rodou, resumir os números do CRM ou sugerir próximos passos com base nos dados disponíveis.</p>
+            <p className="text-sm leading-6 text-white/80">{selectedLead ? `Estou com ${selectedLead.name} em contexto. Posso resumir o cadastro ou preparar um rascunho revisável.` : 'Posso consultar se a pesquisa de hoje rodou, resumir os números do CRM ou sugerir próximos passos com base nos dados disponíveis.'}</p>
           </div>
+          {selectedLead ? <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--atelier-green)]/20 bg-[var(--atelier-green)]/[0.04] px-3 py-2 text-xs">
+            <span className="truncate text-white/70">Empresa: <strong className="text-white">{selectedLead.name}</strong></span>
+            <button type="button" onClick={() => { cancelPendingRequest(); setMessages([]); setSelectedLead(null); setError(''); }} className="min-h-11 shrink-0 rounded-md px-2 text-white/55 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">Remover contexto</button>
+          </div> : null}
           {!messages.length ? <div className="grid gap-2 pt-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/35">Perguntas rápidas</p>
-            {quickQuestions.map((question) => <button key={question} type="button" onClick={() => void sendMessage(question)} disabled={loading} className="min-h-11 rounded-lg border border-white/[0.08] px-3 text-left text-xs text-white/70 transition-colors hover:border-[var(--atelier-green)]/35 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] disabled:opacity-50 motion-reduce:transition-none">{question}</button>)}
+            {(selectedLead ? ['O que sabemos desta empresa?', 'Preparar rascunho de abordagem', 'Qual próximo passo você sugere?'] : quickQuestions).map((question) => <button key={question} type="button" onClick={() => void sendMessage(question)} disabled={loading} className="min-h-11 rounded-lg border border-white/[0.08] px-3 text-left text-xs text-white/70 transition-colors hover:border-[var(--atelier-green)]/35 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] disabled:opacity-50 motion-reduce:transition-none">{question}</button>)}
           </div> : null}
           {messages.map((message) => <article key={message.id} className={`max-w-[94%] rounded-2xl p-3.5 ${message.role === 'user' ? 'ml-auto rounded-tr-md bg-[var(--atelier-green)]/10 text-white' : 'rounded-tl-md border border-white/[0.08] bg-white/[0.035] text-white/80'}`}>
             <p className="whitespace-pre-wrap text-sm leading-6">{message.text}</p>
+            {message.draftText !== undefined ? <div className="mt-3">
+              <label htmlFor={`darwin-draft-${message.id}`} className="mb-1 block text-xs font-medium text-white/55">Rascunho editável</label>
+              <textarea id={`darwin-draft-${message.id}`} value={message.draftText} onChange={(event) => setMessages((current) => current.map((item) => item.id === message.id ? { ...item, draftText: event.target.value.slice(0, 1200) } : item))} maxLength={1200} rows={5} className="w-full resize-y rounded-lg border border-white/10 bg-[#171e22] p-3 text-sm leading-6 text-white outline-none focus:border-[var(--atelier-green)]/55" />
+              <button type="button" onClick={() => void copyDraft(message)} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/35 px-3 text-xs font-medium text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/[0.06] focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]"><CopyIcon size={15} />{copiedDraftId === message.id ? 'Copiado' : 'Copiar rascunho'}</button>
+            </div> : null}
             {message.sources ? <SourceNote sources={message.sources} /> : null}
           </article>)}
           {loading ? <div role="status" className="flex max-w-[85%] items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3.5 py-3 text-xs text-white/55"><CircleNotchIcon size={15} className="animate-spin text-[var(--atelier-green)] motion-reduce:animate-none" /> Consultando pesquisa e relatório…</div> : null}
@@ -172,7 +215,7 @@ export function AgentChat() {
               {loading ? <CircleNotchIcon size={18} className="animate-spin motion-reduce:animate-none" /> : <PaperPlaneTiltIcon size={18} weight="fill" />}
             </button>
           </div>
-          <p className="mt-2 px-1 text-xs text-white/50">Até 500 caracteres · sem alteração no funil ou envio de mensagens</p>
+          <p className="mt-2 px-1 text-xs text-white/50">Até 500 caracteres · rascunhos não são enviados · conversa mantida até limpar</p>
         </form>
       </section>
     </dialog>
@@ -192,5 +235,14 @@ function SourceNote({ sources }: { sources: ChatSources }) {
     : sources.researchStatus
       ? `pesquisa Overture ${date(`${sources.researchDate}T12:00:00-03:00`)} · ${sources.researchCandidates} candidatas`
       : `pesquisa Overture sem registro em ${date(`${sources.researchDate}T12:00:00-03:00`)} · prevista às ${sources.scheduledTime}`;
-  return <p className="mt-3 border-t border-white/[0.07] pt-2 text-xs leading-4 text-white/50">Dados: {research} · {reportRange} · consultado às {time} · {sources.engine === 'GEMINI' ? 'Gemini (faixa gratuita)' : 'resposta local'}</p>;
+  return <p className="mt-3 border-t border-white/[0.07] pt-2 text-xs leading-4 text-white/50">Dados: {sources.lead ? `cadastro de ${sources.lead.name} · etapa ${leadStageLabel(sources.lead.stage)}` : research} · {reportRange} · consultado às {time} · {sources.engine === 'GEMINI' ? 'Gemini (faixa gratuita)' : 'resposta local'}</p>;
+}
+
+function leadStageLabel(stage: string) {
+  const labels: Record<string, string> = {
+    NEW: 'Nova', CONTACTED: 'Abordado', IN_CONVERSATION: 'Em conversa', QUALIFIED: 'Qualificado',
+    PROPOSAL: 'Proposta enviada', MEETING: 'Reunião', INTEREST: 'Com interesse', FOLLOW_UP: 'Follow-up',
+    WON: 'Ganho', NO_RESPONSE: 'Sem resposta', DISCARDED: 'Descartado'
+  };
+  return labels[stage] ?? stage;
 }

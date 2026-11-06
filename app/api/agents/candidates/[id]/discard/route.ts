@@ -2,8 +2,13 @@ import { z } from 'zod';
 
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { ProspectFeedbackReason } from '@prisma/client';
+import { saveCandidateFeedback } from '@/lib/research/feedback';
 
-const dispositionSchema = z.object({ action: z.enum(['discard', 'restore']) }).strict();
+const dispositionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('discard'), reason: z.nativeEnum(ProspectFeedbackReason) }).strict(),
+  z.object({ action: z.literal('restore') }).strict()
+]);
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -23,6 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         status: true,
         leadId: true,
         discardedAt: true,
+        category: true,
         campaigns: { select: { campaign: { select: { ownerId: true, idempotencyKey: true } } } }
       }
     });
@@ -34,15 +40,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (lead) return { kind: 'already_linked' as const };
 
     if (body.data.action === 'discard') {
-      if (candidate.discardedAt) return { kind: 'updated' as const, discardedAt: candidate.discardedAt };
+      if (candidate.discardedAt) {
+        await saveCandidateFeedback(tx, { candidateId: candidate.id, outcome: 'DISCARDED', reason: body.data.reason, category: candidate.category, updatedById: user.id });
+        return { kind: 'updated' as const, discardedAt: candidate.discardedAt };
+      }
       if (candidate.status === 'REJECTED') return { kind: 'legacy_rejected' as const };
       const discardedAt = new Date();
       const update = await tx.prospectCandidate.updateMany({ where: { id, leadId: null, discardedAt: null }, data: { discardedAt } });
+      if (update.count) await saveCandidateFeedback(tx, { candidateId: candidate.id, outcome: 'DISCARDED', reason: body.data.reason, category: candidate.category, updatedById: user.id });
       return update.count ? { kind: 'updated' as const, discardedAt } : { kind: 'conflict' as const };
     }
 
-    if (!candidate.discardedAt) return { kind: 'updated' as const, discardedAt: null };
+    if (!candidate.discardedAt) {
+      await tx.prospectCandidateFeedback.deleteMany({ where: { candidateId: id, outcome: 'DISCARDED' } });
+      return { kind: 'updated' as const, discardedAt: null };
+    }
     const update = await tx.prospectCandidate.updateMany({ where: { id, leadId: null, discardedAt: { not: null } }, data: { discardedAt: null } });
+    if (update.count) await tx.prospectCandidateFeedback.deleteMany({ where: { candidateId: id, outcome: 'DISCARDED' } });
     return update.count ? { kind: 'updated' as const, discardedAt: null } : { kind: 'conflict' as const };
   });
 

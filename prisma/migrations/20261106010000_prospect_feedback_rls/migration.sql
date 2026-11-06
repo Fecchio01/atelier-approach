@@ -1,0 +1,1 @@
+ALTER TABLE "ProspectCandidateFeedback" ENABLE ROW LEVEL SECURITY;

@@ -166,6 +166,19 @@ enum ProspectCandidateStatus {
   PROMOTED
 }
 
+enum ProspectFeedbackOutcome {
+  ACCEPTED
+  DISCARDED
+}
+
+enum ProspectFeedbackReason {
+  DUPLICATE
+  WRONG_NICHE
+  INVALID_BUSINESS
+  INSUFFICIENT_DATA
+  OTHER
+}
+
 model Lead {
   id                          String             @id @default(cuid())
   version                     Int                @default(1)
@@ -668,11 +681,27 @@ model ProspectCandidate {
   lead                Lead?                       @relation(fields: [leadId], references: [id], onDelete: SetNull)
   campaigns           ResearchCampaignCandidate[]
   evidence            ResearchEvidence[]
+  feedback            ProspectCandidateFeedback?
 
   @@unique([source, externalId])
   @@index([normalizedName, latitude, longitude])
   @@index([status, createdAt])
   @@index([discardedAt])
+}
+
+model ProspectCandidateFeedback {
+  id          String                  @id @default(cuid())
+  candidateId String                  @unique
+  outcome     ProspectFeedbackOutcome
+  reason      ProspectFeedbackReason?
+  category    String?
+  updatedById String?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  candidate   ProspectCandidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([category, outcome, reason])
+  @@index([updatedAt])
 }
 
 model ResearchCampaignCandidate {
