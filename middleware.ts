@@ -16,8 +16,9 @@ export default auth((request) => {
     || pathname.startsWith('/api/cron/autonomous-prospecting-hour/');
   const isMessagingWebhook = pathname === '/api/webhooks/messaging';
   const isPublicBrandAsset = pathname.startsWith('/brand/');
+  const isPublicPwaAsset = pathname === '/manifest.webmanifest' || pathname.startsWith('/icons/');
 
-  if (pathname === '/login' || isRequiredAuthEndpoint || isPublicCronEndpoint || isMessagingWebhook || isPublicBrandAsset) {
+  if (pathname === '/login' || isRequiredAuthEndpoint || isPublicCronEndpoint || isMessagingWebhook || isPublicBrandAsset || isPublicPwaAsset) {
     return NextResponse.next();
   }
 
