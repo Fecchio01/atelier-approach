@@ -8,6 +8,7 @@ import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { startProspectingCampaign } from '@/lib/research/runtime';
 import { getSaoPauloDateKey } from '@/lib/research/autonomous';
 import { countVisibleCampaignCandidates } from '@/lib/research/candidates';
+import { isCampaignBatchReady } from '@/lib/research/campaign-batch';
 
 export const runtime = 'nodejs';
 
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
       nationalFallbackUsed: Boolean(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
         && (campaign.checkpoint as { nationalFallbackUsed?: unknown }).nationalFallbackUsed === true),
       candidateCount: availableCandidateCount,
-      candidates: campaign.status === 'COMPLETED' && !campaign.error ? campaign.candidates.map((item) => {
+      candidates: isCampaignBatchReady({ ...campaign, candidateCount: availableCandidateCount }) ? campaign.candidates.map((item) => {
       const lead = leadByExternalId.get(item.candidate.externalId);
       return { ...item, candidate: {
         ...item.candidate,

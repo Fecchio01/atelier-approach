@@ -139,8 +139,23 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
       });
     }
 
-    if (campaign.status === 'RUNNING' && (campaign.workflowRunId || campaign.dispatchAttemptedAt)) {
+    if (campaign.status === 'RUNNING' && campaign.workflowRunId) {
       return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true });
+    }
+    if (campaign.status === 'RUNNING' && campaign.dispatchAttemptedAt) {
+      const leaseUntil = campaign.dispatchLeaseUntil?.getTime()
+        ?? campaign.dispatchAttemptedAt.getTime() + DISPATCH_LEASE_MS;
+      if (leaseUntil > Date.now()) {
+        return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true });
+      }
+
+      const recovered = await prisma.researchCampaign.updateMany({
+        where: { id: campaign.id, status: 'RUNNING', workflowRunId: null, dispatchAttemptedAt: campaign.dispatchAttemptedAt },
+        data: { status: 'QUEUED', dispatchLeaseUntil: null, dispatchAttemptedAt: null }
+      });
+      if (!recovered.count) return Response.json({ campaignId: campaign.id, status: 'RUNNING', reused: true });
+      campaign = await prisma.researchCampaign.findUnique({ where: { id: campaign.id } });
+      if (!campaign) return Response.json({ error: 'Não foi possível recuperar a pesquisa diária.' }, { status: 500 });
     }
 
     const now = new Date();

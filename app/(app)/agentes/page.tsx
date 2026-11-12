@@ -6,6 +6,8 @@ import { automationPolicy } from '@/lib/agents/policy';
 import { prisma } from '@/lib/db';
 import { analyzeProspect, getSaoPauloDateKey } from '@/lib/research/autonomous';
 import { getCategoryCalibration } from '@/lib/research/feedback';
+import { countVisibleCampaignCandidates } from '@/lib/research/candidates';
+import { isCampaignBatchReady } from '@/lib/research/campaign-batch';
 
 export default async function AgentsPage() {
   const [settings, activeCadences, waitingTasks, records] = await Promise.all([
@@ -23,10 +25,11 @@ export default async function AgentsPage() {
     where: { osmId: { in: records.flatMap((campaign) => campaign.candidates.map(({ candidate }) => candidate.externalId)) } },
     select: { id: true, osmId: true, discardedAt: true }
   });
+  const availableCounts = await Promise.all(records.map((campaign) => countVisibleCampaignCandidates(prisma, campaign.id)));
   const categories = [...new Set(records.flatMap((campaign) => campaign.candidates.map(({ candidate }) => candidate.category).filter((value): value is string => Boolean(value?.trim()))))];
   const calibrations = new Map(await Promise.all(categories.map(async (category) => [category, await getCategoryCalibration(category)] as const)));
   const leadByExternalId = new Map(matchingLeads.map((lead) => [lead.osmId, lead]));
-  const campaigns: AutonomousCampaign[] = records.map((campaign) => ({
+  const campaigns: AutonomousCampaign[] = records.map((campaign, index) => ({
     nationalFallbackUsed: Boolean(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
       && (campaign.checkpoint as { nationalFallbackUsed?: unknown }).nationalFallbackUsed === true),
     id: campaign.id,
@@ -37,12 +40,12 @@ export default async function AgentsPage() {
     city: campaign.city,
     status: campaign.status,
     maxCandidates: campaign.maxCandidates,
-    candidateCount: campaign.candidateCount,
+    candidateCount: availableCounts[index] ?? 0,
     maxAreas: campaign.maxAreas,
     completedAreas: campaign.completedAreas,
     error: campaign.error,
     createdAt: campaign.createdAt.toISOString(),
-    candidates: campaign.status === 'COMPLETED' && !campaign.error ? campaign.candidates.map(({ candidate, firstSeenAt }) => ({
+    candidates: isCampaignBatchReady({ ...campaign, candidateCount: availableCounts[index] ?? 0 }) ? campaign.candidates.map(({ candidate, firstSeenAt }) => ({
       firstSeenAt: firstSeenAt.toISOString(),
       candidate: {
         id: candidate.id,

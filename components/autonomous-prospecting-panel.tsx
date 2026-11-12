@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowClockwiseIcon, ArrowSquareOutIcon, CircleNotchIcon, MapPinIcon, SparkleIcon } from '@phosphor-icons/react';
 import { normalizePublishedPhone, toWhatsAppHref } from '@/lib/contact-links';
+import { isCampaignBatchReady } from '@/lib/research/campaign-batch';
 type FeedbackReason = 'DUPLICATE' | 'WRONG_NICHE' | 'INVALID_BUSINESS' | 'INSUFFICIENT_DATA' | 'OTHER';
 type FeedbackSelection = FeedbackReason | '';
 const feedbackReasonLabels: Record<FeedbackReason, string> = {
@@ -79,6 +80,7 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   const [discardingId, setDiscardingId] = useState<string | null>(null);
   const [showDiscarded, setShowDiscarded] = useState(false);
   const [discardReasons, setDiscardReasons] = useState<Record<string, FeedbackSelection>>({});
+  const resumeAttempted = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
     try {
@@ -112,6 +114,18 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
     const timer = window.setInterval(() => void refresh(), 15_000);
     return () => window.clearInterval(timer);
   }, [campaigns, refresh]);
+
+  useEffect(() => {
+    if (paused || !enabled) return;
+    const incomplete = campaigns.find((campaign) => campaign.status === 'COMPLETED'
+      && campaign.candidateCount < campaign.maxCandidates
+      && !campaign.nationalFallbackUsed);
+    if (!incomplete || resumeAttempted.current.has(incomplete.id)) return;
+    resumeAttempted.current.add(incomplete.id);
+    void fetch('/api/agents/campaigns/resume-today', { method: 'POST' })
+      .then(() => refresh())
+      .catch(() => { /* scheduled automation will retry if this request fails */ });
+  }, [campaigns, enabled, paused, refresh]);
 
   const latest = campaigns[0];
   const running = campaigns.some((campaign) => campaign.status === 'RUNNING' || campaign.status === 'QUEUED');
@@ -224,13 +238,16 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
         const campaignLimit = Math.min(dailyLimit, campaign.maxCandidates);
         const activeCandidates = campaign.candidates.filter(({ candidate }) => !candidate.discardedAt && candidate.status !== 'REJECTED').slice(0, campaignLimit);
         const discardedCandidates = campaign.candidates.filter(({ candidate }) => Boolean(candidate.discardedAt) && !candidate.leadId);
-        const batchReady = campaign.status === 'COMPLETED' && !campaign.error;
+        const batchReady = isCampaignBatchReady(campaign);
         const legacyPartial = campaign.status === 'COMPLETED' && Boolean(campaign.error) && !campaign.error?.startsWith('O Darwin consultou');
-        const campaignStatusLabel = legacyPartial ? 'Aguardando ampliação automática'
+        const underfilledLegacyBatch = campaign.status === 'COMPLETED' && !campaign.error && campaign.candidateCount < campaign.maxCandidates;
+        const campaignStatusLabel = legacyPartial || underfilledLegacyBatch ? 'Aguardando completar o lote'
           : campaign.status === 'COMPLETED' && campaign.error ? 'Lote incompleto' : statusLabels[campaign.status];
         const campaignError = legacyPartial
           ? 'A pesquisa parcial não foi liberada. O Darwin vai ampliar a busca na próxima execução automática e só mostrará as empresas quando completar o lote.'
-          : campaign.error;
+          : underfilledLegacyBatch
+            ? `A pesquisa encontrou ${campaign.candidateCount} de ${campaign.maxCandidates}. O Darwin vai retomar a busca automaticamente e só mostrará as empresas quando completar o lote.`
+            : campaign.error;
         const renderCandidate = ({ candidate }: { candidate: AutonomousCandidate }) => <CandidateCard
           key={candidate.id}
           candidate={candidate}
