@@ -41,24 +41,19 @@ export async function GET(request: Request) {
   const leadByExternalId = new Map(matchingLeads.map((lead) => [lead.osmId, lead]));
   const campaignsWithLeadState = await Promise.all(campaigns.map(async (campaign) => {
     const availableCandidateCount = await countVisibleCampaignCandidates(prisma, campaign.id);
-    const checkpoint = campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
-      ? campaign.checkpoint as { retryUsed?: unknown; retryCount?: unknown }
-      : {};
-    const retryCount = typeof checkpoint.retryCount === 'number' && Number.isInteger(checkpoint.retryCount)
-      ? checkpoint.retryCount
-      : checkpoint.retryUsed === true ? 1 : 0;
     return {
       ...campaign,
+      nationalFallbackUsed: Boolean(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
+        && (campaign.checkpoint as { nationalFallbackUsed?: unknown }).nationalFallbackUsed === true),
       candidateCount: availableCandidateCount,
-      retryAvailable: autonomousToday && campaign.status === 'COMPLETED' && availableCandidateCount < campaign.maxCandidates && retryCount < 2,
-      candidates: campaign.candidates.map((item) => {
+      candidates: campaign.status === 'COMPLETED' && !campaign.error ? campaign.candidates.map((item) => {
       const lead = leadByExternalId.get(item.candidate.externalId);
       return { ...item, candidate: {
         ...item.candidate,
         leadId: item.candidate.leadId ?? lead?.id ?? null,
         leadIsDiscarded: Boolean(lead?.discardedAt)
       } };
-      })
+      }) : []
     };
   }));
   return Response.json({ campaigns: campaignsWithLeadState }, { headers: { 'Cache-Control': 'private, no-store' } });

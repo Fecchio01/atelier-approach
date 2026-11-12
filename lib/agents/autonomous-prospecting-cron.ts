@@ -1,12 +1,12 @@
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db';
-import { AUTONOMOUS_CAMPAIGN_OWNER_ID, chooseDailyProspectingTarget, getSaoPauloDateKey } from '@/lib/research/autonomous';
+import { AUTONOMOUS_CAMPAIGN_OWNER_ID, AUTONOMOUS_MAX_AREA_QUERIES, AUTONOMOUS_NATIONAL_AREA_QUERIES, chooseDailyProspectingTarget, getSaoPauloDateKey } from '@/lib/research/autonomous';
 import { resolveProspectSearchPlan } from '@/lib/research/search-service';
+import { countVisibleCampaignCandidates } from '@/lib/research/candidates';
 import { startProspectingCampaign } from '@/lib/research/runtime';
 
 const INITIAL_AREAS = 8;
-const MAX_AREAS = 64;
 const DISPATCH_LEASE_MS = 60_000;
 
 function getSaoPauloHour(now = new Date()) {
@@ -68,7 +68,7 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
             region: target.region,
             city: target.city,
             maxCandidates: settings?.prospectingDailyLimit ?? 10,
-            maxAreas: MAX_AREAS,
+            maxAreas: AUTONOMOUS_MAX_AREA_QUERIES,
             criteria: { automatic: true, phoneOnly: false, digitalPresence: false },
             checkpoint: { areas: plan.areas },
             release: plan.release
@@ -82,7 +82,52 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
 
     if (!campaign) return Response.json({ error: 'Não foi possível salvar a pesquisa diária.' }, { status: 500 });
     if (campaign.status === 'COMPLETED') {
-      return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true });
+      const availableCount = await countVisibleCampaignCandidates(prisma, campaign.id);
+      if (availableCount >= campaign.maxCandidates) {
+        if (campaign.candidateCount !== availableCount || campaign.error) {
+          await prisma.researchCampaign.updateMany({
+            where: { id: campaign.id, status: 'COMPLETED', checkpointVersion: campaign.checkpointVersion },
+            data: { candidateCount: availableCount, error: null }
+          });
+        }
+        return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true });
+      }
+
+      const checkpoint = campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
+        ? campaign.checkpoint as { nationalFallbackUsed?: unknown }
+        : {};
+      if (checkpoint.nationalFallbackUsed === true) {
+        return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true, shortfall: true });
+      }
+
+      const plan = await resolveProspectSearchPlan({
+        region: campaign.region,
+        national: true,
+        maxAreas: AUTONOMOUS_NATIONAL_AREA_QUERIES
+      });
+      if (!plan.areas.length) {
+        return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true, shortfall: true });
+      }
+      const resumed = await prisma.researchCampaign.updateMany({
+        where: { id: campaign.id, status: 'COMPLETED', checkpointVersion: campaign.checkpointVersion },
+        data: {
+          status: 'QUEUED',
+          error: null,
+          workflowRunId: null,
+          dispatchLeaseUntil: null,
+          dispatchAttemptedAt: null,
+          maxAreas: Math.max(campaign.maxAreas, campaign.completedAreas + AUTONOMOUS_NATIONAL_AREA_QUERIES),
+          checkpoint: { areas: plan.areas, nationalFallbackUsed: true },
+          checkpointVersion: { increment: 1 },
+          candidateCount: availableCount,
+          release: plan.release
+        }
+      });
+      if (!resumed.count) {
+        return Response.json({ campaignId: campaign.id, status: 'COMPLETED', reused: true });
+      }
+      campaign = await prisma.researchCampaign.findUnique({ where: { id: campaign.id } });
+      if (!campaign) return Response.json({ error: 'Não foi possível retomar a pesquisa diária.' }, { status: 500 });
     }
     if ((campaign.status === 'FAILED' || campaign.status === 'CANCELLED') && campaign.dispatchAttemptedAt) {
       return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true });

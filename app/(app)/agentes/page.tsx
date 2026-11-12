@@ -27,6 +27,8 @@ export default async function AgentsPage() {
   const calibrations = new Map(await Promise.all(categories.map(async (category) => [category, await getCategoryCalibration(category)] as const)));
   const leadByExternalId = new Map(matchingLeads.map((lead) => [lead.osmId, lead]));
   const campaigns: AutonomousCampaign[] = records.map((campaign) => ({
+    nationalFallbackUsed: Boolean(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
+      && (campaign.checkpoint as { nationalFallbackUsed?: unknown }).nationalFallbackUsed === true),
     id: campaign.id,
     idempotencyKey: campaign.idempotencyKey,
     name: campaign.name,
@@ -39,11 +41,8 @@ export default async function AgentsPage() {
     maxAreas: campaign.maxAreas,
     completedAreas: campaign.completedAreas,
     error: campaign.error,
-    retryAvailable: campaign.status === 'COMPLETED' && campaign.candidateCount === 0
-      && !(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
-        && (campaign.checkpoint as { retryUsed?: unknown }).retryUsed === true),
     createdAt: campaign.createdAt.toISOString(),
-    candidates: campaign.candidates.map(({ candidate, firstSeenAt }) => ({
+    candidates: campaign.status === 'COMPLETED' && !campaign.error ? campaign.candidates.map(({ candidate, firstSeenAt }) => ({
       firstSeenAt: firstSeenAt.toISOString(),
       candidate: {
         id: candidate.id,
@@ -81,7 +80,7 @@ export default async function AgentsPage() {
         })(),
         evidence: candidate.evidence.map(({ id, field, source, verified }) => ({ id, field, source, verified }))
       }
-    }))
+    })) : []
   }));
 
   return <section className="mx-auto max-w-[1520px] px-5 py-7 md:px-8 md:py-9">

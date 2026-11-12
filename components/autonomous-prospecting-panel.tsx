@@ -44,6 +44,7 @@ export type AutonomousCandidate = {
 };
 export type AutonomousCampaign = {
   id: string;
+  nationalFallbackUsed?: boolean;
   idempotencyKey: string;
   name: string;
   niche: string;
@@ -55,7 +56,6 @@ export type AutonomousCampaign = {
   completedAreas: number;
   maxAreas: number;
   error: string | null;
-  retryAvailable?: boolean;
   createdAt: string;
   candidates: Array<{ candidate: AutonomousCandidate; firstSeenAt: string }>;
 };
@@ -72,7 +72,6 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
 }) {
   const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [busy, setBusy] = useState(false);
-  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState('');
   const [promotingId, setPromotingId] = useState<string | null>(null);
   const [promotionError, setPromotionError] = useState<Record<string, string>>({});
@@ -128,21 +127,6 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
       setCampaigns(data.campaigns);
     } catch (refreshError) { setError(refreshError instanceof Error ? refreshError.message : 'Falha ao atualizar.'); }
     finally { setBusy(false); }
-  }
-
-  async function retryToday() {
-    setRetrying(true);
-    setError('');
-    try {
-      const response = await fetch('/api/agents/campaigns/retry-daily', { method: 'POST' });
-      const data = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(data.error ?? 'Não consegui reiniciar a pesquisa.');
-      await refresh();
-    } catch (retryError) {
-      setError(retryError instanceof Error ? retryError.message : 'Não consegui reiniciar a pesquisa.');
-    } finally {
-      setRetrying(false);
-    }
   }
 
   async function addToFunnel(candidateId: string, confirmIdentityReview = false) {
@@ -202,8 +186,12 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
     }
   }
 
-  const discardedCount = campaigns.reduce((count, campaign) => count + campaign.candidates.filter(({ candidate }) => candidate.discardedAt && !candidate.leadId).length, 0);
-  const activeCount = campaigns.reduce((count, campaign) => count + campaign.candidates.filter(({ candidate }) => !candidate.discardedAt && candidate.status !== 'REJECTED').length, 0);
+  const discardedCount = campaigns.reduce((count, campaign) => campaign.status === 'COMPLETED' && !campaign.error
+    ? count + campaign.candidates.filter(({ candidate }) => candidate.discardedAt && !candidate.leadId).length
+    : count, 0);
+  const activeCount = campaigns.reduce((count, campaign) => campaign.status === 'COMPLETED' && !campaign.error
+    ? count + campaign.candidates.filter(({ candidate }) => !candidate.discardedAt && candidate.status !== 'REJECTED').length
+    : count, 0);
 
   return <section aria-labelledby="autonomous-research-heading" className="mt-4 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-3 sm:mt-6 sm:p-5">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.08] pb-4">
@@ -236,7 +224,13 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
         const campaignLimit = Math.min(dailyLimit, campaign.maxCandidates);
         const activeCandidates = campaign.candidates.filter(({ candidate }) => !candidate.discardedAt && candidate.status !== 'REJECTED').slice(0, campaignLimit);
         const discardedCandidates = campaign.candidates.filter(({ candidate }) => Boolean(candidate.discardedAt) && !candidate.leadId);
-        const retryButton = campaign.retryAvailable ? <button type="button" onClick={() => void retryToday()} disabled={retrying} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/35 px-3 text-xs font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/[0.06] disabled:opacity-50">{retrying ? <CircleNotchIcon size={15} className="animate-spin" /> : <ArrowClockwiseIcon size={15} />} Buscar mais empresas</button> : null;
+        const batchReady = campaign.status === 'COMPLETED' && !campaign.error;
+        const legacyPartial = campaign.status === 'COMPLETED' && Boolean(campaign.error) && !campaign.error?.startsWith('O Darwin consultou');
+        const campaignStatusLabel = legacyPartial ? 'Aguardando ampliação automática'
+          : campaign.status === 'COMPLETED' && campaign.error ? 'Lote incompleto' : statusLabels[campaign.status];
+        const campaignError = legacyPartial
+          ? 'A pesquisa parcial não foi liberada. O Darwin vai ampliar a busca na próxima execução automática e só mostrará as empresas quando completar o lote.'
+          : campaign.error;
         const renderCandidate = ({ candidate }: { candidate: AutonomousCandidate }) => <CandidateCard
           key={candidate.id}
           candidate={candidate}
@@ -258,20 +252,19 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="font-semibold">{campaign.niche}</h3>
-              <p className="mt-1 flex items-center gap-1 text-sm text-white/50"><MapPinIcon size={15} /> {campaign.city ? `${campaign.city} · ` : ''}{campaign.region}</p>
+              <p className="mt-1 flex items-center gap-1 text-sm text-white/50"><MapPinIcon size={15} /> {campaign.nationalFallbackUsed ? 'Brasil · cobertura nacional' : `${campaign.city ? `${campaign.city} · ` : ''}${campaign.region}`}</p>
             </div>
-            <span className={`rounded-full border px-3 py-1 text-xs ${campaign.status === 'FAILED' ? 'border-amber-200/30 text-amber-100' : 'border-[var(--atelier-green)]/25 text-[var(--atelier-green)]'}`}>{statusLabels[campaign.status]}</span>
+            <span className={`rounded-full border px-3 py-1 text-xs ${campaign.status === 'FAILED' || campaign.error ? 'border-amber-200/30 text-amber-100' : 'border-[var(--atelier-green)]/25 text-[var(--atelier-green)]'}`}>{campaignStatusLabel}</span>
           </div>
           {(campaign.status === 'RUNNING' || campaign.status === 'QUEUED') ? <div className="mt-4" role="status">
             <div className="flex justify-between text-xs text-white/50"><span>Áreas consultadas</span><span>{campaign.completedAreas}/{campaign.maxAreas}</span></div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-[var(--atelier-green)] transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${Math.min(100, Math.round(campaign.completedAreas / Math.max(1, campaign.maxAreas) * 100))}%` }} /></div>
           </div> : null}
-          {campaign.error ? <p className="mt-3 rounded-lg border border-amber-200/15 bg-amber-100/[0.04] p-3 text-xs leading-5 text-amber-100">{campaign.error}</p> : null}
-          {activeCandidates.length ? <>
+          {campaignError ? <p role="status" className="mt-3 rounded-lg border border-amber-200/15 bg-amber-100/[0.04] p-3 text-xs leading-5 text-amber-100">{campaignError}</p> : null}
+          {batchReady && activeCandidates.length ? <>
             <ul className="mt-4 divide-y divide-white/[0.08]">{activeCandidates.map(renderCandidate)}</ul>
-            {campaign.status === 'COMPLETED' && campaign.retryAvailable ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-white/10 p-3 sm:p-4"><p className="text-sm text-white/55">Encontramos {activeCandidates.length} de {campaignLimit} empresas nesta pesquisa.</p>{retryButton}</div> : null}
-          </> : campaign.status === 'COMPLETED' ? <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-white/10 p-3 sm:mt-4 sm:p-4"><p className="text-sm text-white/55">Nenhuma empresa encontrada hoje.</p>{retryButton}</div> : null}
-          {showDiscarded && discardedCandidates.length ? <div className="mt-4 rounded-lg border border-white/[0.08] p-3">
+          </> : campaign.status === 'RUNNING' || campaign.status === 'QUEUED' ? <p className="mt-3 rounded-lg border border-dashed border-white/10 p-3 text-sm text-white/55">As empresas só aparecem aqui quando o Darwin completar o lote de {campaignLimit}.</p> : null}
+          {batchReady && showDiscarded && discardedCandidates.length ? <div className="mt-4 rounded-lg border border-white/[0.08] p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-white/45">Descartadas nesta pesquisa</p>
             <ul className="mt-3 divide-y divide-white/[0.08]">{discardedCandidates.map(renderCandidate)}</ul>
           </div> : null}

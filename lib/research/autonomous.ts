@@ -1,6 +1,9 @@
 import type { Prisma } from '@prisma/client';
 
 export const AUTONOMOUS_CAMPAIGN_OWNER_ID = 'team';
+export const AUTONOMOUS_CITY_AREA_QUERIES = 32;
+export const AUTONOMOUS_NATIONAL_AREA_QUERIES = 128;
+export const AUTONOMOUS_MAX_AREA_QUERIES = AUTONOMOUS_CITY_AREA_QUERIES + AUTONOMOUS_NATIONAL_AREA_QUERIES;
 
 const NICHE_CYCLE = [
   { name: 'barbearia', terms: ['barber', 'barber shop', 'barbershop'] },
