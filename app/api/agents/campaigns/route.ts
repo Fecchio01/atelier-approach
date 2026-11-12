@@ -40,6 +40,9 @@ export async function GET(request: Request) {
   const leadByExternalId = new Map(matchingLeads.map((lead) => [lead.osmId, lead]));
   const campaignsWithLeadState = campaigns.map((campaign) => ({
     ...campaign,
+    retryAvailable: autonomousToday && campaign.status === 'COMPLETED' && campaign.candidateCount === 0
+      && !(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
+        && (campaign.checkpoint as { retryUsed?: unknown }).retryUsed === true),
     candidates: campaign.candidates.map((item) => {
       const lead = leadByExternalId.get(item.candidate.externalId);
       return { ...item, candidate: {

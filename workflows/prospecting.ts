@@ -3,7 +3,7 @@ import { persistCampaignCandidates } from '@/lib/research/candidates';
 import { enrichProspectBatch, searchProspectArea, splitProspectSearchArea } from '@/lib/research/search-service';
 import type { OvertureSearchArea } from '@/lib/overture';
 
-type CampaignCheckpoint = { areas: OvertureSearchArea[] };
+type CampaignCheckpoint = { areas: OvertureSearchArea[]; retryUsed?: boolean };
 
 export async function prospectingCampaign(campaignId: string) {
   'use workflow';
@@ -25,7 +25,14 @@ async function processProspectingCampaignArea(campaignId: string) {
   if (campaign.candidateCount >= campaign.maxCandidates || checkpoint.areas.length === 0) {
     await prisma.researchCampaign.updateMany({
       where: { id: campaign.id, status: 'RUNNING' },
-      data: { status: 'COMPLETED', error: null, dispatchLeaseUntil: null }
+      data: {
+        status: 'COMPLETED',
+        error: campaign.candidateCount === 0
+          ? 'A fonte não encontrou empresas nas áreas consultadas. O Darwin ampliou a busca; tente novamente amanhã ou ajuste o nicho.'
+          : null,
+        dispatchLeaseUntil: null,
+        checkpoint: { areas: [], ...(checkpoint.retryUsed ? { retryUsed: true } : {}) }
+      }
     });
     return { completed: true, status: 'COMPLETED' };
   }
@@ -38,20 +45,28 @@ async function processProspectingCampaignArea(campaignId: string) {
     const filtered = enriched.filter((business) => (!campaign.criteria || !readBooleanCriterion(campaign.criteria, 'phoneOnly') || Boolean(business.phone || business.whatsapp))
       && (!campaign.criteria || !readBooleanCriterion(campaign.criteria, 'digitalPresence') || Boolean(business.website || business.instagram)));
     const batch = filtered.slice(0, remaining);
-    const nextAreas = [...(result.hitLimit ? splitProspectSearchArea(area) : []), ...checkpoint.areas.slice(1)]
+    // Search smaller tiles when the source returned no/sparse results too.
+    // Previously, only a full 100-row response was subdivided, so a broad tile
+    // with zero matches ended the campaign immediately.
+    const projectedCount = campaign.candidateCount + batch.length;
+    const shouldExpand = result.hitLimit || (projectedCount < campaign.maxCandidates && area.depth < 2);
+    const nextAreas = [...(shouldExpand ? splitProspectSearchArea(area) : []), ...checkpoint.areas.slice(1)]
       .slice(0, Math.max(0, campaign.maxAreas - campaign.completedAreas - 1));
+    const completed = projectedCount >= campaign.maxCandidates || nextAreas.length === 0;
     await prisma.$transaction(async (tx) => {
       await persistCampaignCandidates(tx, campaign.id, batch, campaign.release, campaign.niche);
       const candidateCount = await tx.researchCampaignCandidate.count({ where: { campaignId: campaign.id } });
       await tx.researchCampaign.updateMany({
         where: { id: campaign.id, status: 'RUNNING', checkpointVersion: campaign.checkpointVersion },
         data: {
-          checkpoint: { areas: nextAreas },
+          checkpoint: { areas: nextAreas, ...(checkpoint.retryUsed ? { retryUsed: true } : {}) },
           checkpointVersion: { increment: 1 },
           completedAreas: { increment: 1 },
           candidateCount,
           status: candidateCount >= campaign.maxCandidates || nextAreas.length === 0 ? 'COMPLETED' : 'RUNNING',
-          error: null,
+          error: completed && candidateCount === 0
+            ? 'A fonte não encontrou empresas nas áreas consultadas. O Darwin ampliou a busca; tente novamente amanhã ou ajuste o nicho.'
+            : null,
           dispatchLeaseUntil: null
         }
       });
@@ -75,8 +90,11 @@ async function processProspectingCampaignArea(campaignId: string) {
 
 function parseCheckpoint(value: unknown): CampaignCheckpoint {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { areas: [] };
-  const areas = (value as { areas?: unknown }).areas;
-  return { areas: Array.isArray(areas) ? areas as OvertureSearchArea[] : [] };
+  const parsed = value as { areas?: unknown; retryUsed?: unknown };
+  return {
+    areas: Array.isArray(parsed.areas) ? parsed.areas as OvertureSearchArea[] : [],
+    ...(parsed.retryUsed === true ? { retryUsed: true } : {})
+  };
 }
 
 function readBooleanCriterion(value: unknown, key: string) {

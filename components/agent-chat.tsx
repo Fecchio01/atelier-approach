@@ -100,7 +100,11 @@ export function AgentChat() {
       const response = await fetch('/api/agents/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message, ...(selectedLead ? { leadId: selectedLead.id } : {}) }),
+        body: JSON.stringify({
+          message,
+          ...(selectedLead ? { leadId: selectedLead.id } : {}),
+          conversation: messages.slice(-6).map(({ role, text }) => ({ role, text }))
+        }),
         signal: controller.signal
       });
       const payload = await response.json() as { reply?: string; draftText?: string; sources?: ChatSources; error?: string };
@@ -160,7 +164,7 @@ export function AgentChat() {
             <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><SparkleIcon size={20} weight="fill" /></span>
             <div className="min-w-0">
               <h2 ref={titleRef} tabIndex={-1} id="agent-chat-title" className="font-semibold outline-none">Darwin</h2>
-              <p className="mt-1 text-xs leading-5 text-white/45">Pesquisa, relatório semanal e dicas de abordagem</p>
+              <p className="mt-1 text-xs leading-5 text-white/45">Pesquisa · CRM · metas</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -169,13 +173,9 @@ export function AgentChat() {
           </div>
         </header>
 
-        <div className="border-b border-white/[0.07] px-4 py-2.5 text-xs leading-5 text-white/55 sm:px-5">
-          Consulto o status da pesquisa diária e os dados disponíveis do CRM; não é uma auditoria completa. A conversa fica nesta sessão até você limpá-la.
-        </div>
-
         <div ref={messagesRef} role="log" aria-label="Conversa com Darwin" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           <div className="max-w-[92%] rounded-2xl rounded-tl-md border border-white/[0.08] bg-white/[0.035] p-3.5">
-            <p className="text-sm leading-6 text-white/80">{selectedLead ? `Estou com ${selectedLead.name} em contexto. Posso resumir o cadastro ou preparar um rascunho revisável.` : 'Posso consultar se a pesquisa de hoje rodou, resumir os números do CRM ou sugerir próximos passos com base nos dados disponíveis.'}</p>
+            <p className="text-sm leading-6 text-white/80">{selectedLead ? `${selectedLead.name} está em contexto. Posso resumir ou preparar uma abordagem.` : 'Pergunte sobre a pesquisa, o CRM ou suas metas. Também posso sugerir uma abordagem.'}</p>
           </div>
           {selectedLead ? <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--atelier-green)]/20 bg-[var(--atelier-green)]/[0.04] px-3 py-2 text-xs">
             <span className="truncate text-white/70">Empresa: <strong className="text-white">{selectedLead.name}</strong></span>
@@ -215,7 +215,7 @@ export function AgentChat() {
               {loading ? <CircleNotchIcon size={18} className="animate-spin motion-reduce:animate-none" /> : <PaperPlaneTiltIcon size={18} weight="fill" />}
             </button>
           </div>
-          <p className="mt-2 px-1 text-xs text-white/50">Até 500 caracteres · rascunhos não são enviados · conversa mantida até limpar</p>
+          <p className="mt-2 px-1 text-xs text-white/50">Rascunhos são revisáveis e não são enviados automaticamente.</p>
         </form>
       </section>
     </dialog>

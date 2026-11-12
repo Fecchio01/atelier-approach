@@ -8,7 +8,11 @@ export const runtime = 'nodejs';
 const MAX_BODY_BYTES = 8_192;
 const requestSchema = z.object({
   message: z.string().trim().min(2).max(500),
-  leadId: z.string().trim().min(1).max(128).optional()
+  leadId: z.string().trim().min(1).max(128).optional(),
+  conversation: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    text: z.string().max(500)
+  }).strict()).max(6).optional()
 }).strict();
 
 export async function POST(request: Request) {
@@ -27,7 +31,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Escreva uma pergunta de até 500 caracteres.' }, { status: 400, headers: noStoreHeaders });
     }
 
-    const answer = await answerAssistantChat(parsed.data.message, parsed.data.leadId);
+    const answer = await answerAssistantChat(parsed.data.message, parsed.data.leadId, parsed.data.conversation ?? []);
     return Response.json(answer, { headers: noStoreHeaders });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) {

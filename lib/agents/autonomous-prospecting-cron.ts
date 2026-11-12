@@ -5,7 +5,8 @@ import { AUTONOMOUS_CAMPAIGN_OWNER_ID, chooseDailyProspectingTarget, getSaoPaulo
 import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { startProspectingCampaign } from '@/lib/research/runtime';
 
-const MAX_AREAS = 8;
+const INITIAL_AREAS = 8;
+const MAX_AREAS = 32;
 const DISPATCH_LEASE_MS = 60_000;
 
 function getSaoPauloHour(now = new Date()) {
@@ -53,7 +54,7 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
     }
     if (!campaign) {
       const target = chooseDailyProspectingTarget(dateKey, settings?.prospectingNiches ?? []);
-      const plan = await resolveProspectSearchPlan({ region: target.region, city: target.city, maxAreas: MAX_AREAS });
+      const plan = await resolveProspectSearchPlan({ region: target.region, city: target.city, maxAreas: INITIAL_AREAS });
       if (!plan.areas.length) throw new Error('Não foi possível definir uma área para a pesquisa diária.');
 
       try {

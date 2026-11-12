@@ -55,6 +55,7 @@ export type AutonomousCampaign = {
   completedAreas: number;
   maxAreas: number;
   error: string | null;
+  retryAvailable?: boolean;
   createdAt: string;
   candidates: Array<{ candidate: AutonomousCandidate; firstSeenAt: string }>;
 };
@@ -71,6 +72,7 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
 }) {
   const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [busy, setBusy] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState('');
   const [promotingId, setPromotingId] = useState<string | null>(null);
   const [promotionError, setPromotionError] = useState<Record<string, string>>({});
@@ -107,6 +109,21 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
       setCampaigns(data.campaigns);
     } catch (refreshError) { setError(refreshError instanceof Error ? refreshError.message : 'Falha ao atualizar.'); }
     finally { setBusy(false); }
+  }
+
+  async function retryToday() {
+    setRetrying(true);
+    setError('');
+    try {
+      const response = await fetch('/api/agents/campaigns/retry-daily', { method: 'POST' });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? 'Não consegui reiniciar a pesquisa.');
+      await refresh();
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : 'Não consegui reiniciar a pesquisa.');
+    } finally {
+      setRetrying(false);
+    }
   }
 
   async function addToFunnel(candidateId: string, confirmIdentityReview = false) {
@@ -169,14 +186,14 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   const discardedCount = campaigns.reduce((count, campaign) => count + campaign.candidates.filter(({ candidate }) => candidate.discardedAt && !candidate.leadId).length, 0);
   const activeCount = campaigns.reduce((count, campaign) => count + campaign.candidates.filter(({ candidate }) => !candidate.discardedAt && candidate.status !== 'REJECTED').length, 0);
 
-  return <section aria-labelledby="autonomous-research-heading" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
+  return <section aria-labelledby="autonomous-research-heading" className="mt-4 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-3 sm:mt-6 sm:p-5">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.08] pb-4">
       <div className="flex min-w-0 items-start gap-3">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><SparkleIcon size={21} weight="fill" /></span>
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--atelier-green)]">Pesquisa autônoma</p>
           <h2 id="autonomous-research-heading" className="mt-1 text-lg font-semibold">Pesquisa de hoje</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-white/55">Todos os dias o agente escolhe um nicho e uma capital, pesquisa empresas e analisa os dados disponíveis. Ele não cria abordagens nem envia mensagens.</p>
+          <p className="mt-1 max-w-3xl text-sm leading-5 text-white/55">Pesquisa empresas diariamente e prepara sugestões. Não altera o funil nem envia mensagens.</p>
         </div>
       </div>
       <button type="button" onClick={() => void refreshNow()} disabled={busy} aria-label="Atualizar pesquisas diárias" className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 text-sm text-white/70 transition-colors hover:border-[var(--atelier-green)]/50 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)] disabled:opacity-50">
@@ -184,7 +201,7 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
       </button>
     </header>
 
-    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:gap-3 xl:grid-cols-4">
       <StatusItem label="Automação" value={stateLabel} />
       <StatusItem label="Limite de hoje" value={`${dailyLimit} empresas`} />
       <StatusItem label="Ativas hoje" value={`${Math.min(dailyLimit, activeCount)} / ${dailyLimit}`} />
@@ -229,9 +246,9 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
             <div className="flex justify-between text-xs text-white/50"><span>Áreas consultadas</span><span>{campaign.completedAreas}/{campaign.maxAreas}</span></div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-[var(--atelier-green)] transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${Math.min(100, Math.round(campaign.completedAreas / Math.max(1, campaign.maxAreas) * 100))}%` }} /></div>
           </div> : null}
-          {campaign.error ? <p className="mt-3 text-sm text-amber-100">{campaign.error}</p> : null}
+          {campaign.error ? <p className="mt-3 rounded-lg border border-amber-200/15 bg-amber-100/[0.04] p-3 text-xs leading-5 text-amber-100">{campaign.error}</p> : null}
           {activeCandidates.length ? <ul className="mt-4 divide-y divide-white/[0.08]">{activeCandidates.map(renderCandidate)}</ul>
-            : campaign.status === 'COMPLETED' ? <p className="mt-4 rounded-lg border border-dashed border-white/10 p-4 text-sm text-white/50">Nenhuma empresa passou pelos critérios da pesquisa nessa execução.</p> : null}
+            : campaign.status === 'COMPLETED' ? <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-white/10 p-3 sm:mt-4 sm:p-4"><p className="text-sm text-white/55">Nenhuma empresa encontrada hoje.</p>{campaign.retryAvailable ? <button type="button" onClick={() => void retryToday()} disabled={retrying} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/35 px-3 text-xs font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/[0.06] disabled:opacity-50">{retrying ? <CircleNotchIcon size={15} className="animate-spin" /> : <ArrowClockwiseIcon size={15} />} Tentar outra busca</button> : null}</div> : null}
           {showDiscarded && discardedCandidates.length ? <div className="mt-4 rounded-lg border border-white/[0.08] p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-white/45">Descartadas nesta pesquisa</p>
             <ul className="mt-3 divide-y divide-white/[0.08]">{discardedCandidates.map(renderCandidate)}</ul>
@@ -239,7 +256,7 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
         </article>
       ); }) : <p className="rounded-xl border border-dashed border-white/10 p-6 text-center text-sm text-white/50">{paused || !enabled ? 'A pesquisa diária está pausada. Você pode reativá-la em Configurações.' : 'A primeira pesquisa automática será executada no próximo ciclo diário.'}</p>}
     </div>
-    <p className="mt-4 text-xs leading-5 text-white/40">A análise usa apenas os dados publicados pela fonte de pesquisa; a pontuação não confirma intenção de compra. Resultados ambíguos devem ser conferidos antes de usar.</p>
+    <details className="mt-3 text-xs leading-5 text-white/40"><summary className="min-h-10 cursor-pointer py-2">Sobre os resultados</summary><p>A pesquisa usa dados públicos da fonte disponível. Confira nome e endereço antes de adicionar uma empresa ao funil.</p></details>
   </section>;
 }
 

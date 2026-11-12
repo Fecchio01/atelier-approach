@@ -39,6 +39,9 @@ export default async function AgentsPage() {
     maxAreas: campaign.maxAreas,
     completedAreas: campaign.completedAreas,
     error: campaign.error,
+    retryAvailable: campaign.status === 'COMPLETED' && campaign.candidateCount === 0
+      && !(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
+        && (campaign.checkpoint as { retryUsed?: unknown }).retryUsed === true),
     createdAt: campaign.createdAt.toISOString(),
     candidates: campaign.candidates.map(({ candidate, firstSeenAt }) => ({
       firstSeenAt: firstSeenAt.toISOString(),
@@ -83,13 +86,13 @@ export default async function AgentsPage() {
 
   return <section className="mx-auto max-w-[1520px] px-5 py-7 md:px-8 md:py-9">
     <PageHeading eyebrow="Agente autônomo" title="Pesquisa diária de empresas" description="O agente escolhe nichos e regiões, pesquisa empresas e apresenta a análise para a equipe." />
-    <AgentNextActions />
-    <div className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 text-sm text-white/65 sm:p-5">
-      <p className="font-semibold text-white">Pesquisa programada todos os dias · análise sem custo de modelo</p>
-      <p className="mt-1">As empresas são pesquisadas na fonte Overture e analisadas pelos dados coletados. O Darwin sugere próximos passos e prepara rascunhos; tarefas só são criadas após sua confirmação, e nenhuma mensagem ou etapa do funil é alterada automaticamente.</p>
-      <p className="mt-2 text-xs text-white/45">Política {automationPolicy.version} · até {automationPolicy.maxRunsPerMemberPerDay} análises por membro/dia</p>
-    </div>
-    <AgentAutomationControl initiallyPaused={settings?.paused ?? false} activeCadences={activeCadences} waitingTasks={waitingTasks} />
     <AutonomousProspectingPanel initialCampaigns={campaigns} dailyLimit={settings?.prospectingDailyLimit ?? 10} enabled={settings?.prospectingEnabled ?? true} paused={settings?.paused ?? false} />
+    <AgentNextActions />
+    <AgentAutomationControl initiallyPaused={settings?.paused ?? false} activeCadences={activeCadences} waitingTasks={waitingTasks} />
+    <details className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 text-sm text-white/55">
+      <summary className="min-h-10 cursor-pointer py-2 font-medium text-white/75">Como o Darwin trabalha</summary>
+      <p className="mt-2">Pesquisa pública diária; sugestões e rascunhos ficam para revisão. O funil e as mensagens só mudam com ação da equipe.</p>
+      <p className="mt-2 text-xs text-white/40">Política {automationPolicy.version} · até {automationPolicy.maxRunsPerMemberPerDay} análises por membro/dia.</p>
+    </details>
   </section>;
 }
