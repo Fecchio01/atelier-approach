@@ -7,6 +7,7 @@ import { createResearchCampaignSchema } from '@/lib/research/contracts';
 import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { startProspectingCampaign } from '@/lib/research/runtime';
 import { getSaoPauloDateKey } from '@/lib/research/autonomous';
+import { countVisibleCampaignCandidates } from '@/lib/research/candidates';
 
 export const runtime = 'nodejs';
 
@@ -38,21 +39,29 @@ export async function GET(request: Request) {
     select: { id: true, osmId: true, discardedAt: true }
   });
   const leadByExternalId = new Map(matchingLeads.map((lead) => [lead.osmId, lead]));
-  const campaignsWithLeadState = campaigns.map((campaign) => ({
-    ...campaign,
-    retryAvailable: autonomousToday && campaign.status === 'COMPLETED' && campaign.candidateCount === 0
-      && !(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
-        && (campaign.checkpoint as { retryUsed?: unknown }).retryUsed === true),
-    candidates: campaign.candidates.map((item) => {
+  const campaignsWithLeadState = await Promise.all(campaigns.map(async (campaign) => {
+    const availableCandidateCount = await countVisibleCampaignCandidates(prisma, campaign.id);
+    const checkpoint = campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
+      ? campaign.checkpoint as { retryUsed?: unknown; retryCount?: unknown }
+      : {};
+    const retryCount = typeof checkpoint.retryCount === 'number' && Number.isInteger(checkpoint.retryCount)
+      ? checkpoint.retryCount
+      : checkpoint.retryUsed === true ? 1 : 0;
+    return {
+      ...campaign,
+      candidateCount: availableCandidateCount,
+      retryAvailable: autonomousToday && campaign.status === 'COMPLETED' && availableCandidateCount < campaign.maxCandidates && retryCount < 2,
+      candidates: campaign.candidates.map((item) => {
       const lead = leadByExternalId.get(item.candidate.externalId);
       return { ...item, candidate: {
         ...item.candidate,
         leadId: item.candidate.leadId ?? lead?.id ?? null,
         leadIsDiscarded: Boolean(lead?.discardedAt)
       } };
-    })
+      })
+    };
   }));
-  return Response.json({ campaigns: campaignsWithLeadState });
+  return Response.json({ campaigns: campaignsWithLeadState }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function POST(request: Request) {

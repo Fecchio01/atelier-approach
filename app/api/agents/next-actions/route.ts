@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db';
 import { createHumanCrmActor } from '@/lib/crm/actor';
 import { executeCrmCommand, withCrmActivityActor } from '@/lib/crm/commands';
 import { buildNextBestActions, getSaoPauloDateKey, saoPauloDayBounds, type NextActionLead } from '@/lib/agents/next-best-actions';
+import { countVisibleCampaignCandidates } from '@/lib/research/candidates';
 
 export const runtime = 'nodejs';
 
@@ -41,16 +42,17 @@ export async function GET() {
     prisma.followUp.count({ where: { state: 'PENDING', dueDate: { lt: dayStart } } }),
     prisma.researchCampaign.findUnique({
       where: { idempotencyKey: `autonomous:${today}` },
-      select: { status: true, candidateCount: true, candidates: { where: { candidate: { status: 'REVIEW_IDENTITY' } }, select: { candidateId: true } } }
+      select: { id: true, status: true, candidates: { where: { candidate: { status: 'REVIEW_IDENTITY', discardedAt: null, leadId: null } }, select: { candidateId: true } } }
     })
   ]);
 
+  const availableCandidateCount = campaign ? await countVisibleCampaignCandidates(prisma, campaign.id) : 0;
   const leadsWithOpenWork = new Set([...pendingTasks, ...pendingFollowUps].map(({ leadId }) => leadId));
   const suggestions = buildNextBestActions(leads as NextActionLead[], leadsWithOpenWork, now);
   return Response.json({
     preparedAt: now.toISOString(),
     summary: {
-      research: { status: campaign?.status ?? 'NOT_RUN', candidates: campaign?.candidateCount ?? 0 },
+      research: { status: campaign?.status ?? 'NOT_RUN', candidates: availableCandidateCount },
       identityPending: campaign?.candidates.length ?? 0,
       overdueFollowUps: overdueFollowUpCount,
       actionableSuggestions: suggestions.length

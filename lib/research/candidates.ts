@@ -3,6 +3,62 @@ import type { Prisma } from '@prisma/client';
 import type { ExternalBusiness } from '@/lib/osm';
 import { analyzeProspect } from '@/lib/research/autonomous';
 
+type CandidateQueries = Pick<Prisma.TransactionClient, 'prospectCandidate' | 'researchCampaignCandidate' | 'lead'>;
+const AVAILABLE_CANDIDATE_STATUSES = ['NEW', 'REVIEW_IDENTITY', 'APPROVED'] as const;
+
+/** Match the count shown in Darwin: campaign results that have not been rejected or discarded. */
+export async function countVisibleCampaignCandidates(db: CandidateQueries, campaignId: string) {
+  const linkedCandidates = await db.researchCampaignCandidate.findMany({
+    where: {
+      campaignId,
+      candidate: {
+        status: { not: 'REJECTED' },
+        discardedAt: null
+      }
+    },
+    select: { candidateId: true }
+  });
+  return linkedCandidates.length;
+}
+
+/** Avoid wasting enrichment and area capacity on previously discarded/promoted/CRM-linked leads. */
+export async function filterAvailableCampaignBusinesses(
+  db: CandidateQueries,
+  campaignId: string,
+  businesses: ExternalBusiness[]
+) {
+  if (!businesses.length) return [];
+
+  const externalIds = [...new Set(businesses.map(({ osmId }) => osmId))];
+  const sources = [...new Set(businesses.map(({ source }) => source ?? 'Overture'))];
+  const [existingCandidates, linkedCandidates, existingLeads] = await Promise.all([
+    db.prospectCandidate.findMany({
+      where: { source: { in: sources }, externalId: { in: externalIds } },
+      select: { source: true, externalId: true, status: true, discardedAt: true, leadId: true }
+    }),
+    db.researchCampaignCandidate.findMany({
+      where: { campaignId, candidate: { source: { in: sources }, externalId: { in: externalIds } } },
+      select: { candidate: { select: { source: true, externalId: true } } }
+    }),
+    db.lead.findMany({ where: { osmId: { in: externalIds } }, select: { osmId: true } })
+  ]);
+
+  const key = (source: string, externalId: string) => `${source}:${externalId}`;
+  const existingByKey = new Map(existingCandidates.map((candidate) => [key(candidate.source, candidate.externalId), candidate]));
+  const alreadyLinked = new Set(linkedCandidates.map(({ candidate }) => key(candidate.source, candidate.externalId)));
+  const existingLeadIds = new Set(existingLeads.map(({ osmId }) => osmId));
+
+  return businesses.filter((business) => {
+    const source = business.source ?? 'Overture';
+    const businessKey = key(source, business.osmId);
+    const existing = existingByKey.get(businessKey);
+    if (alreadyLinked.has(businessKey) || existingLeadIds.has(business.osmId)) return false;
+    if (!existing) return true;
+    return AVAILABLE_CANDIDATE_STATUSES.includes(existing.status as typeof AVAILABLE_CANDIDATE_STATUSES[number])
+      && !existing.discardedAt && !existing.leadId;
+  });
+}
+
 const EXTRACTOR_VERSION = 'overture-enrichment-v1';
 
 export function normalizeCandidateName(value: string) {

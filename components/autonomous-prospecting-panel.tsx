@@ -90,6 +90,25 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   }, []);
 
   useEffect(() => {
+    const refreshWhenActive = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+
+    // The page can be restored from App Router state or the browser's back/forward cache.
+    // Re-read the persisted campaign whenever the user returns to Darwin.
+    void refresh();
+    window.addEventListener('pageshow', refreshWhenActive);
+    window.addEventListener('focus', refreshWhenActive);
+    document.addEventListener('visibilitychange', refreshWhenActive);
+
+    return () => {
+      window.removeEventListener('pageshow', refreshWhenActive);
+      window.removeEventListener('focus', refreshWhenActive);
+      document.removeEventListener('visibilitychange', refreshWhenActive);
+    };
+  }, [refresh]);
+
+  useEffect(() => {
     if (!campaigns.some((campaign) => campaign.status === 'QUEUED' || campaign.status === 'RUNNING')) return;
     const timer = window.setInterval(() => void refresh(), 15_000);
     return () => window.clearInterval(timer);
@@ -217,6 +236,7 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
         const campaignLimit = Math.min(dailyLimit, campaign.maxCandidates);
         const activeCandidates = campaign.candidates.filter(({ candidate }) => !candidate.discardedAt && candidate.status !== 'REJECTED').slice(0, campaignLimit);
         const discardedCandidates = campaign.candidates.filter(({ candidate }) => Boolean(candidate.discardedAt) && !candidate.leadId);
+        const retryButton = campaign.retryAvailable ? <button type="button" onClick={() => void retryToday()} disabled={retrying} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/35 px-3 text-xs font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/[0.06] disabled:opacity-50">{retrying ? <CircleNotchIcon size={15} className="animate-spin" /> : <ArrowClockwiseIcon size={15} />} Buscar mais empresas</button> : null;
         const renderCandidate = ({ candidate }: { candidate: AutonomousCandidate }) => <CandidateCard
           key={candidate.id}
           candidate={candidate}
@@ -247,8 +267,10 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-[var(--atelier-green)] transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${Math.min(100, Math.round(campaign.completedAreas / Math.max(1, campaign.maxAreas) * 100))}%` }} /></div>
           </div> : null}
           {campaign.error ? <p className="mt-3 rounded-lg border border-amber-200/15 bg-amber-100/[0.04] p-3 text-xs leading-5 text-amber-100">{campaign.error}</p> : null}
-          {activeCandidates.length ? <ul className="mt-4 divide-y divide-white/[0.08]">{activeCandidates.map(renderCandidate)}</ul>
-            : campaign.status === 'COMPLETED' ? <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-white/10 p-3 sm:mt-4 sm:p-4"><p className="text-sm text-white/55">Nenhuma empresa encontrada hoje.</p>{campaign.retryAvailable ? <button type="button" onClick={() => void retryToday()} disabled={retrying} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--atelier-green)]/35 px-3 text-xs font-semibold text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/[0.06] disabled:opacity-50">{retrying ? <CircleNotchIcon size={15} className="animate-spin" /> : <ArrowClockwiseIcon size={15} />} Tentar outra busca</button> : null}</div> : null}
+          {activeCandidates.length ? <>
+            <ul className="mt-4 divide-y divide-white/[0.08]">{activeCandidates.map(renderCandidate)}</ul>
+            {campaign.status === 'COMPLETED' && campaign.retryAvailable ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-white/10 p-3 sm:p-4"><p className="text-sm text-white/55">Encontramos {activeCandidates.length} de {campaignLimit} empresas nesta pesquisa.</p>{retryButton}</div> : null}
+          </> : campaign.status === 'COMPLETED' ? <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-white/10 p-3 sm:mt-4 sm:p-4"><p className="text-sm text-white/55">Nenhuma empresa encontrada hoje.</p>{retryButton}</div> : null}
           {showDiscarded && discardedCandidates.length ? <div className="mt-4 rounded-lg border border-white/[0.08] p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-white/45">Descartadas nesta pesquisa</p>
             <ul className="mt-3 divide-y divide-white/[0.08]">{discardedCandidates.map(renderCandidate)}</ul>

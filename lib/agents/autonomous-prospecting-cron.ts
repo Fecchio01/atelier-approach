@@ -6,7 +6,7 @@ import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { startProspectingCampaign } from '@/lib/research/runtime';
 
 const INITIAL_AREAS = 8;
-const MAX_AREAS = 32;
+const MAX_AREAS = 64;
 const DISPATCH_LEASE_MS = 60_000;
 
 function getSaoPauloHour(now = new Date()) {

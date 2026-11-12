@@ -1,12 +1,14 @@
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { countVisibleCampaignCandidates } from '@/lib/research/candidates';
 import { getSaoPauloDateKey } from '@/lib/research/autonomous';
 import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { startProspectingCampaign } from '@/lib/research/runtime';
 
 export const runtime = 'nodejs';
 
-const MAX_AREAS = 32;
+const MAX_AREAS = 64;
+const MAX_TOTAL_ATTEMPTS = 3;
 const DISPATCH_LEASE_MS = 60_000;
 
 export async function POST() {
@@ -19,14 +21,21 @@ export async function POST() {
   if (!campaign || campaign.ownerId !== 'team') {
     return Response.json({ error: 'Ainda não há pesquisa de hoje para retomar.' }, { status: 404 });
   }
-  if (campaign.status !== 'COMPLETED' || campaign.candidateCount !== 0) {
-    return Response.json({ error: 'A pesquisa só pode ser retomada quando terminou sem empresas.' }, { status: 409 });
+  if (campaign.status !== 'COMPLETED') {
+    return Response.json({ error: 'A pesquisa só pode ser ampliada depois de concluir.' }, { status: 409 });
+  }
+  const availableCount = await countVisibleCampaignCandidates(prisma, campaign.id);
+  if (availableCount >= campaign.maxCandidates) {
+    return Response.json({ error: 'A pesquisa já encontrou o limite de empresas disponíveis.' }, { status: 409 });
   }
   const checkpoint = campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
-    ? campaign.checkpoint as { retryUsed?: unknown }
+    ? campaign.checkpoint as { retryUsed?: unknown; retryCount?: unknown }
     : {};
-  if (checkpoint.retryUsed === true) {
-    return Response.json({ error: 'A nova tentativa de hoje já foi usada.' }, { status: 409 });
+  const retryCount = typeof checkpoint.retryCount === 'number' && Number.isInteger(checkpoint.retryCount)
+    ? checkpoint.retryCount
+    : checkpoint.retryUsed === true ? 1 : 0;
+  if (retryCount >= MAX_TOTAL_ATTEMPTS - 1) {
+    return Response.json({ error: 'As tentativas de ampliação da pesquisa de hoje foram usadas.' }, { status: 409 });
   }
 
   let plan;
@@ -38,16 +47,17 @@ export async function POST() {
   if (!plan.areas.length) return Response.json({ error: 'Não encontrei áreas válidas para tentar novamente.' }, { status: 422 });
 
   const claimed = await prisma.researchCampaign.updateMany({
-    where: { id: campaign.id, status: 'COMPLETED', candidateCount: 0 },
+    where: { id: campaign.id, status: 'COMPLETED', checkpointVersion: campaign.checkpointVersion },
     data: {
       status: 'RUNNING',
       error: null,
       workflowRunId: null,
+      candidateCount: availableCount,
       dispatchLeaseUntil: new Date(Date.now() + DISPATCH_LEASE_MS),
       dispatchAttemptedAt: new Date(),
       completedAreas: 0,
       maxAreas: MAX_AREAS,
-      checkpoint: { areas: plan.areas, retryUsed: true },
+      checkpoint: { areas: plan.areas, retryUsed: true, retryCount: retryCount + 1 },
       checkpointVersion: { increment: 1 },
       release: plan.release
     }
