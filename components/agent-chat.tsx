@@ -1,7 +1,8 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { ChatCircleDotsIcon, CircleNotchIcon, CopyIcon, PaperPlaneTiltIcon, RobotIcon, XIcon } from '@phosphor-icons/react';
+import { ChatCircleDotsIcon, CircleNotchIcon, CopyIcon, PaperPlaneTiltIcon, XIcon } from '@phosphor-icons/react';
+import { DarwinAvatar } from './darwin-avatar';
 
 type ChatSources = {
   preparedAt: string;
@@ -161,7 +162,7 @@ export function AgentChat() {
       <section className="flex h-full min-h-0 flex-col border-t border-white/10 bg-[#111719] shadow-[-18px_0_60px_rgba(0,0,0,0.32)] sm:border-l sm:border-t-0">
         <header className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-4 sm:px-5">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><RobotIcon size={20} weight="duotone" /></span>
+            <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><DarwinAvatar size={25} /></span>
             <div className="min-w-0">
               <h2 ref={titleRef} tabIndex={-1} id="agent-chat-title" className="font-semibold outline-none">Darwin</h2>
               <p className="mt-1 text-xs leading-5 text-white/45">Pesquisa · CRM · metas</p>

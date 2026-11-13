@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ChartLineUpIcon, CurrencyDollarIcon, HandCoinsIcon, ReceiptIcon } from '@phosphor-icons/react/dist/ssr';
 import { PageHeading } from '@/components/ui';
+import { ReportsMotionCard, ReportsMotionSurface } from '@/components/reports-motion-surface';
 import { prisma } from '@/lib/db';
 import { getGoalPeriodWindow } from '@/lib/goal-periods';
 
@@ -40,7 +41,7 @@ export default async function FinancePage() {
   const averageTicket = current.count ? current.sales / current.count : 0;
   const maxSales = Math.max(1, ...periodTotals.map((period) => period.sales));
 
-  return <main className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
+  return <ReportsMotionSurface testId="finance-page-canvas" className="mx-auto max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10">
     <PageHeading eyebrow="Visão financeira" title="Faturamento registrado" description="Acompanhe vendas e MRR informados ao fechar negócios no CRM. Estes valores representam contratos registrados, não recebimentos ou fluxo de caixa." />
     <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Metric icon={<CurrencyDollarIcon size={18} />} label="Vendas no ciclo" value={money(current.sales)} detail={`${current.count} negócio${current.count === 1 ? '' : 's'} fechado${current.count === 1 ? '' : 's'}`} />
@@ -49,7 +50,7 @@ export default async function FinancePage() {
       <Metric icon={<ReceiptIcon size={18} />} label="Ticket médio do ciclo" value={money(averageTicket)} detail="Valor de venda ÷ negócios fechados" />
     </div>
 
-    <section className="mt-5 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-6" aria-labelledby="finance-chart-title">
+    <ReportsMotionCard as="section" className="mt-5 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-6" aria-labelledby="finance-chart-title">
       <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="finance-chart-title" className="text-lg font-semibold">Vendas por ciclo</h2><p className="mt-1 text-sm text-white/50">Últimos seis ciclos mensais configurados</p></div><span className="text-xs text-white/45">Receita vendida</span></div>
       <div className="mt-6 grid grid-cols-6 items-end gap-2 sm:gap-4">
         {periodTotals.map((period) => <div key={period.start.toISOString()} className="flex min-w-0 flex-col items-center gap-2">
@@ -58,9 +59,9 @@ export default async function FinancePage() {
           <span className="text-xs capitalize text-white/55">{monthLabel(period.start)}</span>
         </div>)}
       </div>
-    </section>
+    </ReportsMotionCard>
 
-    <section className="mt-5 overflow-hidden rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)]" aria-labelledby="finance-sales-title">
+    <ReportsMotionCard as="section" className="mt-5 overflow-hidden rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)]" aria-labelledby="finance-sales-title">
       <div className="border-b border-white/[0.08] px-4 py-4 sm:px-6"><h2 id="finance-sales-title" className="font-semibold">Negócios fechados neste ciclo</h2><p className="mt-1 text-sm text-white/50">Valores registrados no fechamento dentro do CRM.</p></div>
       {latestSales.length ? <ul className="divide-y divide-white/[0.07]">
         {latestSales.map((event) => <li key={event.id} className="grid gap-1 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-5 sm:px-6">
@@ -69,14 +70,14 @@ export default async function FinancePage() {
           <span className="text-sm tabular-nums">{money(Number(event.saleValue))}<span className="ml-2 text-xs text-white/45">MRR {money(Number(event.mrr))}</span></span>
         </li>)}
       </ul> : <p className="px-4 py-8 text-sm text-white/50 sm:px-6">Ainda não há vendas registradas neste ciclo.</p>}
-    </section>
+    </ReportsMotionCard>
     <p className="mt-4 text-xs leading-5 text-white/40">Somente vendas registradas no CRM entram nestes valores. Recebimentos, inadimplência, impostos e custos não são calculados pelo sistema.</p>
-  </main>;
+  </ReportsMotionSurface>;
 }
 
 function Metric({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail: string }) {
-  return <section className="rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4" aria-label={label}>
+  return <ReportsMotionCard as="section" className="rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4" aria-label={label}>
     <div className="flex items-center gap-2 text-[var(--atelier-green)]">{icon}<span className="text-xs font-medium text-white/55">{label}</span></div>
     <p className="mt-4 text-xl font-semibold tabular-nums sm:text-2xl">{value}</p><p className="mt-1 text-xs text-white/45">{detail}</p>
-  </section>;
+  </ReportsMotionCard>;
 }

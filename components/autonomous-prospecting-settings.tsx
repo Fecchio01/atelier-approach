@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { CircleNotchIcon, MapPinIcon, PlusIcon, RobotIcon, SparkleIcon, XIcon } from '@phosphor-icons/react';
+import { CircleNotchIcon, MapPinIcon, PlusIcon, SparkleIcon, XIcon } from '@phosphor-icons/react';
 import { AUTONOMOUS_PROSPECTING_NICHE_SUGGESTIONS } from '@/lib/research/autonomous';
+import { DarwinAvatar } from './darwin-avatar';
 
 export function AutonomousProspectingSettings({ initialEnabled, initialDailyLimit, initialTime, initialNiches }: { initialEnabled: boolean; initialDailyLimit: number; initialTime: string; initialNiches: string[] }) {
   const [enabled, setEnabled] = useState(initialEnabled);
@@ -65,7 +66,7 @@ export function AutonomousProspectingSettings({ initialEnabled, initialDailyLimi
   return <div className="grid gap-5">
     <section className="rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-5 sm:p-6">
       <div className="flex items-start gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><RobotIcon size={21} weight="duotone" /></span>
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/10 text-[var(--atelier-green)]"><DarwinAvatar size={27} /></span>
         <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--atelier-green)]">Agente autônomo</p><h2 className="mt-1 text-xl font-semibold">Pesquisa diária de empresas</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">Defina quando e em quais segmentos o agente deve pesquisar. Ele analisa as candidatas todos os dias sem iniciar uma campanha manualmente nem escolher uma região.</p></div>
       </div>
 

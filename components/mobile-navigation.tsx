@@ -11,20 +11,20 @@ import {
   ListIcon,
   SignOutIcon,
   SquaresFourIcon,
-  RobotIcon,
   TargetIcon,
   XIcon
 } from '@phosphor-icons/react';
 import { ProfileAvatar } from './profile-avatar';
+import { DarwinAvatar } from './darwin-avatar';
 
 export const appRoutes = [
   { href: '/', label: 'Painel', Icon: SquaresFourIcon },
+  { href: '/financeiro', label: 'Financeiro', Icon: ChartLineUpIcon },
   { href: '/crm', label: 'Funil', Icon: FunnelIcon },
-  { href: '/agentes', label: 'Darwin', Icon: RobotIcon },
+  { href: '/agentes', label: 'Darwin', Icon: DarwinAvatar },
   { href: '/pesquisa', label: 'Empresas', Icon: BuildingsIcon },
   { href: '/metas', label: 'Metas', Icon: TargetIcon },
-  { href: '/relatorios', label: 'Relatórios', Icon: ChartBarIcon },
-  { href: '/financeiro', label: 'Financeiro', Icon: ChartLineUpIcon }
+  { href: '/relatorios', label: 'Relatórios', Icon: ChartBarIcon }
 ];
 
 function routeIsActive(pathname: string, href: string) {
