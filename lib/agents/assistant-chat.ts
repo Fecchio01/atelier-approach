@@ -5,6 +5,7 @@ import { GEMINI_MODEL_ID, isGeminiFreeTierConfigured } from '@/lib/agents/gemini
 import { prisma } from '@/lib/db';
 import { buildRecommendations, buildReport, getRecentReportRange } from '@/lib/reports';
 import { getSaoPauloDateKey } from '@/lib/research/autonomous';
+import { createDarwinGoalSuggestion, type GoalSuggestionResult } from '@/lib/agents/goal-planner';
 
 const MAX_OUTPUT_TOKENS = 360;
 
@@ -33,6 +34,24 @@ export async function answerAssistantChat(
   leadId?: string,
   conversation: Array<{ role: 'user' | 'assistant'; text: string }> = []
 ): Promise<{ reply: string; draftText?: string; sources: AssistantChatSources }> {
+  const goalRequest = detectGoalWriteRequest(message);
+  if (goalRequest) {
+    if (!goalRequest.kinds.length) {
+      const context = await loadAssistantContext(message, leadId);
+      return {
+        reply: 'Posso preencher as metas da equipe com base nos ciclos anteriores. Você quer as metas semanais, mensais ou as duas?',
+        sources: { ...context.sources, engine: 'LOCAL' }
+      };
+    }
+
+    const results = await Promise.all(goalRequest.kinds.map((kind) => createDarwinGoalSuggestion(kind)));
+    const context = await loadAssistantContext(message, leadId);
+    return {
+      reply: formatGoalWriteReply(results, context.data.goals),
+      sources: { ...context.sources, engine: 'LOCAL' }
+    };
+  }
+
   const context = await loadAssistantContext(message, leadId);
   if (context.sources.lead && /rascunh|mensagem|abord|contat|falar com/.test(message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))) {
     return {
@@ -57,6 +76,57 @@ export async function answerAssistantChat(
   }
 
   return { reply, sources: { ...context.sources, engine } };
+}
+
+function detectGoalWriteRequest(message: string): { kinds: Array<'WEEKLY' | 'MONTHLY'> } | null {
+  const lowerMessage = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+  if (!/\b(?:meta|metas|objetivo|objetivos)\b/.test(lowerMessage)) return null;
+  // Never perform writes from a question, negation, conditional request, or
+  // explanatory prompt. Only a command at the start of the message authorizes
+  // a write; a verb mentioned later may just be part of a discussion.
+  if (message.includes('?')
+    || /\b(?:nao|nunca|jamais|caso|se|talvez|poderia|poderiam|gostaria|queria saber|seria|como|por que|porque|qual|quais|quando|posso|pode|podem|tem como|me explica|me ensina|vale a pena|quero saber|sera que)\b/.test(lowerMessage)) {
+    return null;
+  }
+  const command = lowerMessage.replace(/^\s*(?:darwin\s*[,!:]?\s*)?(?:por favor\s*[,!:]?\s*)?/, '');
+  const explicitCommand = /^(?:crie|cria|defina|define|preencha|preenche|monte|monta|estabeleca|estabelece|faca|faz|fazer|gere|gera|configure|configura)\b/;
+  if (!explicitCommand.test(command)) return null;
+
+  const kinds: Array<'WEEKLY' | 'MONTHLY'> = [];
+  if (/\b(?:semanal|semanais|semana)\b/.test(lowerMessage)) kinds.push('WEEKLY');
+  if (/\b(?:mensal|mensais|mes)\b/.test(lowerMessage)) kinds.push('MONTHLY');
+  return { kinds };
+}
+
+function formatGoalWriteReply(results: GoalSuggestionResult[], value: unknown) {
+  const goals = value && typeof value === 'object' ? value as Record<string, {
+    start?: unknown;
+    end?: unknown;
+    targets?: Record<string, number | null>;
+  }> : {};
+  const labels: Record<string, string> = {
+    approaches: 'abordagens', interests: 'interesses', meetings: 'reuniões', proposalsSent: 'propostas enviadas',
+    sales: 'vendas', revenue: 'receita', mrr: 'MRR', followUpsCompleted: 'follow-ups concluídos', conversionRate: 'conversão'
+  };
+  const periods = results.map((result) => {
+    const key = result.kind === 'WEEKLY' ? 'weekly' : 'monthly';
+    const name = result.kind === 'WEEKLY' ? 'Semanal' : 'Mensal';
+    if (result.status === 'no_history') return `${name}: não encontrei resultados anteriores suficientes para preencher metas, então não gravei valores inventados.`;
+    if (result.status === 'unchanged') return `${name}: as metas existentes foram mantidas sem alterações.`;
+    if (result.status === 'concurrent_change') return `${name}: houve uma atualização ao mesmo tempo e não consigo confirmar que esta solicitação gravou as metas. Confira a página Metas para ver o valor atual.`;
+
+    const goal = goals[key];
+    const targets = Object.entries(goal?.targets ?? {}).filter(([, target]) => typeof target === 'number' && target > 0)
+      .map(([metric, target]) => {
+        const formatted = metric === 'revenue' || metric === 'mrr'
+          ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(target as number)
+          : `${target}${metric === 'conversionRate' ? '%' : ''}`;
+        return `${labels[metric] ?? metric}: ${formatted}`;
+      });
+    const savedLabel = result.status === 'created' ? 'criei' : 'completei';
+    return `${name}: ${savedLabel} ${result.metricsSaved} campo(s) na área Metas${targets.length ? ` — ${targets.join(' · ')}` : ''}. Os valores que a equipe já tinha foram preservados.`;
+  });
+  return periods.join(' ');
 }
 
 async function loadAssistantContext(message: string, leadId?: string): Promise<ChatContext> {
@@ -348,7 +418,7 @@ async function generateGeminiReply(
       'Você pode resumir relatórios, explicar a pesquisa diária e oferecer dicas gerais de abordagem. Em dicas, não invente fatos da empresa nem prometa resultados; recomende revisão humana dos dados.',
       'Responda ao pedido específico primeiro, explique termos simples e conecte os dados ao que o usuário perguntou. Se faltarem dados, diga exatamente quais faltam; evite respostas padronizadas e listas genéricas. O contexto goals mostra as metas atuais semanal e mensal.',
       'Use as últimas mensagens da conversa para entender referências e perguntas de continuação. Não repita a resposta anterior; avance a conversa e peça esclarecimento somente quando faltar uma informação essencial.',
-      'As metas novas são sugeridas automaticamente a partir dos ciclos anteriores. Nunca afirme que um valor foi salvo ou alterado por conversa; a equipe pode revisar metas na página Metas.',
+      'Nunca afirme que salvou ou alterou metas por conversa, a menos que o sistema retorne explicitamente o resultado da ação. As metas existentes são consultadas no contexto.',
       'Se houver selectedLead no contexto, use somente o nome, segmento e etapa informados. Se o usuário pedir abordagem, produza um rascunho curto, editável e claramente marcado como não enviado. Não invente serviços, resultados, preços ou fatos sobre a empresa.',
       'Não altere CRM, não crie tarefas, não envie mensagens, não diga que executou ações.'
     ].join(' '),

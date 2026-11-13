@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowClockwiseIcon, ArrowSquareOutIcon, CircleNotchIcon, MapPinIcon, SparkleIcon } from '@phosphor-icons/react';
 import { normalizePublishedPhone, toWhatsAppHref } from '@/lib/contact-links';
 import { isCampaignBatchReady } from '@/lib/research/campaign-batch';
+import { AUTONOMOUS_NATIONAL_SEARCH_VERSION } from '@/lib/research/autonomous';
 type FeedbackReason = 'DUPLICATE' | 'WRONG_NICHE' | 'INVALID_BUSINESS' | 'INSUFFICIENT_DATA' | 'OTHER';
 type FeedbackSelection = FeedbackReason | '';
 const feedbackReasonLabels: Record<FeedbackReason, string> = {
@@ -46,6 +47,7 @@ export type AutonomousCandidate = {
 export type AutonomousCampaign = {
   id: string;
   nationalFallbackUsed?: boolean;
+  nationalSearchVersion?: number;
   idempotencyKey: string;
   name: string;
   niche: string;
@@ -119,7 +121,7 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
     if (paused || !enabled) return;
     const incomplete = campaigns.find((campaign) => campaign.status === 'COMPLETED'
       && campaign.candidateCount < campaign.maxCandidates
-      && !campaign.nationalFallbackUsed);
+      && campaign.nationalSearchVersion !== AUTONOMOUS_NATIONAL_SEARCH_VERSION);
     if (!incomplete || resumeAttempted.current.has(incomplete.id)) return;
     resumeAttempted.current.add(incomplete.id);
     void fetch('/api/agents/campaigns/resume-today', { method: 'POST' })

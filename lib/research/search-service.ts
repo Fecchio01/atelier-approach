@@ -21,9 +21,13 @@ export async function resolveProspectSearchPlan(input: {
 }) {
   const bounds = await boundsService.resolveSearchBounds(input.region, input.city, input.national ?? false);
   if (!bounds) throw new Error('Não foi possível resolver os limites desta região.');
-  const areas = planOvertureSearchAreas(bounds, input.national ?? false, input.region)
-    .slice(0, input.maxAreas ?? 20);
-  return { release: await getOvertureRelease(), areas };
+  const plannedAreas = planOvertureSearchAreas(bounds, input.national ?? false, input.region);
+  const maxAreas = input.maxAreas ?? 20;
+  return {
+    release: await getOvertureRelease(),
+    areas: plannedAreas.slice(0, maxAreas),
+    areaPlanTruncated: plannedAreas.length > maxAreas
+  };
 }
 
 export async function searchProspectArea(area: OvertureSearchArea, criteria: ProspectSearchCriteria) {

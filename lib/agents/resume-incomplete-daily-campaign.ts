@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
 import { countVisibleCampaignCandidates } from '@/lib/research/candidates';
-import { AUTONOMOUS_NATIONAL_AREA_QUERIES, getSaoPauloDateKey } from '@/lib/research/autonomous';
+import { AUTONOMOUS_NATIONAL_AREA_QUERIES, AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES, AUTONOMOUS_NATIONAL_SEARCH_VERSION, getSaoPauloDateKey } from '@/lib/research/autonomous';
 import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { startProspectingCampaign } from '@/lib/research/runtime';
 
@@ -27,14 +27,16 @@ export async function resumeIncompleteDailyCampaign() {
   }
 
   const checkpoint = campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
-    ? campaign.checkpoint as { nationalFallbackUsed?: unknown }
+    ? campaign.checkpoint as { nationalFallbackUsed?: unknown; nationalSearchVersion?: unknown }
     : {};
-  if (checkpoint.nationalFallbackUsed === true) return { resumed: false, reason: 'national_search_exhausted', availableCount };
+  if (checkpoint.nationalFallbackUsed === true && checkpoint.nationalSearchVersion === AUTONOMOUS_NATIONAL_SEARCH_VERSION) {
+    return { resumed: false, reason: 'national_search_exhausted', availableCount };
+  }
 
   const plan = await resolveProspectSearchPlan({
     region: campaign.region,
     national: true,
-    maxAreas: AUTONOMOUS_NATIONAL_AREA_QUERIES
+    maxAreas: AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES
   });
   if (!plan.areas.length) return { resumed: false, reason: 'no_search_areas', availableCount };
 
@@ -46,8 +48,13 @@ export async function resumeIncompleteDailyCampaign() {
       workflowRunId: null,
       dispatchLeaseUntil: null,
       dispatchAttemptedAt: null,
-      maxAreas: Math.max(campaign.maxAreas, campaign.completedAreas + AUTONOMOUS_NATIONAL_AREA_QUERIES),
-      checkpoint: { areas: plan.areas, nationalFallbackUsed: true },
+      maxAreas: campaign.completedAreas + AUTONOMOUS_NATIONAL_AREA_QUERIES,
+      checkpoint: {
+        areas: plan.areas,
+        nationalFallbackUsed: true,
+        nationalSearchVersion: AUTONOMOUS_NATIONAL_SEARCH_VERSION,
+        ...(plan.areaPlanTruncated ? { nationalCoverageLimitReached: true } : {})
+      },
       checkpointVersion: { increment: 1 },
       candidateCount: availableCount,
       release: plan.release

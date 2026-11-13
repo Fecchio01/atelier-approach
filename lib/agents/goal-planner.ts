@@ -35,14 +35,12 @@ function suggestTargets(history: GoalMetricActuals[]) {
   return targets;
 }
 
-function isCompletelyEmpty(goal: {
+function countMissingSuggestedTargets(goal: {
   approachesTarget: number | null; interestsTarget: number | null; meetingsTarget: number | null;
   proposalsSentTarget: number | null; salesTarget: number | null; revenueTarget: number | null;
   mrrTarget: number | null; followUpsCompletedTarget: number | null; conversionRateTarget: number | null;
-  customGoals: Prisma.JsonValue;
-}) {
-  return metricKeys.every((key) => goal[`${key}Target` as keyof typeof goal] == null)
-    && Array.isArray(goal.customGoals) && goal.customGoals.length === 0;
+}, targets: Record<GoalMetricKey, number | null>) {
+  return metricKeys.filter((key) => goal[`${key}Target` as keyof typeof goal] == null && targets[key] !== null).length;
 }
 
 function targetFields(targets: Record<GoalMetricKey, number | null>) {
@@ -59,36 +57,62 @@ function targetFields(targets: Record<GoalMetricKey, number | null>) {
   };
 }
 
-async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthlyStartDay: number, now: Date) {
+export type GoalSuggestionStatus = 'created' | 'updated' | 'unchanged' | 'no_history' | 'concurrent_change';
+
+export type GoalSuggestionResult = {
+  kind: GoalPeriodKind;
+  status: GoalSuggestionStatus;
+  metricsSaved: number;
+};
+
+async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthlyStartDay: number, now: Date): Promise<GoalSuggestionResult> {
   const key = { ownerId: OWNER_ID, periodKind: kind, periodStart: current.start };
   const existing = await prisma.goal.findUnique({ where: { ownerId_periodKind_periodStart: key } });
-  if (existing && !isCompletelyEmpty(existing)) return false;
 
   const historyPeriods = previousPeriods(current, monthlyStartDay);
   const actuals = await getTeamGoalActualsByPeriod(historyPeriods, now);
   const targets = suggestTargets(actuals);
-  if (Object.values(targets).every((value) => value === null)) return false;
+  const metricsToSave = existing
+    ? countMissingSuggestedTargets(existing, targets)
+    : metricKeys.filter((metric) => targets[metric] !== null).length;
+  if (metricsToSave === 0) {
+    return {
+      kind,
+      status: existing && metricKeys.some((metric) => existing[`${metric}Target` as keyof typeof existing] !== null)
+        ? 'unchanged'
+        : 'no_history',
+      metricsSaved: 0
+    };
+  }
 
   if (existing) {
-    // Fill only a blank cycle created by a reset/close action. Never replace a
-    // target or custom indicator the team has already edited.
+    // Fill only blank built-in metrics; keep every existing team value and all
+    // custom indicators intact.
+    const proposedFields = targetFields(targets);
+    const data = Object.fromEntries(metricKeys.flatMap((metric) => {
+      if (existing[`${metric}Target` as keyof typeof existing] !== null || targets[metric] === null) return [];
+      const field = `${metric}Target`;
+      return [[field, proposedFields[field as keyof typeof proposedFields]]];
+    })) as Partial<ReturnType<typeof targetFields>>;
     const update = await prisma.goal.updateMany({
       where: { id: existing.id, updatedAt: existing.updatedAt },
-      data: targetFields(targets)
+      data
     });
-    return update.count === 1;
+    return { kind, status: update.count === 1 ? 'updated' : 'concurrent_change', metricsSaved: update.count === 1 ? metricsToSave : 0 };
   }
 
   try {
     await prisma.goal.create({ data: { ...key, periodEnd: current.end, ...targetFields(targets), customGoals: [] } });
-    return true;
+    return { kind, status: 'created', metricsSaved: metricsToSave };
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return false;
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return { kind, status: 'concurrent_change', metricsSaved: 0 };
+    }
     throw error;
   }
 }
 
-export async function createDarwinGoalSuggestions(now = new Date()) {
+export async function createDarwinGoalSuggestion(kind: GoalPeriodKind, now = new Date()): Promise<GoalSuggestionResult> {
   const settings = await prisma.teamGoalSettings.findUnique({ where: { id: 'team' } });
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
   const activeGoals = await prisma.goal.findMany({
@@ -96,20 +120,21 @@ export async function createDarwinGoalSuggestions(now = new Date()) {
       ownerId: OWNER_ID,
       periodStart: { lte: now },
       periodEnd: { gt: now },
-      periodKind: { in: ['WEEKLY', 'MONTHLY'] }
+      periodKind: kind
     },
-    select: { periodKind: true, periodStart: true, periodEnd: true }
+    select: { periodStart: true, periodEnd: true }
   });
-  const activeWindow = (kind: GoalPeriodKind): GoalPeriodWindow => {
-    const active = activeGoals.find((goal) => goal.periodKind === kind);
-    return active
-      ? { kind, start: active.periodStart, end: active.periodEnd }
-      : getGoalPeriodWindow(kind, now, monthlyStartDay);
-  };
-  const windows = [activeWindow('WEEKLY'), activeWindow('MONTHLY')];
+  const active = activeGoals[0];
+  const current = active
+    ? { kind, start: active.periodStart, end: active.periodEnd }
+    : getGoalPeriodWindow(kind, now, monthlyStartDay);
+  return planCycle(kind, current, monthlyStartDay, now);
+}
+
+export async function createDarwinGoalSuggestions(now = new Date()) {
   const [weekly, monthly] = await Promise.all([
-    planCycle('WEEKLY', windows[0], monthlyStartDay, now),
-    planCycle('MONTHLY', windows[1], monthlyStartDay, now)
+    createDarwinGoalSuggestion('WEEKLY', now),
+    createDarwinGoalSuggestion('MONTHLY', now)
   ]);
-  return { weekly, monthly };
+  return { weekly: weekly.status === 'created' || weekly.status === 'updated', monthly: monthly.status === 'created' || monthly.status === 'updated' };
 }

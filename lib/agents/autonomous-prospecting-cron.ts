@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db';
-import { AUTONOMOUS_CAMPAIGN_OWNER_ID, AUTONOMOUS_MAX_AREA_QUERIES, AUTONOMOUS_NATIONAL_AREA_QUERIES, chooseDailyProspectingTarget, getSaoPauloDateKey } from '@/lib/research/autonomous';
+import { AUTONOMOUS_CAMPAIGN_OWNER_ID, AUTONOMOUS_MAX_AREA_QUERIES, AUTONOMOUS_NATIONAL_AREA_QUERIES, AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES, AUTONOMOUS_NATIONAL_SEARCH_VERSION, chooseDailyProspectingTarget, getSaoPauloDateKey } from '@/lib/research/autonomous';
 import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { countVisibleCampaignCandidates } from '@/lib/research/candidates';
 import { startProspectingCampaign } from '@/lib/research/runtime';
@@ -94,16 +94,16 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
       }
 
       const checkpoint = campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
-        ? campaign.checkpoint as { nationalFallbackUsed?: unknown }
+        ? campaign.checkpoint as { nationalFallbackUsed?: unknown; nationalSearchVersion?: unknown }
         : {};
-      if (checkpoint.nationalFallbackUsed === true) {
+      if (checkpoint.nationalFallbackUsed === true && checkpoint.nationalSearchVersion === AUTONOMOUS_NATIONAL_SEARCH_VERSION) {
         return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true, shortfall: true });
       }
 
       const plan = await resolveProspectSearchPlan({
         region: campaign.region,
         national: true,
-        maxAreas: AUTONOMOUS_NATIONAL_AREA_QUERIES
+        maxAreas: AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES
       });
       if (!plan.areas.length) {
         return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true, shortfall: true });
@@ -116,8 +116,13 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
           workflowRunId: null,
           dispatchLeaseUntil: null,
           dispatchAttemptedAt: null,
-          maxAreas: Math.max(campaign.maxAreas, campaign.completedAreas + AUTONOMOUS_NATIONAL_AREA_QUERIES),
-          checkpoint: { areas: plan.areas, nationalFallbackUsed: true },
+          maxAreas: campaign.completedAreas + AUTONOMOUS_NATIONAL_AREA_QUERIES,
+          checkpoint: {
+            areas: plan.areas,
+            nationalFallbackUsed: true,
+            nationalSearchVersion: AUTONOMOUS_NATIONAL_SEARCH_VERSION,
+            ...(plan.areaPlanTruncated ? { nationalCoverageLimitReached: true } : {})
+          },
           checkpointVersion: { increment: 1 },
           candidateCount: availableCount,
           release: plan.release

@@ -32,6 +32,9 @@ export default async function AgentsPage() {
   const campaigns: AutonomousCampaign[] = records.map((campaign, index) => ({
     nationalFallbackUsed: Boolean(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
       && (campaign.checkpoint as { nationalFallbackUsed?: unknown }).nationalFallbackUsed === true),
+    nationalSearchVersion: campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
+      && typeof (campaign.checkpoint as { nationalSearchVersion?: unknown }).nationalSearchVersion === 'number'
+      ? (campaign.checkpoint as { nationalSearchVersion: number }).nationalSearchVersion : undefined,
     id: campaign.id,
     idempotencyKey: campaign.idempotencyKey,
     name: campaign.name,

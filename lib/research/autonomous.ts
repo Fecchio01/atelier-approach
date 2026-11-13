@@ -2,7 +2,12 @@ import type { Prisma } from '@prisma/client';
 
 export const AUTONOMOUS_CAMPAIGN_OWNER_ID = 'team';
 export const AUTONOMOUS_CITY_AREA_QUERIES = 32;
-export const AUTONOMOUS_NATIONAL_AREA_QUERIES = 128;
+// Bound each national sweep to keep daily workflow duration and provider usage predictable.
+// The workflow stops as soon as the configured batch is full, so this is a ceiling, not a fixed cost.
+export const AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES = 192;
+export const AUTONOMOUS_NATIONAL_EXPANSION_AREA_QUERIES = 32;
+export const AUTONOMOUS_NATIONAL_AREA_QUERIES = AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES + AUTONOMOUS_NATIONAL_EXPANSION_AREA_QUERIES;
+export const AUTONOMOUS_NATIONAL_SEARCH_VERSION = 6;
 export const AUTONOMOUS_MAX_AREA_QUERIES = AUTONOMOUS_CITY_AREA_QUERIES + AUTONOMOUS_NATIONAL_AREA_QUERIES;
 
 const NICHE_CYCLE = [

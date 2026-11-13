@@ -46,6 +46,9 @@ export async function GET(request: Request) {
       ...campaign,
       nationalFallbackUsed: Boolean(campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
         && (campaign.checkpoint as { nationalFallbackUsed?: unknown }).nationalFallbackUsed === true),
+      nationalSearchVersion: campaign.checkpoint && typeof campaign.checkpoint === 'object' && !Array.isArray(campaign.checkpoint)
+        && typeof (campaign.checkpoint as { nationalSearchVersion?: unknown }).nationalSearchVersion === 'number'
+        ? (campaign.checkpoint as { nationalSearchVersion: number }).nationalSearchVersion : undefined,
       candidateCount: availableCandidateCount,
       candidates: isCampaignBatchReady({ ...campaign, candidateCount: availableCandidateCount }) ? campaign.candidates.map((item) => {
       const lead = leadByExternalId.get(item.candidate.externalId);

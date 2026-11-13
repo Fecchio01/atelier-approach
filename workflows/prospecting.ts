@@ -1,10 +1,16 @@
 import { prisma } from '@/lib/db';
 import { countVisibleCampaignCandidates, filterAvailableCampaignBusinesses, persistCampaignCandidates } from '@/lib/research/candidates';
 import { enrichProspectBatch, resolveProspectSearchPlan, searchProspectArea, splitProspectSearchArea } from '@/lib/research/search-service';
-import { AUTONOMOUS_CITY_AREA_QUERIES, AUTONOMOUS_NATIONAL_AREA_QUERIES } from '@/lib/research/autonomous';
+import { AUTONOMOUS_CITY_AREA_QUERIES, AUTONOMOUS_NATIONAL_AREA_QUERIES, AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES, AUTONOMOUS_NATIONAL_SEARCH_VERSION } from '@/lib/research/autonomous';
 import type { OvertureSearchArea } from '@/lib/overture';
 
-type CampaignCheckpoint = { areas: OvertureSearchArea[]; nationalFallbackUsed?: boolean };
+type CampaignCheckpoint = {
+  areas: OvertureSearchArea[];
+  nationalFallbackUsed?: boolean;
+  nationalSearchVersion?: number;
+  nationalCoverageLimitReached?: boolean;
+  nationalAreaFailure?: boolean;
+};
 
 export async function prospectingCampaign(campaignId: string) {
   'use workflow';
@@ -39,13 +45,13 @@ async function processProspectingCampaignArea(campaignId: string) {
   }
 
   if (!checkpoint.areas.length) {
-    if (!checkpoint.nationalFallbackUsed) {
+    if (!checkpoint.nationalFallbackUsed || checkpoint.nationalSearchVersion !== AUTONOMOUS_NATIONAL_SEARCH_VERSION) {
       let plan;
       try {
         plan = await resolveProspectSearchPlan({
           region: campaign.region,
           national: true,
-          maxAreas: AUTONOMOUS_NATIONAL_AREA_QUERIES
+          maxAreas: AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES
         });
       } catch (error) {
         console.error('[agents/prospecting] Could not prepare national fallback', {
@@ -62,9 +68,14 @@ async function processProspectingCampaignArea(campaignId: string) {
         await prisma.researchCampaign.updateMany({
           where: { id: campaign.id, status: 'RUNNING', checkpointVersion: campaign.checkpointVersion },
           data: {
-            checkpoint: { areas: plan.areas, nationalFallbackUsed: true },
+            checkpoint: {
+              areas: plan.areas,
+              nationalFallbackUsed: true,
+              nationalSearchVersion: AUTONOMOUS_NATIONAL_SEARCH_VERSION,
+              ...(plan.areaPlanTruncated ? { nationalCoverageLimitReached: true } : {})
+            },
             checkpointVersion: { increment: 1 },
-            maxAreas: Math.max(campaign.maxAreas, campaign.completedAreas + AUTONOMOUS_NATIONAL_AREA_QUERIES),
+            maxAreas: campaign.completedAreas + AUTONOMOUS_NATIONAL_AREA_QUERIES,
             release: plan.release,
             error: null
           }
@@ -78,9 +89,15 @@ async function processProspectingCampaignArea(campaignId: string) {
       data: {
         candidateCount: availableCount,
         status: 'COMPLETED',
-        error: campaignSearchShortfallMessage(availableCount, campaign.maxCandidates),
+        error: campaignSearchShortfallMessage(availableCount, campaign.maxCandidates, checkpoint),
         dispatchLeaseUntil: null,
-        checkpoint: { areas: [], ...(checkpoint.nationalFallbackUsed ? { nationalFallbackUsed: true } : {}) }
+        checkpoint: {
+          areas: [],
+          ...(checkpoint.nationalFallbackUsed ? { nationalFallbackUsed: true } : {}),
+          ...(checkpoint.nationalSearchVersion ? { nationalSearchVersion: checkpoint.nationalSearchVersion } : {}),
+          ...(checkpoint.nationalCoverageLimitReached ? { nationalCoverageLimitReached: true } : {}),
+          ...(checkpoint.nationalAreaFailure ? { nationalAreaFailure: true } : {})
+        }
       }
     });
     return { completed: true, status: 'COMPLETED' };
@@ -103,8 +120,14 @@ async function processProspectingCampaignArea(campaignId: string) {
     const areaBudget = checkpoint.nationalFallbackUsed
       ? campaign.maxAreas
       : Math.min(campaign.maxAreas, AUTONOMOUS_CITY_AREA_QUERIES);
-    const nextAreas = [...(shouldExpand ? splitProspectSearchArea(area) : []), ...checkpoint.areas.slice(1)]
-      .slice(0, Math.max(0, areaBudget - campaign.completedAreas - 1));
+    // Keep the original national tiles ahead of subdivisions. Prepending
+    // children from sparse early tiles can spend the whole bounded national
+    // budget around the first city and never reach the rest of Brazil.
+    const queuedAreas = [...checkpoint.areas.slice(1), ...(shouldExpand ? splitProspectSearchArea(area) : [])];
+    const remainingAreaBudget = Math.max(0, areaBudget - campaign.completedAreas - 1);
+    const nextAreas = queuedAreas.slice(0, remainingAreaBudget);
+    const nationalCoverageLimitReached = Boolean(checkpoint.nationalCoverageLimitReached)
+      || Boolean(checkpoint.nationalFallbackUsed && queuedAreas.length > nextAreas.length);
     await prisma.$transaction(async (tx) => {
       await persistCampaignCandidates(tx, campaign.id, batch, campaign.release, campaign.niche);
       const candidateCount = await countVisibleCampaignCandidates(tx, campaign.id);
@@ -115,14 +138,20 @@ async function processProspectingCampaignArea(campaignId: string) {
         data: {
           checkpoint: {
             areas: nextAreas,
-            ...(checkpoint.nationalFallbackUsed ? { nationalFallbackUsed: true } : {})
+            ...(checkpoint.nationalFallbackUsed ? { nationalFallbackUsed: true } : {}),
+            ...(checkpoint.nationalSearchVersion ? { nationalSearchVersion: checkpoint.nationalSearchVersion } : {}),
+            ...(nationalCoverageLimitReached ? { nationalCoverageLimitReached: true } : {}),
+            ...(checkpoint.nationalAreaFailure ? { nationalAreaFailure: true } : {})
           },
           checkpointVersion: { increment: 1 },
           completedAreas: { increment: 1 },
           candidateCount,
           status: exhausted ? 'COMPLETED' : 'RUNNING',
           error: exhausted && candidateCount < campaign.maxCandidates
-            ? campaignSearchShortfallMessage(candidateCount, campaign.maxCandidates)
+            ? campaignSearchShortfallMessage(candidateCount, campaign.maxCandidates, {
+              ...checkpoint,
+              ...(nationalCoverageLimitReached ? { nationalCoverageLimitReached: true } : {})
+            })
             : null,
           dispatchLeaseUntil: null
         }
@@ -137,20 +166,64 @@ async function processProspectingCampaignArea(campaignId: string) {
       area,
       error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
     });
+    const areaBudget = checkpoint.nationalFallbackUsed
+      ? campaign.maxAreas
+      : Math.min(campaign.maxAreas, AUTONOMOUS_CITY_AREA_QUERIES);
+    const retryAreas = splitProspectSearchArea(area);
+    // Retry failed tiles after the already planned coverage so transient
+    // failures do not starve later national areas either.
+    const queuedAreas = [...checkpoint.areas.slice(1), ...retryAreas];
+    const remainingAreaBudget = Math.max(0, areaBudget - campaign.completedAreas - 1);
+    const nextAreas = queuedAreas.slice(0, remainingAreaBudget);
+    const nationalCoverageLimitReached = Boolean(checkpoint.nationalCoverageLimitReached)
+      || Boolean(checkpoint.nationalFallbackUsed && queuedAreas.length > nextAreas.length);
+    const nationalAreaFailure = Boolean(checkpoint.nationalAreaFailure)
+      || Boolean(checkpoint.nationalFallbackUsed && retryAreas.length === 0);
+    const exhausted = Boolean(checkpoint.nationalFallbackUsed && nextAreas.length === 0
+      && campaign.completedAreas + 1 >= campaign.maxAreas);
     await prisma.researchCampaign.updateMany({
       where: { id: campaign.id, status: 'RUNNING', checkpointVersion: campaign.checkpointVersion },
-      data: { status: 'FAILED', error: 'Uma área não pôde ser processada. A campanha pode ser retomada do checkpoint.', dispatchLeaseUntil: null }
+      data: {
+        checkpoint: {
+          areas: nextAreas,
+          ...(checkpoint.nationalFallbackUsed ? { nationalFallbackUsed: true } : {}),
+          ...(checkpoint.nationalSearchVersion ? { nationalSearchVersion: checkpoint.nationalSearchVersion } : {}),
+          ...(nationalCoverageLimitReached ? { nationalCoverageLimitReached: true } : {}),
+          ...(nationalAreaFailure ? { nationalAreaFailure: true } : {})
+        },
+        checkpointVersion: { increment: 1 },
+        completedAreas: { increment: 1 },
+        candidateCount: availableCount,
+        status: exhausted ? 'COMPLETED' : 'RUNNING',
+        error: exhausted
+          ? campaignSearchShortfallMessage(availableCount, campaign.maxCandidates, {
+            ...checkpoint,
+            ...(nationalCoverageLimitReached ? { nationalCoverageLimitReached: true } : {}),
+            ...(nationalAreaFailure ? { nationalAreaFailure: true } : {})
+          })
+          : null,
+        dispatchLeaseUntil: null
+      }
     });
-    return { completed: true, status: 'FAILED' };
+    return { completed: exhausted, status: exhausted ? 'COMPLETED' : 'RUNNING' };
   }
 }
 
 function parseCheckpoint(value: unknown): CampaignCheckpoint {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { areas: [] };
-  const parsed = value as { areas?: unknown; nationalFallbackUsed?: unknown };
+  const parsed = value as {
+    areas?: unknown;
+    nationalFallbackUsed?: unknown;
+    nationalSearchVersion?: unknown;
+    nationalCoverageLimitReached?: unknown;
+    nationalAreaFailure?: unknown;
+  };
   return {
     areas: Array.isArray(parsed.areas) ? parsed.areas as OvertureSearchArea[] : [],
-    ...(parsed.nationalFallbackUsed === true ? { nationalFallbackUsed: true } : {})
+    ...(parsed.nationalFallbackUsed === true ? { nationalFallbackUsed: true } : {}),
+    ...(typeof parsed.nationalSearchVersion === 'number' ? { nationalSearchVersion: parsed.nationalSearchVersion } : {}),
+    ...(parsed.nationalCoverageLimitReached === true ? { nationalCoverageLimitReached: true } : {}),
+    ...(parsed.nationalAreaFailure === true ? { nationalAreaFailure: true } : {})
   };
 }
 
@@ -158,6 +231,12 @@ function readBooleanCriterion(value: unknown, key: string) {
   return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>)[key] === true);
 }
 
-function campaignSearchShortfallMessage(candidateCount: number, maxCandidates: number) {
-  return `O Darwin consultou a região inicial e a cobertura nacional, mas encontrou ${candidateCount} de ${maxCandidates} empresas válidas. O lote incompleto não foi liberado; a fonte não forneceu empresas suficientes para completar os ${maxCandidates} resultados.`;
+function campaignSearchShortfallMessage(candidateCount: number, maxCandidates: number, checkpoint: CampaignCheckpoint) {
+  if (checkpoint.nationalCoverageLimitReached) {
+    return `A pesquisa atingiu o limite de cobertura nacional desta execução e encontrou ${candidateCount} de ${maxCandidates} empresas válidas. O lote incompleto não foi liberado.`;
+  }
+  if (checkpoint.nationalAreaFailure) {
+    return `Uma ou mais áreas não puderam ser consultadas, e a pesquisa encontrou ${candidateCount} de ${maxCandidates} empresas válidas. O lote incompleto não foi liberado.`;
+  }
+  return `O Darwin percorreu as áreas disponíveis na cobertura nacional e encontrou ${candidateCount} de ${maxCandidates} empresas válidas. O lote incompleto não foi liberado.`;
 }
