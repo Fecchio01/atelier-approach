@@ -16,17 +16,25 @@ export async function closeCurrentDailyReport(
   closedById: string,
   reference = new Date()
 ): Promise<{ report: DailyReportRecord; created: boolean }> {
-  const { start: dayStart, end: dayEnd } = getLocalDayWindow(reference);
+  return closeDailyReportForDate(reference, closedById, reference);
+}
+
+export async function closeDailyReportForDate(
+  dayReference: Date,
+  closedById: string,
+  closedAt = new Date()
+): Promise<{ report: DailyReportRecord; created: boolean }> {
+  const { start: dayStart, end: dayEnd } = getLocalDayWindow(dayReference);
   const existing = await prisma.dailyReport.findUnique({ where: { dayStart } });
   if (existing) return { report: toDailyReportRecord(existing), created: false };
 
-  const snapshot = await buildDailyReportSnapshot({ from: dayStart, to: dayEnd, closedAt: reference });
+  const snapshot = await buildDailyReportSnapshot({ from: dayStart, to: dayEnd, closedAt: closedAt < dayEnd ? dayEnd : closedAt });
   const insertion = await prisma.dailyReport.createMany({
     data: [{
       id: randomUUID(),
       dayStart,
       dayEnd,
-      closedAt: reference,
+      closedAt,
       closedById,
       snapshot: snapshot as unknown as Prisma.InputJsonValue
     }],

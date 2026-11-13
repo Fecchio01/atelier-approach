@@ -6,11 +6,12 @@ import { AppNavigationLink } from './app-navigation-link';
 import {
   BuildingsIcon,
   ChartBarIcon,
+  ChartLineUpIcon,
   FunnelIcon,
   ListIcon,
   SignOutIcon,
   SquaresFourIcon,
-  SparkleIcon,
+  RobotIcon,
   TargetIcon,
   XIcon
 } from '@phosphor-icons/react';
@@ -19,10 +20,11 @@ import { ProfileAvatar } from './profile-avatar';
 export const appRoutes = [
   { href: '/', label: 'Painel', Icon: SquaresFourIcon },
   { href: '/crm', label: 'Funil', Icon: FunnelIcon },
-  { href: '/agentes', label: 'Darwin', Icon: SparkleIcon },
+  { href: '/agentes', label: 'Darwin', Icon: RobotIcon },
   { href: '/pesquisa', label: 'Empresas', Icon: BuildingsIcon },
   { href: '/metas', label: 'Metas', Icon: TargetIcon },
-  { href: '/relatorios', label: 'Relatórios', Icon: ChartBarIcon }
+  { href: '/relatorios', label: 'Relatórios', Icon: ChartBarIcon },
+  { href: '/financeiro', label: 'Financeiro', Icon: ChartLineUpIcon }
 ];
 
 function routeIsActive(pathname: string, href: string) {

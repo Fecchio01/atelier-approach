@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowClockwiseIcon, ArrowRightIcon, CheckIcon, CircleNotchIcon, SparkleIcon } from '@phosphor-icons/react';
+import { ArrowClockwiseIcon, ArrowRightIcon, CheckIcon, CircleNotchIcon, RobotIcon } from '@phosphor-icons/react';
 
 type Suggestion = {
   leadId: string;
@@ -88,7 +88,7 @@ export function AgentNextActions() {
   return <section aria-labelledby="darwin-next-actions-title" className="mt-6 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-4 sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-3">
-        <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.09] text-[var(--atelier-green)]"><SparkleIcon size={20} weight="fill" /></span>
+        <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--atelier-green)]/[0.09] text-[var(--atelier-green)]"><RobotIcon size={20} weight="duotone" /></span>
         <div><h2 id="darwin-next-actions-title" className="text-lg font-semibold">Próximas ações</h2><p className="mt-1 text-sm leading-5 text-white/50">Darwin identifica oportunidades paradas no funil. Você decide se cria a tarefa.</p></div>
       </div>
       <button type="button" onClick={() => void refresh(true)} disabled={loading || refreshing} aria-label="Atualizar fila de próximas ações" className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-white/10 px-3 text-sm text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)] disabled:opacity-50">

@@ -8,6 +8,8 @@ import { startProspectingCampaign } from '@/lib/research/runtime';
 
 const INITIAL_AREAS = 8;
 const DISPATCH_LEASE_MS = 60_000;
+const DISPATCH_RETRY_BACKOFF_MS = 60 * 60_000;
+const MAX_DISPATCH_RETRIES = 3;
 
 function getSaoPauloHour(now = new Date()) {
   return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hourCycle: 'h23' }).format(now));
@@ -36,9 +38,9 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
     }
 
     let configuredTime: string | null = null;
+    let currentHour: number | null = null;
     if (expectedHour !== undefined) {
-      const currentHour = getSaoPauloHour();
-      if (currentHour !== expectedHour) return Response.json({ skipped: true, reason: 'outside_scheduled_hour' });
+      currentHour = getSaoPauloHour();
       configuredTime = settings?.prospectingTime ?? '09:00';
       const configuredHour = Number(configuredTime.slice(0, 2));
       if (expectedHour < configuredHour) return Response.json({ skipped: true, reason: 'before_configured_time' });
@@ -47,6 +49,16 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
     const dateKey = getSaoPauloDateKey();
     const idempotencyKey = `autonomous:${dateKey}`;
     let campaign = await prisma.researchCampaign.findUnique({ where: { idempotencyKey } });
+    if (expectedHour !== undefined && currentHour !== expectedHour) {
+      const configuredHour = Number((configuredTime ?? '09:00').slice(0, 2));
+      const retryWindowOpen = currentHour !== null && currentHour >= configuredHour;
+      const recoverableDispatch = retryWindowOpen && campaign && (
+        campaign.status === 'FAILED'
+        || (campaign.status === 'RUNNING' && !campaign.workflowRunId && campaign.dispatchAttemptedAt
+          && campaign.dispatchAttemptedAt.getTime() + DISPATCH_LEASE_MS <= Date.now())
+      );
+      if (!recoverableDispatch) return Response.json({ skipped: true, reason: 'outside_scheduled_hour' });
+    }
     const configuredHour = Number((configuredTime ?? '09:00').slice(0, 2));
     if (expectedHour !== undefined && expectedHour >= configuredHour && !campaign
       && changedAfterScheduledTime(dateKey, configuredTime ?? '09:00', settings?.prospectingTimeUpdatedAt)) {
@@ -134,14 +146,34 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
       campaign = await prisma.researchCampaign.findUnique({ where: { id: campaign.id } });
       if (!campaign) return Response.json({ error: 'Não foi possível retomar a pesquisa diária.' }, { status: 500 });
     }
-    if ((campaign.status === 'FAILED' || campaign.status === 'CANCELLED') && campaign.dispatchAttemptedAt) {
+    if (campaign.status === 'CANCELLED') {
       return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true });
     }
-    if (campaign.status === 'FAILED' || campaign.status === 'CANCELLED') {
-      campaign = await prisma.researchCampaign.update({
-        where: { id: campaign.id },
-        data: { status: 'QUEUED', error: null, workflowRunId: null, dispatchLeaseUntil: null, dispatchAttemptedAt: null }
+    if (campaign.status === 'FAILED') {
+      const checkpoint = toCheckpointRecord(campaign.checkpoint);
+      const retryCount = typeof checkpoint.dispatchRetryCount === 'number' ? checkpoint.dispatchRetryCount : 0;
+      const lastAttemptAt = campaign.dispatchAttemptedAt ?? campaign.updatedAt;
+      if (retryCount >= MAX_DISPATCH_RETRIES) {
+        return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true, retriesExhausted: true });
+      }
+      if (Date.now() - lastAttemptAt.getTime() < DISPATCH_RETRY_BACKOFF_MS) {
+        return Response.json({ campaignId: campaign.id, status: campaign.status, reused: true, retryPending: true });
+      }
+      const requeued = await prisma.researchCampaign.updateMany({
+        where: { id: campaign.id, status: 'FAILED', checkpointVersion: campaign.checkpointVersion },
+        data: {
+          status: 'QUEUED',
+          error: null,
+          workflowRunId: null,
+          dispatchLeaseUntil: null,
+          dispatchAttemptedAt: null,
+          checkpoint: { ...checkpoint, dispatchRetryCount: retryCount + 1 } as Prisma.InputJsonObject,
+          checkpointVersion: { increment: 1 }
+        }
       });
+      if (!requeued.count) return Response.json({ campaignId: campaign.id, status: 'FAILED', reused: true });
+      campaign = await prisma.researchCampaign.findUnique({ where: { id: campaign.id } });
+      if (!campaign) return Response.json({ error: 'Não foi possível recuperar a pesquisa diária.' }, { status: 500 });
     }
 
     if (campaign.status === 'RUNNING' && campaign.workflowRunId) {
@@ -194,4 +226,10 @@ export async function runAutonomousProspecting(request: Request, expectedHour?: 
     console.error('[cron/autonomous-prospecting] Daily research failed', error);
     return Response.json({ error: 'Não foi possível iniciar a pesquisa diária.' }, { status: 500 });
   }
+}
+
+function toCheckpointRecord(value: Prisma.JsonValue): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
