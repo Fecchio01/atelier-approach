@@ -66,9 +66,10 @@ export type ExternalBusiness = {
   address?: string | null;
   category?: string | null;
   categoryHierarchy?: string | null;
+  googleMapsUrl?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  source?: 'OpenStreetMap' | 'Overture' | 'OpenStreetMap + Overture';
+  source?: 'OpenStreetMap' | 'Overture' | 'OpenStreetMap + Overture' | 'Google Maps (Apify)';
   lastSyncedAt?: string | null;
   alreadyWorked?: boolean;
   crmHref?: string | null;

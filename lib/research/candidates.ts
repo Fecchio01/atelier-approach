@@ -31,7 +31,8 @@ export async function filterAvailableCampaignBusinesses(
 
   const externalIds = [...new Set(businesses.map(({ osmId }) => osmId))];
   const sources = [...new Set(businesses.map(({ source }) => source ?? 'Overture'))];
-  const [existingCandidates, linkedCandidates, existingLeads] = await Promise.all([
+  const normalizedNames = [...new Set(businesses.map(({ name }) => normalizeCandidateName(name)))];
+  const [existingCandidates, linkedCandidates, existingLeads, sameIdentityCandidates] = await Promise.all([
     db.prospectCandidate.findMany({
       where: { source: { in: sources }, externalId: { in: externalIds } },
       select: { source: true, externalId: true, status: true, discardedAt: true, leadId: true }
@@ -40,7 +41,11 @@ export async function filterAvailableCampaignBusinesses(
       where: { campaignId, candidate: { source: { in: sources }, externalId: { in: externalIds } } },
       select: { candidate: { select: { source: true, externalId: true } } }
     }),
-    db.lead.findMany({ where: { osmId: { in: externalIds } }, select: { osmId: true } })
+    db.lead.findMany({ where: { osmId: { in: externalIds } }, select: { osmId: true } }),
+    db.prospectCandidate.findMany({
+      where: { normalizedName: { in: normalizedNames }, OR: [{ latitude: { not: null } }, { website: { not: null } }, { address: { not: null } }] },
+      select: { source: true, externalId: true, normalizedName: true, address: true, latitude: true, longitude: true, website: true }
+    })
   ]);
 
   const key = (source: string, externalId: string) => `${source}:${externalId}`;
@@ -51,15 +56,39 @@ export async function filterAvailableCampaignBusinesses(
   return businesses.filter((business) => {
     const source = business.source ?? 'Overture';
     const businessKey = key(source, business.osmId);
+    const normalizedName = normalizeCandidateName(business.name);
     const existing = existingByKey.get(businessKey);
     if (alreadyLinked.has(businessKey) || existingLeadIds.has(business.osmId)) return false;
+    if (sameIdentityCandidates.some((candidate) => candidate.externalId !== business.osmId
+      && candidate.normalizedName === normalizedName
+      && candidatesRepresentSamePlace(candidate, business))) return false;
     if (!existing) return true;
     return AVAILABLE_CANDIDATE_STATUSES.includes(existing.status as typeof AVAILABLE_CANDIDATE_STATUSES[number])
       && !existing.discardedAt && !existing.leadId;
   });
 }
 
-const EXTRACTOR_VERSION = 'overture-enrichment-v1';
+function candidatesRepresentSamePlace(
+  candidate: { address: string | null; latitude: number | null; longitude: number | null; website: string | null },
+  business: ExternalBusiness
+) {
+  const sameCoordinates = candidate.latitude !== null && candidate.longitude !== null
+    && typeof business.latitude === 'number' && typeof business.longitude === 'number'
+    && Math.abs(candidate.latitude - business.latitude) <= 0.0005
+    && Math.abs(candidate.longitude - business.longitude) <= 0.0005;
+  const sameAddress = Boolean(candidate.address && business.address)
+    && normalizeCandidateName(candidate.address ?? '') === normalizeCandidateName(business.address ?? '');
+  const sameDomain = Boolean(candidate.website && business.website)
+    && websiteDomain(candidate.website ?? '') === websiteDomain(business.website ?? '');
+  return sameCoordinates || sameAddress || sameDomain;
+}
+
+function websiteDomain(value: string) {
+  try { return new URL(value).hostname.toLocaleLowerCase('en-US').replace(/^www\./, ''); }
+  catch { return ''; }
+}
+
+const EXTRACTOR_VERSION = 'research-provider-enrichment-v1';
 
 export function normalizeCandidateName(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR')
@@ -190,15 +219,17 @@ async function persistEvidence(
   business: ExternalBusiness,
   release: string | null
 ) {
+  const provider = business.source ?? 'Overture';
   const fields: Array<{ field: string; value: string | null; source: string; sourceUrl: string; verified: boolean }> = [
-    { field: 'name', value: business.name, source: 'Overture', sourceUrl: '', verified: false },
-    { field: 'category', value: business.category ?? null, source: 'Overture', sourceUrl: '', verified: false },
-    { field: 'address', value: business.address ?? null, source: 'Overture', sourceUrl: '', verified: false },
-    { field: 'phone', value: business.phone ?? null, source: business.phoneSource ? 'OFFICIAL_SITE' : 'Overture', sourceUrl: business.website ?? '', verified: Boolean(business.phoneSource) },
-    { field: 'website', value: business.website, source: 'Overture', sourceUrl: '', verified: false },
-    { field: 'instagram', value: business.instagram, source: 'Overture', sourceUrl: business.website ?? '', verified: false },
-    { field: 'whatsapp', value: business.whatsapp ?? null, source: business.whatsappSourceUrl ? 'OFFICIAL_SITE' : 'Overture', sourceUrl: business.whatsappSourceUrl ?? business.website ?? '', verified: Boolean(business.whatsappSourceUrl) },
-    { field: 'imageUrl', value: business.imageUrl ?? null, source: 'Overture', sourceUrl: '', verified: false }
+    { field: 'name', value: business.name, source: provider, sourceUrl: '', verified: false },
+    { field: 'category', value: business.category ?? null, source: provider, sourceUrl: '', verified: false },
+    { field: 'address', value: business.address ?? null, source: provider, sourceUrl: '', verified: false },
+    { field: 'phone', value: business.phone ?? null, source: business.phoneSource ? 'OFFICIAL_SITE' : provider, sourceUrl: business.website ?? '', verified: Boolean(business.phoneSource) },
+    { field: 'website', value: business.website, source: provider, sourceUrl: '', verified: false },
+    { field: 'instagram', value: business.instagram, source: provider, sourceUrl: business.website ?? '', verified: false },
+    { field: 'whatsapp', value: business.whatsapp ?? null, source: business.whatsappSourceUrl ? 'OFFICIAL_SITE' : provider, sourceUrl: business.whatsappSourceUrl ?? business.website ?? '', verified: Boolean(business.whatsappSourceUrl) },
+    { field: 'imageUrl', value: business.imageUrl ?? null, source: provider, sourceUrl: '', verified: false },
+    { field: 'googleMapsUrl', value: business.googleMapsUrl ?? null, source: provider, sourceUrl: business.googleMapsUrl ?? '', verified: false }
   ];
 
   for (const item of fields) {

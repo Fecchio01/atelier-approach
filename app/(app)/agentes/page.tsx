@@ -58,6 +58,7 @@ export default async function AgentsPage() {
         feedbackReason: candidate.feedback?.outcome === 'DISCARDED' ? candidate.feedback.reason : null,
         calibrationHint: calibrations.get(candidate.category ?? '')?.label ?? null,
         name: candidate.name,
+        source: candidate.source,
         status: candidate.status,
         category: candidate.category,
         address: candidate.address,
@@ -84,7 +85,7 @@ export default async function AgentsPage() {
           const calibratedFit = Math.max(0, Math.min(100, analysis.fitScore + adjustment));
           return { ...analysis, fitScore: candidate.status === 'REVIEW_IDENTITY' ? Math.min(45, calibratedFit) : calibratedFit };
         })(),
-        evidence: candidate.evidence.map(({ id, field, source, verified }) => ({ id, field, source, verified }))
+        evidence: candidate.evidence.map(({ id, field, value, source, verified }) => ({ id, field, value, source, verified }))
       }
     })) : []
   }));

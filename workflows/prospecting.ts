@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/db';
+import { sleep } from 'workflow';
 import { countVisibleCampaignCandidates, filterAvailableCampaignBusinesses, persistCampaignCandidates } from '@/lib/research/candidates';
 import { enrichProspectBatch, resolveProspectSearchPlan, searchProspectArea, splitProspectSearchArea } from '@/lib/research/search-service';
+import { getApifyGooglePlacesSearch, isApifyGooglePlacesEnabled, startApifyGooglePlacesSearch } from '@/lib/research/apify-google-places';
 import { AUTONOMOUS_CITY_AREA_QUERIES, AUTONOMOUS_NATIONAL_AREA_QUERIES, AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES, AUTONOMOUS_NATIONAL_SEARCH_VERSION } from '@/lib/research/autonomous';
 import type { OvertureSearchArea } from '@/lib/overture';
 
@@ -10,6 +12,10 @@ type CampaignCheckpoint = {
   nationalSearchVersion?: number;
   nationalCoverageLimitReached?: boolean;
   nationalAreaFailure?: boolean;
+  apifyAttempted?: boolean;
+  apifyAttemptedAt?: string;
+  apifyCompleted?: boolean;
+  apifyRunId?: string;
 };
 
 export async function prospectingCampaign(campaignId: string) {
@@ -18,6 +24,7 @@ export async function prospectingCampaign(campaignId: string) {
   while (true) {
     const result = await processProspectingCampaignArea(campaignId);
     if (result.completed) return result;
+    if (result.waitingForApify) await sleep('45s');
   }
 }
 
@@ -42,6 +49,14 @@ async function processProspectingCampaignArea(campaignId: string) {
       }
     });
     return { completed: true, status: 'COMPLETED' };
+  }
+
+  // One optional Maps lookup per automatic Darwin campaign, never one per Overture tile.
+  // The API is off unless an operator explicitly enables it and configures a server token.
+  if (readBooleanCriterion(campaign.criteria, 'automatic') && isApifyGooglePlacesEnabled() && !checkpoint.apifyCompleted) {
+    const apifyResult = await processApifyCampaignBatch(campaign.id, campaign.checkpointVersion, campaign.niche, campaign.city ?? campaign.region, campaign.region, campaign.maxCandidates, availableCount, checkpoint);
+    if (apifyResult === 'WAITING') return { completed: false, status: 'RUNNING', waitingForApify: true };
+    if (apifyResult === 'SAVED') return { completed: false, status: 'RUNNING' };
   }
 
   if (!checkpoint.areas.length) {
@@ -69,6 +84,7 @@ async function processProspectingCampaignArea(campaignId: string) {
           where: { id: campaign.id, status: 'RUNNING', checkpointVersion: campaign.checkpointVersion },
           data: {
             checkpoint: {
+              ...apifyCheckpoint(checkpoint),
               areas: plan.areas,
               nationalFallbackUsed: true,
               nationalSearchVersion: AUTONOMOUS_NATIONAL_SEARCH_VERSION,
@@ -92,6 +108,7 @@ async function processProspectingCampaignArea(campaignId: string) {
         error: campaignSearchShortfallMessage(availableCount, campaign.maxCandidates, checkpoint),
         dispatchLeaseUntil: null,
         checkpoint: {
+          ...apifyCheckpoint(checkpoint),
           areas: [],
           ...(checkpoint.nationalFallbackUsed ? { nationalFallbackUsed: true } : {}),
           ...(checkpoint.nationalSearchVersion ? { nationalSearchVersion: checkpoint.nationalSearchVersion } : {}),
@@ -137,6 +154,7 @@ async function processProspectingCampaignArea(campaignId: string) {
         where: { id: campaign.id, status: 'RUNNING', checkpointVersion: campaign.checkpointVersion },
         data: {
           checkpoint: {
+            ...apifyCheckpoint(checkpoint),
             areas: nextAreas,
             ...(checkpoint.nationalFallbackUsed ? { nationalFallbackUsed: true } : {}),
             ...(checkpoint.nationalSearchVersion ? { nationalSearchVersion: checkpoint.nationalSearchVersion } : {}),
@@ -185,6 +203,7 @@ async function processProspectingCampaignArea(campaignId: string) {
       where: { id: campaign.id, status: 'RUNNING', checkpointVersion: campaign.checkpointVersion },
       data: {
         checkpoint: {
+          ...apifyCheckpoint(checkpoint),
           areas: nextAreas,
           ...(checkpoint.nationalFallbackUsed ? { nationalFallbackUsed: true } : {}),
           ...(checkpoint.nationalSearchVersion ? { nationalSearchVersion: checkpoint.nationalSearchVersion } : {}),
@@ -217,18 +236,132 @@ function parseCheckpoint(value: unknown): CampaignCheckpoint {
     nationalSearchVersion?: unknown;
     nationalCoverageLimitReached?: unknown;
     nationalAreaFailure?: unknown;
+    apifyAttempted?: unknown;
+    apifyAttemptedAt?: unknown;
+    apifyCompleted?: unknown;
+    apifyRunId?: unknown;
   };
   return {
     areas: Array.isArray(parsed.areas) ? parsed.areas as OvertureSearchArea[] : [],
     ...(parsed.nationalFallbackUsed === true ? { nationalFallbackUsed: true } : {}),
     ...(typeof parsed.nationalSearchVersion === 'number' ? { nationalSearchVersion: parsed.nationalSearchVersion } : {}),
     ...(parsed.nationalCoverageLimitReached === true ? { nationalCoverageLimitReached: true } : {}),
-    ...(parsed.nationalAreaFailure === true ? { nationalAreaFailure: true } : {})
+    ...(parsed.nationalAreaFailure === true ? { nationalAreaFailure: true } : {}),
+    ...(parsed.apifyAttempted === true ? { apifyAttempted: true } : {}),
+    ...(typeof parsed.apifyAttemptedAt === 'string' ? { apifyAttemptedAt: parsed.apifyAttemptedAt } : {}),
+    ...(parsed.apifyCompleted === true ? { apifyCompleted: true } : {}),
+    ...(typeof parsed.apifyRunId === 'string' ? { apifyRunId: parsed.apifyRunId } : {})
   };
+}
+
+async function processApifyCampaignBatch(
+  campaignId: string,
+  checkpointVersion: number,
+  niche: string,
+  city: string,
+  region: string,
+  maxCandidates: number,
+  availableCount: number,
+  checkpoint: CampaignCheckpoint
+): Promise<'CONTINUE' | 'WAITING' | 'SAVED'> {
+  if (!checkpoint.apifyAttempted) {
+    const reserved = await prisma.researchCampaign.updateMany({
+      where: { id: campaignId, status: 'RUNNING', checkpointVersion },
+      data: {
+        checkpoint: { ...checkpoint, apifyAttempted: true, apifyAttemptedAt: new Date().toISOString() },
+        checkpointVersion: { increment: 1 }
+      }
+    });
+    if (!reserved.count) return 'WAITING';
+
+    try {
+      const run = await startApifyGooglePlacesSearch({ niche, city, region });
+      const current = await prisma.researchCampaign.findUnique({ where: { id: campaignId } });
+      if (!current || current.status !== 'RUNNING') return 'CONTINUE';
+      const latestCheckpoint = parseCheckpoint(current.checkpoint);
+      await prisma.researchCampaign.updateMany({
+        where: { id: campaignId, status: 'RUNNING', checkpointVersion: current.checkpointVersion },
+        data: {
+          checkpoint: { ...latestCheckpoint, apifyAttempted: true, apifyRunId: run.runId },
+          checkpointVersion: { increment: 1 }
+        }
+      });
+      return 'WAITING';
+    } catch (error) {
+      console.error('[agents/prospecting] Apify search could not start; continuing with Overture.', {
+        campaignId,
+        error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+      });
+      await completeApifyAttempt(campaignId);
+      return 'CONTINUE';
+    }
+  }
+
+  if (!checkpoint.apifyRunId) {
+    const attemptedAt = checkpoint.apifyAttemptedAt ? Date.parse(checkpoint.apifyAttemptedAt) : Number.NaN;
+    if (Number.isFinite(attemptedAt) && Date.now() - attemptedAt < 2 * 60_000) return 'WAITING';
+    // A lost API response must not trigger a second potentially billable actor run.
+    await completeApifyAttempt(campaignId);
+    return 'CONTINUE';
+  }
+
+  const result = await getApifyGooglePlacesSearch(checkpoint.apifyRunId, { city, region });
+  if (['RUNNING', 'READY', 'TIMING-OUT', 'ABORTING'].includes(result.status)) return 'WAITING';
+
+  const current = await prisma.researchCampaign.findUnique({ where: { id: campaignId } });
+  if (!current || current.status !== 'RUNNING') return 'CONTINUE';
+  const latestCheckpoint = parseCheckpoint(current.checkpoint);
+  const remaining = Math.max(0, maxCandidates - availableCount);
+  const eligible = result.status === 'SUCCEEDED'
+    ? await filterAvailableCampaignBusinesses(prisma, campaignId, result.businesses)
+    : [];
+  const batch = eligible.slice(0, remaining);
+
+  await prisma.$transaction(async (tx) => {
+    await persistCampaignCandidates(tx, campaignId, batch, null, niche);
+    const candidateCount = await countVisibleCampaignCandidates(tx, campaignId);
+    const exhausted = candidateCount >= current.maxCandidates;
+    const saved = await tx.researchCampaign.updateMany({
+      where: { id: campaignId, status: 'RUNNING', checkpointVersion: current.checkpointVersion },
+      data: {
+        checkpoint: { ...latestCheckpoint, apifyAttempted: true, apifyCompleted: true, apifyRunId: latestCheckpoint.apifyRunId },
+        checkpointVersion: { increment: 1 },
+        candidateCount,
+        status: exhausted ? 'COMPLETED' : 'RUNNING',
+        error: null,
+        dispatchLeaseUntil: exhausted ? null : current.dispatchLeaseUntil
+      }
+    });
+    if (!saved.count) throw new Error('A campanha mudou durante a gravação dos resultados Apify.');
+  });
+
+  return batch.length ? 'SAVED' : 'CONTINUE';
+}
+
+async function completeApifyAttempt(campaignId: string) {
+  const current = await prisma.researchCampaign.findUnique({ where: { id: campaignId } });
+  if (!current || current.status !== 'RUNNING') return;
+  const checkpoint = parseCheckpoint(current.checkpoint);
+  await prisma.researchCampaign.updateMany({
+    where: { id: campaignId, status: 'RUNNING', checkpointVersion: current.checkpointVersion },
+    data: {
+      checkpoint: { ...checkpoint, apifyAttempted: true, apifyCompleted: true },
+      checkpointVersion: { increment: 1 }
+    }
+  });
 }
 
 function readBooleanCriterion(value: unknown, key: string) {
   return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>)[key] === true);
+}
+
+function apifyCheckpoint(checkpoint: CampaignCheckpoint) {
+  return {
+    ...(checkpoint.apifyAttempted ? { apifyAttempted: true } : {}),
+    ...(checkpoint.apifyAttemptedAt ? { apifyAttemptedAt: checkpoint.apifyAttemptedAt } : {}),
+    ...(checkpoint.apifyCompleted ? { apifyCompleted: true } : {}),
+    ...(checkpoint.apifyRunId ? { apifyRunId: checkpoint.apifyRunId } : {})
+  };
 }
 
 function campaignSearchShortfallMessage(candidateCount: number, maxCandidates: number, checkpoint: CampaignCheckpoint) {

@@ -13,7 +13,7 @@ type Candidate = {
   instagram: string | null;
   whatsapp: string | null;
   imageUrl: string | null;
-  evidence: Array<{ id: string; field: string; source: string; verified: boolean }>;
+  evidence: Array<{ id: string; field: string; value: string | null; source: string; verified: boolean }>;
 };
 
 type Campaign = {
@@ -190,7 +190,9 @@ function CampaignCard({ campaign, onRetry }: { campaign: Campaign; onRetry: () =
 }
 
 function CandidateRow({ candidate }: { candidate: Candidate }) {
-  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${candidate.name}${candidate.address ? `, ${candidate.address}` : ''}`)}`;
+  const recordedMapsUrl = candidate.evidence.find(({ field, value }) => field === 'googleMapsUrl' && value)?.value ?? null;
+  const mapsHref = safeExternalUrl(recordedMapsUrl)
+    ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${candidate.name}${candidate.address ? `, ${candidate.address}` : ''}`)}`;
   const safeWebsite = safeExternalUrl(candidate.website);
   const safeInstagram = safeExternalUrl(candidate.instagram);
   const safeWhatsapp = safeExternalUrl(candidate.whatsapp);

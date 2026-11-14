@@ -28,6 +28,7 @@ export type ProspectAnalysis = {
 };
 export type AutonomousCandidate = {
   id: string;
+  source: string;
   leadId: string | null;
   leadIsDiscarded: boolean;
   discardedAt: string | null;
@@ -43,7 +44,7 @@ export type AutonomousCandidate = {
   commercialAnalysis: ProspectAnalysis | null;
   feedbackReason?: FeedbackReason | null;
   calibrationHint?: string | null;
-  evidence: Array<{ id: string; field: string; source: string; verified: boolean }>;
+  evidence: Array<{ id: string; field: string; value: string | null; source: string; verified: boolean }>;
 };
 export type AutonomousCampaign = {
   id: string;
@@ -311,9 +312,11 @@ function CandidateCard({ candidate, promoting, discarding, error, confirmingIden
 }) {
   const analysis = candidate.commercialAnalysis;
   const mapQuery = encodeURIComponent(`${candidate.name}${candidate.address ? `, ${candidate.address}` : ''}`);
+  const recordedMapsUrl = candidate.evidence.find(({ field, value }) => field === 'googleMapsUrl' && value)?.value ?? null;
+  const googleMapsHref = safeExternalUrl(recordedMapsUrl) ?? `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
   const whatsappHref = toWhatsAppHref(candidate.whatsapp);
   const publishedPhone = normalizePublishedPhone(candidate.phone);
-  const phoneAsWhatsAppHref = !whatsappHref ? toWhatsAppHref(publishedPhone) : null;
+  const phoneAsWhatsAppHref = !whatsappHref && candidate.source !== 'Google Maps (Apify)' ? toWhatsAppHref(publishedPhone) : null;
   const actionableWhatsAppHref = whatsappHref ?? phoneAsWhatsAppHref;
   const whatsappNumber = actionableWhatsAppHref
     ? `+${new URL(actionableWhatsAppHref).pathname.replace(/\D/g, '')}`
@@ -326,14 +329,14 @@ function CandidateCard({ candidate, promoting, discarding, error, confirmingIden
       </div>
       <p className="mt-1 text-sm text-white/50">{candidate.category ?? 'Categoria não informada'}{candidate.address ? ` · ${candidate.address}` : ''}</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <a className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer">Google Maps <ArrowSquareOutIcon size={13} /></a>
+        <a className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={googleMapsHref} target="_blank" rel="noreferrer">Google Maps <ArrowSquareOutIcon size={13} /></a>
         {whatsappHref ? <a className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/50 px-3 text-xs font-medium text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/10" href={whatsappHref} target="_blank" rel="noreferrer">Abrir WhatsApp</a> : null}
         {!whatsappHref && phoneAsWhatsAppHref ? <a className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/50 px-3 text-xs font-medium text-[var(--atelier-green)] hover:bg-[var(--atelier-green)]/10" href={phoneAsWhatsAppHref} target="_blank" rel="noreferrer">WhatsApp</a> : null}
         {publishedPhone ? <a className="inline-flex min-h-11 items-center rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={`tel:${publishedPhone}`} aria-label={`Ligar para ${candidate.name}`}>Ligar</a> : null}
         {safeExternalUrl(candidate.website) ? <a className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.website)!} target="_blank" rel="noreferrer">Site <ArrowSquareOutIcon size={13} /></a> : null}
         {safeExternalUrl(candidate.instagram) ? <a className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.instagram)!} target="_blank" rel="noreferrer">Instagram <ArrowSquareOutIcon size={13} /></a> : null}
       </div>
-      {whatsappNumber ? <p className="mt-2 text-xs text-white/55">{whatsappHref ? 'WhatsApp publicado' : 'Telefone disponível para WhatsApp'}: <a className="underline underline-offset-2 hover:text-white" href={actionableWhatsAppHref!} target="_blank" rel="noreferrer">{whatsappNumber}</a></p> : candidate.whatsapp ? <p className="mt-2 text-xs text-white/45">Link de WhatsApp indisponível</p> : null}
+      {candidate.source === 'Google Maps (Apify)' && publishedPhone ? <p className="mt-2 text-xs text-white/55">Telefone publicado: <a className="underline underline-offset-2 hover:text-white" href={`tel:${publishedPhone}`}>{publishedPhone}</a></p> : whatsappNumber ? <p className="mt-2 text-xs text-white/55">{whatsappHref ? 'WhatsApp publicado' : 'Telefone disponível para WhatsApp'}: <a className="underline underline-offset-2 hover:text-white" href={actionableWhatsAppHref!} target="_blank" rel="noreferrer">{whatsappNumber}</a></p> : candidate.whatsapp ? <p className="mt-2 text-xs text-white/45">Link de WhatsApp indisponível</p> : null}
       <div className="mt-3">
         {candidate.leadId ? <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2">
           <span className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/30 px-3 text-sm font-medium text-[var(--atelier-green)]">{candidate.leadIsDiscarded ? 'Na lixeira do CRM' : 'Já no funil'}</span>
