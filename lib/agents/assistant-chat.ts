@@ -128,8 +128,15 @@ function formatGoalWriteReply(results: GoalSuggestionResult[], value: unknown) {
   const periods = results.map((result) => {
     const key = result.kind === 'WEEKLY' ? 'weekly' : 'monthly';
     const name = result.kind === 'WEEKLY' ? 'Semanal' : 'Mensal';
-    if (result.status === 'no_history') return `${name}: não encontrei resultados anteriores suficientes para preencher metas, então não gravei valores inventados.`;
-    if (result.status === 'unchanged') return `${name}: as metas existentes foram mantidas sem alterações.`;
+    const withoutEvidence = result.unavailableMetrics.map((metric) => labels[metric] ?? metric);
+    const evidenceNote = withoutEvidence.length
+      ? ` Não defini ${withoutEvidence.join(', ')} porque ainda não encontrei resultados registrados suficientes para estimar esses alvos.`
+      : '';
+    const projectionNote = result.projectedMetrics.length
+      ? ` Projetei pelo ritmo observado no ciclo atual: ${result.projectedMetrics.map((metric) => labels[metric] ?? metric).join(', ')}.`
+      : '';
+    if (result.status === 'no_history') return `${name}: não encontrei resultados registrados suficientes para salvar metas sem inventar números.${evidenceNote}`;
+    if (result.status === 'unchanged') return `${name}: as metas existentes já estavam atualizadas.${evidenceNote}`;
     if (result.status === 'concurrent_change') return `${name}: houve uma atualização ao mesmo tempo e não consigo confirmar que esta solicitação gravou as metas. Confira a página Metas para ver o valor atual.`;
 
     const goal = goals[key];
@@ -144,7 +151,7 @@ function formatGoalWriteReply(results: GoalSuggestionResult[], value: unknown) {
       ? ` Indicadores personalizados mantidos: ${goal.customGoals.map(({ name, target, unit }) => `${name} ${target}${unit ? ` ${unit}` : ''}`).join(' · ')}.`
       : '';
     const savedLabel = result.status === 'created' ? 'criei e salvei' : 'atualizei';
-    return `${name}: ${savedLabel} ${result.metricsSaved} campo(s) na área Metas${targets.length ? ` — ${targets.join(' · ')}` : ''}. Abordagens seguem o limite diário de prospecção; os demais alvos existentes foram preservados.${custom}`;
+    return `${name}: ${savedLabel} ${result.metricsSaved} campo(s) na área Metas${targets.length ? ` — ${targets.join(' · ')}` : ''}. Abordagens seguem o limite diário de prospecção; os demais alvos existentes foram preservados.${projectionNote}${custom}${evidenceNote}`;
   });
   return periods.join(' ');
 }
