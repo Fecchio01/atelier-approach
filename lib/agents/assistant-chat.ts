@@ -46,12 +46,13 @@ export async function answerAssistantChat(
     if (!goalRequest.kinds.length) {
       const context = await loadAssistantContext(message, leadId);
       return {
-        reply: 'Posso preencher as metas da equipe com base nos ciclos anteriores. Você quer as metas semanais, mensais ou as duas?',
+        reply: 'Posso salvar as metas semanais, mensais ou as duas na página Metas. Abordagens são calculadas pelo limite diário de prospecção e pelos dias úteis do ciclo; os outros indicadores usam o histórico disponível.',
         sources: { ...context.sources, engine: 'LOCAL' }
       };
     }
 
-    const results = await Promise.all(goalRequest.kinds.map((kind) => createDarwinGoalSuggestion(kind)));
+    const now = new Date();
+    const results = await Promise.all(goalRequest.kinds.map((kind) => createDarwinGoalSuggestion(kind, now, true)));
     const context = await loadAssistantContext(message, leadId);
     return {
       reply: formatGoalWriteReply(results, context.data.goals),
@@ -92,15 +93,20 @@ function detectGoalWriteRequest(message: string): { kinds: Array<'WEEKLY' | 'MON
   const lowerMessage = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
   if (!/\b(?:meta|metas|objetivo|objetivos)\b/.test(lowerMessage)) return null;
   // Never perform writes from a question, negation, conditional request, or
-  // explanatory prompt. Only a command at the start of the message authorizes
-  // a write; a verb mentioned later may just be part of a discussion.
+  // explanatory prompt. Accept both direct commands and explicit delegated
+  // requests such as “pedi para ele criar as metas”.
   if (message.includes('?')
-    || /\b(?:nao|nunca|jamais|caso|se|talvez|poderia|poderiam|gostaria|queria saber|seria|como|por que|porque|qual|quais|quando|posso|pode|podem|tem como|me explica|me ensina|vale a pena|quero saber|sera que)\b/.test(lowerMessage)) {
+    || /\b(?:nao|nunca|jamais|caso|se|talvez|poderia|poderiam|queria saber|seria|como|por que|porque|qual|quais|quando|posso|pode|podem|tem como|me explica|me ensina|vale a pena|quero saber|sera que)\b/.test(lowerMessage)) {
     return null;
   }
   const command = lowerMessage.replace(/^\s*(?:darwin\s*[,!:]?\s*)?(?:por favor\s*[,!:]?\s*)?/, '');
-  const explicitCommand = /^(?:crie|cria|defina|define|preencha|preenche|monte|monta|estabeleca|estabelece|faca|faz|fazer|gere|gera|configure|configura)\b/;
-  if (!explicitCommand.test(command)) return null;
+  const writeVerb = '(?:crie|cria|criar|criasse|defina|define|definir|definisse|preencha|preenche|preencher|preenchesse|monte|monta|montar|montasse|estabeleca|estabelece|estabelecer|estabelecesse|faca|faz|fazer|fizesse|gere|gera|gerar|gerasse|configure|configura|configurar|configurasse)';
+  const directCommand = new RegExp(`^(?:${writeVerb})\\b`).test(command);
+  const delegatedCommand = [
+    new RegExp(`^(?:(?:eu\\s+)?(?:quero|pedi|peco|mande|manda|faca|faz|preciso)\\s+(?:(?:para|pra)\\s+)?(?:(?:que\\s+)?(?:(?:o\\s+)?(?:ele|darwin)|(?:o\\s+)?proprio\\s+darwin|voce)(?:\\s+(?:mesmo|proprio))?\\s+)?${writeVerb}\\b)`),
+    new RegExp(`^(?:(?:eu\\s+)?(?:quero|gostaria)\\s+que\\s+(?:(?:o\\s+)?(?:ele|darwin)|(?:o\\s+)?proprio\\s+darwin|voce)?\\s*${writeVerb}\\b)`)
+  ].some((pattern) => pattern.test(command));
+  if (!directCommand && !delegatedCommand) return null;
 
   const kinds: Array<'WEEKLY' | 'MONTHLY'> = [];
   if (/\b(?:semanal|semanais|semana)\b/.test(lowerMessage)) kinds.push('WEEKLY');
@@ -113,6 +119,7 @@ function formatGoalWriteReply(results: GoalSuggestionResult[], value: unknown) {
     start?: unknown;
     end?: unknown;
     targets?: Record<string, number | null>;
+    customGoals?: Array<{ name: string; target: number; unit?: string }>;
   }> : {};
   const labels: Record<string, string> = {
     approaches: 'abordagens', interests: 'interesses', meetings: 'reuniões', proposalsSent: 'propostas enviadas',
@@ -133,8 +140,11 @@ function formatGoalWriteReply(results: GoalSuggestionResult[], value: unknown) {
           : `${target}${metric === 'conversionRate' ? '%' : ''}`;
         return `${labels[metric] ?? metric}: ${formatted}`;
       });
-    const savedLabel = result.status === 'created' ? 'criei' : 'completei';
-    return `${name}: ${savedLabel} ${result.metricsSaved} campo(s) na área Metas${targets.length ? ` — ${targets.join(' · ')}` : ''}. Os valores que a equipe já tinha foram preservados.`;
+    const custom = goal?.customGoals?.length
+      ? ` Indicadores personalizados mantidos: ${goal.customGoals.map(({ name, target, unit }) => `${name} ${target}${unit ? ` ${unit}` : ''}`).join(' · ')}.`
+      : '';
+    const savedLabel = result.status === 'created' ? 'criei e salvei' : 'atualizei';
+    return `${name}: ${savedLabel} ${result.metricsSaved} campo(s) na área Metas${targets.length ? ` — ${targets.join(' · ')}` : ''}. Abordagens seguem o limite diário de prospecção; os demais alvos existentes foram preservados.${custom}`;
   });
   return periods.join(' ');
 }
@@ -176,7 +186,7 @@ async function loadAssistantContext(message: string, leadId?: string): Promise<C
       periodKind: true, periodStart: true, periodEnd: true, approachesTarget: true,
       interestsTarget: true, meetingsTarget: true, proposalsSentTarget: true,
       salesTarget: true, revenueTarget: true, mrrTarget: true,
-      followUpsCompletedTarget: true, conversionRateTarget: true
+      followUpsCompletedTarget: true, conversionRateTarget: true, customGoals: true
     }
   }).catch(() => []);
   const leadPromise = leadId ? prisma.lead.findUnique({
@@ -230,7 +240,14 @@ async function loadAssistantContext(message: string, leadId?: string): Promise<C
       approaches: goal.approachesTarget, interests: goal.interestsTarget, meetings: goal.meetingsTarget,
       proposalsSent: goal.proposalsSentTarget, sales: goal.salesTarget, revenue: goal.revenueTarget,
       mrr: goal.mrrTarget, followUpsCompleted: goal.followUpsCompletedTarget, conversionRate: goal.conversionRateTarget
-    }
+    },
+    customGoals: Array.isArray(goal.customGoals) ? goal.customGoals.flatMap((item) => {
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) return [];
+      const record = item as Record<string, unknown>;
+      return typeof record.name === 'string' && typeof record.target === 'number'
+        ? [{ name: record.name, target: record.target, unit: typeof record.unit === 'string' ? record.unit : '' }]
+        : [];
+    }) : []
   }]));
   const weeklyData = report ? {
     from: report.period.from.toISOString(),
@@ -264,7 +281,7 @@ async function loadAssistantContext(message: string, leadId?: string): Promise<C
       paused: settings.paused,
       scheduledTime: settings.prospectingTime
     } : null,
-    goals: goals as Record<string, { targets: Record<string, number | null> }> | null,
+    goals: goals as Record<string, { targets: Record<string, number | null>; customGoals: Array<{ name: string; target: number; unit: string }> }> | null,
     lead
   });
   return {
@@ -393,7 +410,7 @@ function buildLocalReply(message: string, input: {
   } | null;
   reportAvailable: boolean;
   automation: { enabled: boolean; paused: boolean; scheduledTime: string } | null;
-  goals: Record<string, { targets: Record<string, number | null> }> | null;
+  goals: Record<string, { targets: Record<string, number | null>; customGoals: Array<{ name: string; target: number; unit: string }> }> | null;
   lead: AssistantChatSources['lead'];
 }) {
   const lowerMessage = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
@@ -459,7 +476,11 @@ function buildLocalReply(message: string, input: {
         .map(([metric, value]) => `${labels[metric] ?? metric} ${metric === 'revenue' || metric === 'mrr' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value as number) : `${value}${metric === 'conversionRate' ? '%' : ''}`}`);
       return `${key === 'weekly' ? 'Semanal' : 'Mensal'}: ${entries.length ? entries.join(' · ') : 'aguardando histórico para sugerir valores.'}`;
     };
-    return `O Darwin preenche as metas novas usando os resultados anteriores, sem alterar metas que a equipe já definiu. ${format('weekly')} ${format('monthly')}`;
+    const custom = (key: 'weekly' | 'monthly') => {
+      const labels = input.goals?.[key]?.customGoals ?? [];
+      return labels.length ? `Indicadores personalizados ${key === 'weekly' ? 'da semana' : 'do mês'}: ${labels.map(({ name, target, unit }) => `${name} ${target}${unit ? ` ${unit}` : ''}`).join(' · ')}.` : '';
+    };
+    return `O Darwin usa os indicadores já cadastrados e não remove os personalizados. ${format('weekly')} ${custom('weekly')} ${format('monthly')} ${custom('monthly')}`.trim();
   }
   if (/relat|semana|indicador|convers/.test(lowerMessage)) return `${report} ${alerts}`.trim();
   if (/melhor|falta|sistema|oportunidade|sugest/.test(lowerMessage)) {

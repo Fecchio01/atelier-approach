@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/lib/db';
 import { getGoalPeriodWindow, type GoalPeriodKind, type GoalPeriodWindow } from '@/lib/goal-periods';
@@ -6,6 +7,28 @@ import { getTeamGoalActualsByPeriod, type GoalMetricActuals, type GoalMetricKey 
 
 const OWNER_ID = '__team__';
 const metricKeys: GoalMetricKey[] = ['approaches', 'interests', 'meetings', 'proposalsSent', 'sales', 'revenue', 'mrr', 'followUpsCompleted', 'conversionRate'];
+const saoPauloDate = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
+});
+
+function countProspectingDays(start: Date, end: Date): number {
+  const dateParts = (date: Date) => {
+    const parts = saoPauloDate.formatToParts(date);
+    const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+    return { year: value('year'), month: value('month'), day: value('day') };
+  };
+  const first = dateParts(start);
+  const last = dateParts(new Date(end.getTime() - 1));
+  const cursor = new Date(Date.UTC(first.year, first.month - 1, first.day));
+  const lastDay = Date.UTC(last.year, last.month - 1, last.day);
+  let weekdays = 0;
+  while (cursor.getTime() <= lastDay) {
+    const day = cursor.getUTCDay();
+    if (day !== 0 && day !== 6) weekdays += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return weekdays;
+}
 
 function previousPeriods(current: GoalPeriodWindow, monthlyStartDay: number, count = 4) {
   const periods: GoalPeriodWindow[] = [];
@@ -65,15 +88,19 @@ export type GoalSuggestionResult = {
   metricsSaved: number;
 };
 
-async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthlyStartDay: number, now: Date): Promise<GoalSuggestionResult> {
+async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthlyStartDay: number, now: Date, replaceApproaches: boolean): Promise<GoalSuggestionResult> {
   const key = { ownerId: OWNER_ID, periodKind: kind, periodStart: current.start };
   const existing = await prisma.goal.findUnique({ where: { ownerId_periodKind_periodStart: key } });
 
   const historyPeriods = previousPeriods(current, monthlyStartDay);
   const actuals = await getTeamGoalActualsByPeriod(historyPeriods, now);
   const targets = suggestTargets(actuals);
+  const automation = await prisma.agentAutomationSettings.findUnique({ where: { id: 'team' }, select: { prospectingDailyLimit: true } });
+  const dailyLimit = automation?.prospectingDailyLimit ?? 10;
+  const approachesTarget = dailyLimit * countProspectingDays(current.start, current.end);
+  targets.approaches = approachesTarget;
   const metricsToSave = existing
-    ? countMissingSuggestedTargets(existing, targets)
+    ? countMissingSuggestedTargets(existing, targets) + (replaceApproaches && existing.approachesTarget != null && existing.approachesTarget !== approachesTarget ? 1 : 0)
     : metricKeys.filter((metric) => targets[metric] !== null).length;
   if (metricsToSave === 0) {
     return {
@@ -86,10 +113,14 @@ async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthl
   }
 
   if (existing) {
-    // Fill only blank built-in metrics; keep every existing team value and all
-    // custom indicators intact.
+    // Fill blank built-in metrics; on an explicit chat request, recalculate
+    // approaches from the configured daily prospecting limit. Keep custom goals.
     const proposedFields = targetFields(targets);
     const data = Object.fromEntries(metricKeys.flatMap((metric) => {
+      if (metric === 'approaches' && replaceApproaches) {
+        if (existing.approachesTarget === approachesTarget) return [];
+        return [['approachesTarget', approachesTarget]];
+      }
       if (existing[`${metric}Target` as keyof typeof existing] !== null || targets[metric] === null) return [];
       const field = `${metric}Target`;
       return [[field, proposedFields[field as keyof typeof proposedFields]]];
@@ -98,11 +129,13 @@ async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthl
       where: { id: existing.id, updatedAt: existing.updatedAt },
       data
     });
+    if (update.count === 1) revalidateGoals();
     return { kind, status: update.count === 1 ? 'updated' : 'concurrent_change', metricsSaved: update.count === 1 ? metricsToSave : 0 };
   }
 
   try {
     await prisma.goal.create({ data: { ...key, periodEnd: current.end, ...targetFields(targets), customGoals: [] } });
+    revalidateGoals();
     return { kind, status: 'created', metricsSaved: metricsToSave };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -112,7 +145,7 @@ async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthl
   }
 }
 
-export async function createDarwinGoalSuggestion(kind: GoalPeriodKind, now = new Date()): Promise<GoalSuggestionResult> {
+export async function createDarwinGoalSuggestion(kind: GoalPeriodKind, now = new Date(), replaceApproaches = false): Promise<GoalSuggestionResult> {
   const settings = await prisma.teamGoalSettings.findUnique({ where: { id: 'team' } });
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
   const activeGoals = await prisma.goal.findMany({
@@ -128,7 +161,13 @@ export async function createDarwinGoalSuggestion(kind: GoalPeriodKind, now = new
   const current = active
     ? { kind, start: active.periodStart, end: active.periodEnd }
     : getGoalPeriodWindow(kind, now, monthlyStartDay);
-  return planCycle(kind, current, monthlyStartDay, now);
+  return planCycle(kind, current, monthlyStartDay, now, replaceApproaches);
+}
+
+async function revalidateGoals() {
+  revalidatePath('/');
+  revalidatePath('/metas');
+  revalidatePath('/relatorios');
 }
 
 export async function createDarwinGoalSuggestions(now = new Date()) {
