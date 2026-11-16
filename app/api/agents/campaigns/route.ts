@@ -7,7 +7,7 @@ import { createResearchCampaignSchema } from '@/lib/research/contracts';
 import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { startProspectingCampaign } from '@/lib/research/runtime';
 import { getSaoPauloDateKey } from '@/lib/research/autonomous';
-import { countVisibleCampaignCandidates } from '@/lib/research/candidates';
+import { countVisibleCampaignCandidates, matchesStoredCandidateNiche } from '@/lib/research/candidates';
 import { isCampaignBatchReady } from '@/lib/research/campaign-batch';
 
 export const runtime = 'nodejs';
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     include: {
       candidates: {
         orderBy: { firstSeenAt: 'desc' },
-        take: 20,
+        take: 100,
         include: { candidate: { include: { evidence: { orderBy: { capturedAt: 'desc' }, take: 8 } } } }
       }
     }
@@ -50,7 +50,10 @@ export async function GET(request: Request) {
         && typeof (campaign.checkpoint as { nationalSearchVersion?: unknown }).nationalSearchVersion === 'number'
         ? (campaign.checkpoint as { nationalSearchVersion: number }).nationalSearchVersion : undefined,
       candidateCount: availableCandidateCount,
-      candidates: isCampaignBatchReady({ ...campaign, candidateCount: availableCandidateCount }) ? campaign.candidates.map((item) => {
+      candidates: isCampaignBatchReady({ ...campaign, candidateCount: availableCandidateCount }) ? campaign.candidates
+      .filter(({ candidate }) => matchesStoredCandidateNiche(candidate, campaign.niche))
+      .slice(0, campaign.maxCandidates)
+      .map((item) => {
       const lead = leadByExternalId.get(item.candidate.externalId);
       return { ...item, candidate: {
         ...item.candidate,

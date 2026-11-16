@@ -30,6 +30,7 @@ const TARGET_AUTO_SERVICE_NAME_PATTERN = /\b(estetica automotiva|detalhamento au
 const AUTO_PRODUCT_CATEGORY_PATTERN = /(^| )(auto_parts|car_parts|vehicle_parts|tire_shop|tyre_shop|tire_dealer|auto_dealer|car_dealer|automotive_dealer|vehicle_dealer|car_accessories|auto_accessories|automotive_store|auto_parts_store)( |$)/;
 const AUTO_PRODUCT_NAME_PATTERN = /\b(auto pecas|autopecas|car parts|auto parts|pecas automotivas|produtos automotivos|automotive products|loja de pecas|loja de acessorios|auto accessories|automotive accessories|concessionaria|dealership|revenda de veiculos|veiculos usados|pneus|tire shop|tyre shop)\b/;
 const UNRELATED_AUTO_PLACE_PATTERN = /retirement home|casa de repouso|residencial senior|corretora de seguros|insurance|detran|protecao veicular|clube de beneficios/i;
+const OPTICAL_BUSINESS_PATTERN = /(^| )(otica|oticas|otico|oticos|optica|opticas|optico|opticos|optic|optics|optical|optical store|optical shop|optician|opticians|optometrist|optometria|optometry|eyewear|eyeglass|glasses store|vision center)( |$)/;
 const CONTACT_URL = /https?:\/\/[^\s,;]+/gi;
 const NICHE_TAXONOMY_TERMS: Record<string, string[]> = {
   barbearia: ['barber', 'barber shop', 'barbershop'],
@@ -47,13 +48,21 @@ const NICHE_TAXONOMY_TERMS: Record<string, string[]> = {
   restaurante: ['restaurant'],
   imobiliaria: ['real estate agency', 'real estate'],
   'pet shop': ['pet shop', 'pet store', 'pet supply'],
-  'loja de roupa': ['loja de roupas', 'roupa', 'roupas', 'vestuario', 'clothing store', 'clothing', 'apparel store', 'apparel'],
-  'loja de roupas': ['loja de roupa', 'roupa', 'roupas', 'vestuario', 'clothing store', 'clothing', 'apparel store', 'apparel'],
-  roupas: ['loja de roupa', 'loja de roupas', 'vestuario', 'clothing store', 'clothing', 'apparel store', 'apparel'],
-  vestuario: ['loja de roupa', 'loja de roupas', 'roupas', 'clothing store', 'clothing', 'apparel store', 'apparel'],
-  'clothing store': ['clothing', 'apparel store', 'apparel', 'loja de roupa', 'loja de roupas', 'roupas', 'vestuario'],
-  clothing: ['clothing store', 'apparel store', 'apparel', 'loja de roupa', 'loja de roupas', 'roupas', 'vestuario'],
-  'apparel store': ['clothing store', 'clothing', 'apparel', 'loja de roupa', 'loja de roupas', 'roupas', 'vestuario'],
+  'loja de roupa': ['loja de roupas', 'roupa', 'roupas', 'vestuario', 'clothing store', 'clothing', 'apparel store', 'apparel', 'fashion store', 'fashion boutique', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing", 'moda feminina', 'moda masculina', 'lingerie', 'loja de lingerie', 'lingerie store', 'lingerie shop', 'underwear store', 'intimate apparel', 'roupa intima'],
+  'loja de roupas': ['loja de roupa', 'roupa', 'roupas', 'vestuario', 'clothing store', 'clothing', 'apparel store', 'apparel', 'fashion store', 'fashion boutique', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing", 'moda feminina', 'moda masculina', 'lingerie', 'loja de lingerie', 'lingerie store', 'lingerie shop', 'underwear store', 'intimate apparel', 'roupa intima'],
+  roupas: ['loja de roupa', 'loja de roupas', 'vestuario', 'clothing store', 'clothing', 'apparel store', 'apparel', 'fashion store', 'fashion boutique', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing", 'moda feminina', 'moda masculina', 'lingerie', 'loja de lingerie', 'lingerie store', 'lingerie shop', 'underwear store', 'intimate apparel', 'roupa intima'],
+  vestuario: ['loja de roupa', 'loja de roupas', 'roupas', 'clothing store', 'clothing', 'apparel store', 'apparel', 'fashion store', 'fashion boutique', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing", 'moda feminina', 'moda masculina', 'lingerie', 'loja de lingerie', 'lingerie store', 'lingerie shop', 'underwear store', 'intimate apparel', 'roupa intima'],
+  'clothing store': ['clothing', 'apparel store', 'apparel', 'loja de roupa', 'loja de roupas', 'roupas', 'vestuario', 'fashion store', 'fashion boutique', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing", 'moda feminina', 'moda masculina', 'lingerie', 'loja de lingerie', 'lingerie store', 'lingerie shop', 'underwear store', 'intimate apparel', 'roupa intima'],
+  clothing: ['clothing store', 'apparel store', 'apparel', 'loja de roupa', 'loja de roupas', 'roupas', 'vestuario', 'fashion store', 'fashion boutique', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing", 'moda feminina', 'moda masculina', 'lingerie', 'loja de lingerie', 'lingerie store', 'lingerie shop', 'underwear store', 'intimate apparel', 'roupa intima'],
+  'apparel store': ['clothing store', 'clothing', 'apparel', 'loja de roupa', 'loja de roupas', 'roupas', 'vestuario', 'fashion store', 'fashion boutique', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing", 'moda feminina', 'moda masculina', 'lingerie', 'loja de lingerie', 'lingerie store', 'lingerie shop', 'underwear store', 'intimate apparel', 'roupa intima'],
+  'fashion store': ['fashion boutique', 'apparel store', 'apparel', 'clothing store', 'clothing', 'loja de roupa', 'loja de roupas', 'moda feminina', 'moda masculina'],
+  'fashion boutique': ['fashion store', 'apparel store', 'apparel', 'clothing store', 'clothing', 'loja de roupa', 'loja de roupas', 'moda feminina', 'moda masculina'],
+  'moda feminina': ['loja de roupa', 'loja de roupas', 'roupas', 'vestuario', 'fashion store', 'fashion boutique', 'womens clothing', "women's clothing", 'lingerie', 'loja de lingerie', 'roupa intima'],
+  'moda masculina': ['loja de roupa', 'loja de roupas', 'roupas', 'vestuario', 'fashion store', 'fashion boutique', 'mens clothing', "men's clothing"],
+  'womens clothing': ['women’s clothing', 'fashion store', 'fashion boutique', 'apparel', 'clothing', 'loja de roupa', 'moda feminina'],
+  "women's clothing": ['womens clothing', 'fashion store', 'fashion boutique', 'apparel', 'clothing', 'loja de roupa', 'moda feminina'],
+  'mens clothing': ['men’s clothing', 'fashion store', 'fashion boutique', 'apparel', 'clothing', 'loja de roupa', 'moda masculina'],
+  "men's clothing": ['mens clothing', 'fashion store', 'fashion boutique', 'apparel', 'clothing', 'loja de roupa', 'moda masculina'],
   oficina: ['automotive repair', 'auto repair', 'mechanic'],
   'oficina mecanica': ['automotive repair', 'auto repair', 'mechanic'],
   'lava jato': ['car wash', 'auto wash'],
@@ -278,11 +287,15 @@ export function buildOvertureQuery(
   const placesPaths = `[${files.map((file) => `'${file.replaceAll("'", "''")}'`).join(', ')}]`;
   const categoryText = "translate(lower(concat_ws(' ', coalesce(taxonomy.primary, ''), array_to_string(taxonomy.hierarchy, ' '), coalesce(basic_category, ''))), 'áàâãéêíóôõúç', 'aaaaeeiooouc')";
   const nameText = "translate(lower(concat_ws(' ', coalesce(names.primary, ''), coalesce(brand.names.primary, ''))), 'áàâãéêíóôõúç', 'aaaaeeiooouc')";
+  const opticalSearchText = `regexp_replace(replace(replace(${categoryText} || ' ' || ${nameText}, '_', ' '), '-', ' '), '\\s+', ' ', 'g')`;
   const searchCondition = buildOvertureSearchCondition(categoryText, nameText, criteria);
   const automotiveProductExclusion = !criteria.businessName && isDefaultAutomotiveNiche(criteria.niche)
     ? `AND NOT regexp_matches(${categoryText}, '${AUTO_PRODUCT_CATEGORY_PATTERN.source.replaceAll("'", "''")}')
       AND (NOT regexp_matches(${nameText}, '${AUTO_PRODUCT_NAME_PATTERN.source.replaceAll("'", "''")}')
         OR regexp_matches(${nameText}, '${TARGET_AUTO_SERVICE_NAME_PATTERN.source.replaceAll("'", "''")}'))`
+    : '';
+  const opticalBusinessExclusion = !criteria.businessName && isClothingNiche(criteria.niche)
+    ? `AND NOT regexp_matches(${opticalSearchText}, '${OPTICAL_BUSINESS_PATTERN.source.replaceAll("'", "''")}')`
     : '';
   return `
     SELECT
@@ -307,6 +320,7 @@ export function buildOvertureQuery(
       AND operating_status IS DISTINCT FROM 'permanently_closed'
       AND ${searchCondition}
       ${automotiveProductExclusion}
+      ${opticalBusinessExclusion}
     LIMIT ${MAX_OVERTURE_RESULTS}
   `;
 }
@@ -322,6 +336,10 @@ export function matchesOvertureSearch(
     return isTargetAutomotiveService(business.category ?? null, business.categoryHierarchy ?? null, business.name);
   }
 
+  const normalizedNiche = normalizeSearchTerm(criteria.niche);
+  const searchableText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''} ${business.name}`);
+  if (isClothingNiche(normalizedNiche) && OPTICAL_BUSINESS_PATTERN.test(searchableText)) return false;
+
   // A café keyword in a hospital's name does not establish a café business.
   // Keep unknown/broad classifications and cafés located inside hospitals.
   if (['cafe', 'cafeteria'].includes(normalizeSearchTerm(criteria.niche))
@@ -329,8 +347,13 @@ export function matchesOvertureSearch(
     return false;
   }
 
-  const searchableText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''} ${business.name}`);
   return getNicheSearchTerms(criteria.niche).some((term) => matchesWholeSearchPhrase(searchableText, term));
+}
+
+function isClothingNiche(niche: string) {
+  return ['loja de roupa', 'loja de roupas', 'roupas', 'vestuario', 'clothing', 'clothing store', 'apparel', 'apparel store',
+    'fashion store', 'fashion boutique', 'moda feminina', 'moda masculina', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing"]
+    .includes(normalizeSearchTerm(niche));
 }
 
 function buildOvertureSearchCondition(

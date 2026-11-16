@@ -7,7 +7,7 @@ export const AUTONOMOUS_CITY_AREA_QUERIES = 32;
 export const AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES = 192;
 export const AUTONOMOUS_NATIONAL_EXPANSION_AREA_QUERIES = 32;
 export const AUTONOMOUS_NATIONAL_AREA_QUERIES = AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES + AUTONOMOUS_NATIONAL_EXPANSION_AREA_QUERIES;
-export const AUTONOMOUS_NATIONAL_SEARCH_VERSION = 6;
+export const AUTONOMOUS_NATIONAL_SEARCH_VERSION = 7;
 export const AUTONOMOUS_MAX_AREA_QUERIES = AUTONOMOUS_CITY_AREA_QUERIES + AUTONOMOUS_NATIONAL_AREA_QUERIES;
 
 const NICHE_CYCLE = [
@@ -73,6 +73,7 @@ export function analyzeProspect(input: {
   niche: string;
   name: string;
   category: string | null;
+  categoryHierarchy?: string | null;
   address: string | null;
   phone: string | null;
   website: string | null;
@@ -84,7 +85,7 @@ export function analyzeProspect(input: {
 }) {
   const target = chooseTermsForNiche(input.niche);
   const normalizedName = normalize(input.name);
-  const normalizedCategory = normalize(input.category ?? '');
+  const normalizedCategory = normalize([input.category, input.categoryHierarchy].filter(Boolean).join(' '));
   const nameMatches = target.filter((term) => normalizedName.includes(normalize(term)));
   const categoryMatches = target.filter((term) => normalizedCategory.includes(normalize(term)));
   const matchedTerms = Array.from(new Set([...categoryMatches, ...nameMatches]));
@@ -125,6 +126,7 @@ export function analyzeProspect(input: {
   const result = {
     version: 'prospect-analysis-v1',
     niche: input.niche,
+    categoryHierarchy: input.categoryHierarchy ?? null,
     fitScore,
     matchBasis,
     dataCompleteness: completeness,

@@ -2,12 +2,16 @@ import type { Prisma } from '@prisma/client';
 
 import type { ExternalBusiness } from '@/lib/osm';
 import { analyzeProspect } from '@/lib/research/autonomous';
+import { matchesOvertureSearch } from '@/lib/overture';
 
-type CandidateQueries = Pick<Prisma.TransactionClient, 'prospectCandidate' | 'researchCampaignCandidate' | 'lead'>;
+type CandidateQueries = Pick<Prisma.TransactionClient, 'prospectCandidate' | 'researchCampaignCandidate' | 'researchCampaign' | 'lead'>;
 const AVAILABLE_CANDIDATE_STATUSES = ['NEW', 'REVIEW_IDENTITY', 'APPROVED'] as const;
 
 /** Match the count shown in Darwin: campaign results that have not been rejected or discarded. */
 export async function countVisibleCampaignCandidates(db: CandidateQueries, campaignId: string) {
+  const campaign = await db.researchCampaign.findUnique({ where: { id: campaignId }, select: { niche: true } });
+  if (!campaign) return 0;
+
   const linkedCandidates = await db.researchCampaignCandidate.findMany({
     where: {
       campaignId,
@@ -16,9 +20,20 @@ export async function countVisibleCampaignCandidates(db: CandidateQueries, campa
         discardedAt: null
       }
     },
-    select: { candidateId: true }
+    select: { candidate: { select: { name: true, category: true, commercialAnalysis: true } } }
   });
-  return linkedCandidates.length;
+  return linkedCandidates.filter(({ candidate }) => matchesStoredCandidateNiche(candidate, campaign.niche)).length;
+}
+
+export function matchesStoredCandidateNiche(candidate: {
+  name: string;
+  category: string | null;
+  commercialAnalysis?: Prisma.JsonValue | null;
+}, niche: string) {
+  const analysis = candidate.commercialAnalysis;
+  const categoryHierarchy = analysis && typeof analysis === 'object' && !Array.isArray(analysis)
+    && typeof analysis.categoryHierarchy === 'string' ? analysis.categoryHierarchy : null;
+  return matchesOvertureSearch({ name: candidate.name, category: candidate.category, categoryHierarchy }, { niche });
 }
 
 /** Avoid wasting enrichment and area capacity on previously discarded/promoted/CRM-linked leads. */
@@ -123,6 +138,7 @@ export async function persistCampaignCandidates(
       niche,
       name: business.name,
       category: business.category ?? null,
+      categoryHierarchy: business.categoryHierarchy ?? null,
       address: business.address ?? null,
       phone: business.phone ?? null,
       website: business.website ?? null,

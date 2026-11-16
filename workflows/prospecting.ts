@@ -4,6 +4,7 @@ import { countVisibleCampaignCandidates, filterAvailableCampaignBusinesses, pers
 import { enrichProspectBatch, resolveProspectSearchPlan, searchProspectArea, splitProspectSearchArea } from '@/lib/research/search-service';
 import { getApifyGooglePlacesSearch, isApifyGooglePlacesEnabled, startApifyGooglePlacesSearch } from '@/lib/research/apify-google-places';
 import { AUTONOMOUS_CITY_AREA_QUERIES, AUTONOMOUS_NATIONAL_AREA_QUERIES, AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES, AUTONOMOUS_NATIONAL_SEARCH_VERSION } from '@/lib/research/autonomous';
+import { matchesOvertureSearch } from '@/lib/overture';
 import type { OvertureSearchArea } from '@/lib/overture';
 
 type CampaignCheckpoint = {
@@ -124,7 +125,8 @@ async function processProspectingCampaignArea(campaignId: string) {
   try {
     const result = await searchProspectArea(area, { niche: campaign.niche, release: campaign.release ?? undefined });
     const remaining = Math.max(0, campaign.maxCandidates - availableCount);
-    const eligibleBusinesses = await filterAvailableCampaignBusinesses(prisma, campaign.id, result.businesses);
+    const nicheMatchedBusinesses = result.businesses.filter((business) => matchesOvertureSearch(business, { niche: campaign.niche }));
+    const eligibleBusinesses = await filterAvailableCampaignBusinesses(prisma, campaign.id, nicheMatchedBusinesses);
     const enriched = await enrichProspectBatch(eligibleBusinesses.slice(0, remaining));
     const filtered = enriched.filter((business) => (!campaign.criteria || !readBooleanCriterion(campaign.criteria, 'phoneOnly') || Boolean(business.phone || business.whatsapp))
       && (!campaign.criteria || !readBooleanCriterion(campaign.criteria, 'digitalPresence') || Boolean(business.website || business.instagram)));
@@ -313,7 +315,7 @@ async function processApifyCampaignBatch(
   const latestCheckpoint = parseCheckpoint(current.checkpoint);
   const remaining = Math.max(0, maxCandidates - availableCount);
   const eligible = result.status === 'SUCCEEDED'
-    ? await filterAvailableCampaignBusinesses(prisma, campaignId, result.businesses)
+    ? await filterAvailableCampaignBusinesses(prisma, campaignId, result.businesses.filter((business) => matchesOvertureSearch(business, { niche })))
     : [];
   const batch = eligible.slice(0, remaining);
 
