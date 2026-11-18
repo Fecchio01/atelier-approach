@@ -2,7 +2,9 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { ChatCircleDotsIcon, CircleNotchIcon, CopyIcon, PaperPlaneTiltIcon, XIcon } from '@phosphor-icons/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { DarwinCompanion } from './darwin-companion';
+import { useDarwinPresence } from './darwin-presence';
 
 type ChatSources = {
   preparedAt: string;
@@ -28,6 +30,7 @@ const quickQuestions = [
 ];
 
 export function AgentChat() {
+  const prefersReducedMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -35,12 +38,17 @@ export function AgentChat() {
   const [error, setError] = useState('');
   const [selectedLead, setSelectedLead] = useState<{ id: string; name: string } | null>(null);
   const [copiedDraftId, setCopiedDraftId] = useState<string | null>(null);
+  const { mode: campaignMode } = useDarwinPresence();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<AbortController | null>(null);
   const sessionRef = useRef(0);
+  const companionMode = error ? 'attention' : loading ? 'working' : campaignMode;
+  const companionStatus = companionMode === 'working' ? 'Pesquisando…'
+    : companionMode === 'attention' ? 'Preciso da sua atenção'
+      : companionMode === 'complete' ? 'Pesquisa concluída' : 'Pronto para ajudar';
 
   function cancelPendingRequest() {
     sessionRef.current += 1;
@@ -138,17 +146,30 @@ export function AgentChat() {
   }
 
   return <>
-    <button
+    <motion.button
       type="button"
       onClick={() => setOpen(true)}
+      aria-label={`Abrir conversa com Darwin. ${companionStatus}`}
       aria-haspopup="dialog"
       aria-expanded={open}
       aria-controls="agent-chat-dialog"
-      className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-[calc(env(safe-area-inset-right)+1rem)] z-40 inline-flex min-h-12 items-center gap-2 rounded-full border border-[var(--atelier-green)]/40 bg-[#18201c] px-4 text-sm font-semibold text-white shadow-[0_12px_36px_rgba(0,0,0,0.38)] transition-colors hover:border-[var(--atelier-green)] hover:bg-[#202b24] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)] motion-reduce:transition-none sm:bottom-6 sm:right-6"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-[calc(env(safe-area-inset-right)+1rem)] z-40 flex flex-col items-center gap-2 rounded-2xl p-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--atelier-green)] sm:bottom-6 sm:right-6"
     >
-      <ChatCircleDotsIcon size={19} weight="fill" className="text-[var(--atelier-green)]" />
-      Perguntar ao agente
-    </button>
+      <span className={`inline-flex min-h-8 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border bg-[#18201c]/95 px-3 text-xs font-medium text-white shadow-lg backdrop-blur-sm ${companionMode === 'attention' ? 'border-amber-300/35' : companionMode === 'complete' ? 'border-[var(--atelier-green)]/40' : 'border-white/15'}`}>
+        <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${companionMode === 'attention' ? 'bg-amber-300' : companionMode === 'working' ? 'animate-pulse bg-[var(--atelier-green)] motion-reduce:animate-none' : 'bg-[var(--atelier-green)]'}`} />
+        <span className="truncate">{companionStatus}</span>
+      </span>
+      <motion.span
+        animate={prefersReducedMotion === false ? { y: [0, -3, 0] } : undefined}
+        transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
+        className="relative block rounded-[18px] shadow-[0_12px_32px_rgba(0,0,0,0.34)] transition-transform duration-200 hover:scale-105 motion-reduce:transition-none"
+      >
+        <DarwinCompanion mode={companionMode} size={72} className="rounded-[18px] ring-1 ring-white/20" />
+        <span aria-hidden="true" className="absolute bottom-1.5 right-1.5 flex size-7 items-center justify-center rounded-full border border-[var(--atelier-green)]/35 bg-[#18201c] text-[var(--atelier-green)] shadow-md">
+          <ChatCircleDotsIcon size={16} weight="fill" />
+        </span>
+      </motion.span>
+    </motion.button>
 
     <dialog
       ref={dialogRef}

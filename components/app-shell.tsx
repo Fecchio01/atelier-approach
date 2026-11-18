@@ -11,6 +11,7 @@ import { ReportPeriodNavigationProvider } from './report-period-navigation-state
 import { BrandLogo } from './brand-logo';
 import { ProfileAvatar } from './profile-avatar';
 import { AgentChat } from './agent-chat';
+import { DarwinPresenceProvider } from './darwin-presence';
 
 export function AppShell({ children, user, onSignOut }: { children: React.ReactNode; user: { name: string; email: string; image?: string | null }; onSignOut: () => Promise<void> }) {
   const pathname = usePathname();
@@ -44,7 +45,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
     return () => window.removeEventListener('atelier:navigation-error', clearPending);
   }, []);
 
-  return <MotionConfig reducedMotion="user"><>
+  return <DarwinPresenceProvider><MotionConfig reducedMotion="user"><>
     {pendingNavigation && <div role="status" aria-label="Navegação em andamento" aria-live="polite" className="fixed right-4 top-20 z-[60] inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-[var(--atelier-floating-surface)] px-3.5 text-xs font-medium text-white/75 shadow-lg backdrop-blur-xl backdrop-saturate-150 md:right-6 md:top-5">
       <CircleNotchIcon size={15} className="animate-spin text-[var(--atelier-green)] motion-reduce:animate-none" aria-hidden="true" />
       Abrindo {pendingNavigation.label}…
@@ -84,5 +85,5 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
     </div>
     </main>
     <AgentChat />
-  </></MotionConfig>;
+  </></MotionConfig></DarwinPresenceProvider>;
 }

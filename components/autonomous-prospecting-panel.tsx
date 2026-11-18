@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowClockwiseIcon, ArrowSquareOutIcon, CircleNotchIcon, MapPinIcon } from '@phosphor-icons/react';
 import { DarwinCompanion, type DarwinMode } from './darwin-companion';
+import { useDarwinPresence } from './darwin-presence';
 import { normalizePublishedPhone, toWhatsAppHref } from '@/lib/contact-links';
 import { isCampaignBatchReady } from '@/lib/research/campaign-batch';
 import { AUTONOMOUS_NATIONAL_SEARCH_VERSION } from '@/lib/research/autonomous';
@@ -85,6 +86,7 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   const [showDiscarded, setShowDiscarded] = useState(false);
   const [discardReasons, setDiscardReasons] = useState<Record<string, FeedbackSelection>>({});
   const resumeAttempted = useRef(new Set<string>());
+  const { setMode } = useDarwinPresence();
 
   const refresh = useCallback(async () => {
     try {
@@ -133,9 +135,13 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
 
   const latest = campaigns[0];
   const running = campaigns.some((campaign) => campaign.status === 'RUNNING' || campaign.status === 'QUEUED');
-  const companionMode: DarwinMode = campaigns.some((campaign) => campaign.status === 'RUNNING') ? 'working'
+  const companionMode: DarwinMode = campaigns.some((campaign) => campaign.status === 'RUNNING' || campaign.status === 'QUEUED') ? 'working'
     : latest?.status === 'FAILED' || Boolean(latest?.error) ? 'attention'
       : latest?.status === 'COMPLETED' && isCampaignBatchReady(latest) ? 'complete' : 'idle';
+
+  useEffect(() => {
+    setMode(companionMode);
+  }, [companionMode, setMode]);
   const stateLabel = paused || !enabled ? 'Pausada nas Configurações' : running
     ? campaigns.some((campaign) => campaign.status === 'RUNNING') ? 'Pesquisa em execução' : 'Pesquisa na fila'
     : 'Agendada para todos os dias';
