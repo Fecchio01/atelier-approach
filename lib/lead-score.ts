@@ -1,4 +1,5 @@
 import type { ExternalBusiness } from './osm';
+import { normalizePublishedPhone, toWhatsAppHref } from './contact-links';
 
 export type BusinessScore = {
   score: number;
@@ -6,8 +7,10 @@ export type BusinessScore = {
 };
 
 export function approachabilityRank(business: ExternalBusiness) {
-  if (business.whatsapp && business.instagram) return 0;
-  if (business.whatsapp) return 1;
+  const whatsappAction = toWhatsAppHref(business.whatsapp)
+    ?? toWhatsAppHref(normalizePublishedPhone(business.phone));
+  if (whatsappAction && business.instagram) return 0;
+  if (whatsappAction) return 1;
   if (business.instagram || business.website) return 2;
   if (business.phone) return 3;
   return 4;

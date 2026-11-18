@@ -12,8 +12,8 @@ export function normalizePublishedPhone(value: string | null | undefined): strin
   return digits ? `+${digits}` : null;
 }
 
-// This validates a published target's format, never whether it has a live account.
-// Only call with a field explicitly declared as WhatsApp, not a general telephone.
+// Builds a WhatsApp link from a published phone or explicit WhatsApp target.
+// Format validation does not confirm whether the number has an active account.
 export function toWhatsAppHref(value: string | null | undefined): string | null {
   const input = value?.trim();
   if (!input) return null;
@@ -26,6 +26,15 @@ export function toWhatsAppHref(value: string | null | undefined): string | null 
   try {
     const url = new URL(candidate);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port) return null;
+
+    // Walink short links are WhatsApp chat links. Accept only the exact HTTPS
+    // host and a single opaque path segment; never treat arbitrary shorteners as WhatsApp.
+    if (url.hostname.toLowerCase() === 'wa.link') {
+      return url.protocol === 'https:' && /^\/[a-z0-9_-]{3,80}\/?$/i.test(url.pathname)
+        && !url.search && !url.hash
+        ? url.toString()
+        : null;
+    }
 
     let number: string;
     if (url.hostname.toLowerCase() === 'wa.me' && /^\/\d+\/?$/.test(url.pathname)) {
