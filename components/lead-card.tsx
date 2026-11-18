@@ -111,7 +111,7 @@ export function LeadCard({ business, result, onApproached, onDiscard }: LeadCard
           <h2 className="mt-2 line-clamp-2 break-words text-lg font-semibold leading-snug text-white">{displayName}</h2>
         </div>
         <span className="rounded-full border border-[var(--atelier-green)]/60 px-3 py-1 text-xs font-semibold text-[var(--atelier-green)]">
-          {whatsappHref ? 'WhatsApp publicado' : instagramHref ? 'Instagram disponível' : business.website ? 'Site disponível' : publishedPhone ? 'Telefone publicado' : 'Sem canal direto'}
+          {whatsappHref || phoneAsWhatsAppHref ? 'WhatsApp' : instagramHref ? 'Instagram disponível' : business.website ? 'Site disponível' : publishedPhone ? 'Telefone publicado' : 'Sem canal direto'}
         </span>
       </div>
 

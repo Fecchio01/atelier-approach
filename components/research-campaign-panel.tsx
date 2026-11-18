@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { normalizePublishedPhone, toWhatsAppHref } from '../lib/contact-links';
 
 type Candidate = {
   id: string;
@@ -195,7 +196,8 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
     ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${candidate.name}${candidate.address ? `, ${candidate.address}` : ''}`)}`;
   const safeWebsite = safeExternalUrl(candidate.website);
   const safeInstagram = safeExternalUrl(candidate.instagram);
-  const safeWhatsapp = safeExternalUrl(candidate.whatsapp);
+  const safeWhatsapp = toWhatsAppHref(candidate.whatsapp)
+    ?? toWhatsAppHref(normalizePublishedPhone(candidate.phone));
   return (
     <li className="grid gap-2 py-3 sm:grid-cols-[1fr_auto] sm:items-center">
       <div className="min-w-0">
@@ -210,7 +212,7 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
         <a className="rounded-md border border-white/15 px-3 py-2 text-xs hover:border-white/40" href={mapsHref} target="_blank" rel="noreferrer">Google Maps</a>
         {safeWebsite ? <a className="rounded-md border border-white/15 px-3 py-2 text-xs hover:border-white/40" href={safeWebsite} target="_blank" rel="noreferrer">Site</a> : null}
         {safeInstagram ? <a className="rounded-md border border-white/15 px-3 py-2 text-xs hover:border-white/40" href={safeInstagram} target="_blank" rel="noreferrer">Instagram</a> : null}
-        {safeWhatsapp ? <a className="rounded-md border border-white/15 px-3 py-2 text-xs hover:border-white/40" href={safeWhatsapp} target="_blank" rel="noreferrer">WhatsApp publicado</a> : null}
+        {safeWhatsapp ? <a className="rounded-md border border-white/15 px-3 py-2 text-xs hover:border-white/40" href={safeWhatsapp} target="_blank" rel="noreferrer">WhatsApp</a> : null}
       </div>
     </li>
   );

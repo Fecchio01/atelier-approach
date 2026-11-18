@@ -55,7 +55,8 @@ export async function POST(request: Request) {
           phone: normalizePublishedPhone(optionalText(business?.phone)),
           website: optionalText(business?.website),
           instagram: optionalText(business?.instagram),
-          whatsapp: toWhatsAppHref(optionalText(business?.whatsapp)),
+          whatsapp: toWhatsAppHref(optionalText(business?.whatsapp))
+            ?? toWhatsAppHref(normalizePublishedPhone(optionalText(business?.phone))),
           address: optionalText(business?.address),
           category: optionalText(business?.category),
           latitude: typeof business?.latitude === 'number' ? business.latitude : null,

@@ -52,7 +52,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           phone: normalizePublishedPhone(candidate.phone),
           website: candidate.website,
           instagram: candidate.instagram,
-          whatsapp: toWhatsAppHref(candidate.whatsapp),
+          whatsapp: toWhatsAppHref(candidate.whatsapp)
+            ?? toWhatsAppHref(normalizePublishedPhone(candidate.phone)),
           address: candidate.address,
           category: candidate.category,
           latitude: candidate.latitude,

@@ -316,7 +316,7 @@ function CandidateCard({ candidate, promoting, discarding, error, confirmingIden
   const googleMapsHref = safeExternalUrl(recordedMapsUrl) ?? `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
   const whatsappHref = toWhatsAppHref(candidate.whatsapp);
   const publishedPhone = normalizePublishedPhone(candidate.phone);
-  const phoneAsWhatsAppHref = !whatsappHref && candidate.source !== 'Google Maps (Apify)' ? toWhatsAppHref(publishedPhone) : null;
+  const phoneAsWhatsAppHref = !whatsappHref ? toWhatsAppHref(publishedPhone) : null;
   const actionableWhatsAppHref = whatsappHref ?? phoneAsWhatsAppHref;
   const whatsappNumber = actionableWhatsAppHref
     ? `+${new URL(actionableWhatsAppHref).pathname.replace(/\D/g, '')}`
@@ -336,7 +336,7 @@ function CandidateCard({ candidate, promoting, discarding, error, confirmingIden
         {safeExternalUrl(candidate.website) ? <a className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.website)!} target="_blank" rel="noreferrer">Site <ArrowSquareOutIcon size={13} /></a> : null}
         {safeExternalUrl(candidate.instagram) ? <a className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-white/70 hover:border-[var(--atelier-green)]/50 hover:text-white" href={safeExternalUrl(candidate.instagram)!} target="_blank" rel="noreferrer">Instagram <ArrowSquareOutIcon size={13} /></a> : null}
       </div>
-      {candidate.source === 'Google Maps (Apify)' && publishedPhone ? <p className="mt-2 text-xs text-white/55">Telefone publicado: <a className="underline underline-offset-2 hover:text-white" href={`tel:${publishedPhone}`}>{publishedPhone}</a></p> : whatsappNumber ? <p className="mt-2 text-xs text-white/55">{whatsappHref ? 'WhatsApp publicado' : 'Telefone disponível para WhatsApp'}: <a className="underline underline-offset-2 hover:text-white" href={actionableWhatsAppHref!} target="_blank" rel="noreferrer">{whatsappNumber}</a></p> : candidate.whatsapp ? <p className="mt-2 text-xs text-white/45">Link de WhatsApp indisponível</p> : null}
+      {whatsappNumber ? <p className="mt-2 text-xs text-white/55">{whatsappHref ? 'WhatsApp' : 'Telefone publicado, abrir no WhatsApp'}: <a className="underline underline-offset-2 hover:text-white" href={actionableWhatsAppHref!} target="_blank" rel="noreferrer">{whatsappNumber}</a></p> : candidate.whatsapp ? <p className="mt-2 text-xs text-white/45">Link de WhatsApp indisponível</p> : null}
       <div className="mt-3">
         {candidate.leadId ? <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2">
           <span className="inline-flex min-h-11 items-center rounded-lg border border-[var(--atelier-green)]/30 px-3 text-sm font-medium text-[var(--atelier-green)]">{candidate.leadIsDiscarded ? 'Na lixeira do CRM' : 'Já no funil'}</span>
