@@ -21,7 +21,8 @@
 
 ## Limites observáveis
 
-- A origem dos prospectos continua sendo Overture; OSM resolve limites geográficos. Um link de busca no Google Maps não equivale a um Place ID verificado.
+- A pesquisa e o Darwin só exibem registros da Overture quando nome e coordenadas também correspondem exatamente a um registro no OpenStreetMap a até 150 metros. Candidatos persistidos sem essa evidência não são contabilizados, mostrados ou promovidos. A busca paga do Apify exige `APIFY_PAID_SEARCH_AUTHORIZED=true`, além da ativação e do token.
+- A correspondência gratuita confirma um registro no OpenStreetMap, não que a empresa esteja aberta atualmente nem que exista uma ficha ativa no Google Maps. Para os resultados cruzados, o botão abre as coordenadas em vez de pesquisar um nome que possa ser ambíguo.
 - Formato válido e publicação de um WhatsApp não comprovam que a conta continua registrada/ativa. A interface declara essa condição e não apresenta inferência de telefone como confirmação de WhatsApp. Não foram enviadas mensagens para testar contas.
 - Nenhum schema ou dado de produção foi alterado por estas correções. Testes com banco usam o schema isolado `atelier_test`.
 

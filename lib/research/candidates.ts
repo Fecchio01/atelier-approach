@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 import type { ExternalBusiness } from '@/lib/osm';
+import { isDirectGoogleMapsPlaceUrl } from '@/lib/osm';
 import { analyzeProspect } from '@/lib/research/autonomous';
 import { matchesOvertureSearch } from '@/lib/overture';
 
@@ -20,9 +21,27 @@ export async function countVisibleCampaignCandidates(db: CandidateQueries, campa
         discardedAt: null
       }
     },
-    select: { candidate: { select: { name: true, category: true, commercialAnalysis: true } } }
+    select: { candidate: { select: {
+      name: true,
+      category: true,
+      commercialAnalysis: true,
+      source: true,
+      externalId: true,
+      evidence: { where: { field: 'googleMapsUrl' }, select: { field: true, value: true } }
+    } } }
   });
-  return linkedCandidates.filter(({ candidate }) => matchesStoredCandidateNiche(candidate, campaign.niche)).length;
+  return linkedCandidates.filter(({ candidate }) => hasCandidateExistenceEvidence(candidate)
+    && matchesStoredCandidateNiche(candidate, campaign.niche)).length;
+}
+
+export function hasCandidateExistenceEvidence(candidate: {
+  source: string;
+  externalId: string;
+  evidence?: Array<{ field: string; value: string | null }>;
+}) {
+  if (candidate.source === 'OpenStreetMap + Overture') return candidate.externalId.startsWith('overture/');
+  if (candidate.source !== 'Google Maps (Apify)' || !/^apify\/[a-zA-Z0-9_-]{5,240}$/.test(candidate.externalId)) return false;
+  return candidate.evidence?.some(({ field, value }) => field === 'googleMapsUrl' && isDirectGoogleMapsPlaceUrl(value)) ?? false;
 }
 
 export function matchesStoredCandidateNiche(candidate: {

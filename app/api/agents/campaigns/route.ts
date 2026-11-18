@@ -7,7 +7,7 @@ import { createResearchCampaignSchema } from '@/lib/research/contracts';
 import { resolveProspectSearchPlan } from '@/lib/research/search-service';
 import { startProspectingCampaign } from '@/lib/research/runtime';
 import { getSaoPauloDateKey } from '@/lib/research/autonomous';
-import { countVisibleCampaignCandidates, matchesStoredCandidateNiche } from '@/lib/research/candidates';
+import { countVisibleCampaignCandidates, hasCandidateExistenceEvidence, matchesStoredCandidateNiche } from '@/lib/research/candidates';
 import { isCampaignBatchReady } from '@/lib/research/campaign-batch';
 
 export const runtime = 'nodejs';
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       candidates: {
         orderBy: { firstSeenAt: 'desc' },
         take: 100,
-        include: { candidate: { include: { evidence: { orderBy: { capturedAt: 'desc' }, take: 8 } } } }
+        include: { candidate: { include: { evidence: { orderBy: { capturedAt: 'desc' }, take: 20 } } } }
       }
     }
   });
@@ -51,7 +51,8 @@ export async function GET(request: Request) {
         ? (campaign.checkpoint as { nationalSearchVersion: number }).nationalSearchVersion : undefined,
       candidateCount: availableCandidateCount,
       candidates: isCampaignBatchReady({ ...campaign, candidateCount: availableCandidateCount }) ? campaign.candidates
-      .filter(({ candidate }) => matchesStoredCandidateNiche(candidate, campaign.niche))
+      .filter(({ candidate }) => hasCandidateExistenceEvidence(candidate)
+        && matchesStoredCandidateNiche(candidate, campaign.niche))
       .slice(0, campaign.maxCandidates)
       .map((item) => {
       const lead = leadByExternalId.get(item.candidate.externalId);

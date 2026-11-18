@@ -38,6 +38,10 @@ export async function enrichProspectBatch(businesses: ExternalBusiness[]) {
   return enrichOvertureBusinesses(businesses);
 }
 
+export async function verifyProspectExistence(businesses: ExternalBusiness[]) {
+  return boundsService.verifyBusinessExistence(businesses);
+}
+
 export function splitProspectSearchArea(area: OvertureSearchArea) {
   return splitOvertureSearchArea(area);
 }

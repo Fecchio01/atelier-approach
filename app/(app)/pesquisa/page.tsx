@@ -164,7 +164,7 @@ export default function PesquisaPage() {
 
   return (
     <section className="mx-auto max-w-6xl px-5 py-12 md:px-8">
-      <PageHeading eyebrow="Pesquisa de prospecção" title="Encontre novas empresas." description="Empresas identificadas exclusivamente na base Overture e priorizadas pelos canais de contato disponíveis. Empresas já trabalhadas ficam fora da busca padrão." />
+      <PageHeading eyebrow="Pesquisa de prospecção" title="Encontre novas empresas." description="A pesquisa cruza Overture com OpenStreetMap e oculta empresas sem confirmação independente. Empresas já trabalhadas ficam fora da busca padrão." />
 
       <div className="mt-8">
         <SearchForm onResults={handleResults} onSearchStart={handleSearchStart} onFailure={handleFailure} filters={filters} onFiltersChange={setFilters} />

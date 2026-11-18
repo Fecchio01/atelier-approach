@@ -5,6 +5,8 @@ import { enrichProspectBatch, resolveProspectSearchPlan, searchProspectArea, spl
 import { getApifyGooglePlacesSearch, isApifyGooglePlacesEnabled, startApifyGooglePlacesSearch } from '@/lib/research/apify-google-places';
 import { AUTONOMOUS_CITY_AREA_QUERIES, AUTONOMOUS_NATIONAL_AREA_QUERIES, AUTONOMOUS_NATIONAL_BASE_AREA_QUERIES, AUTONOMOUS_NATIONAL_SEARCH_VERSION } from '@/lib/research/autonomous';
 import { matchesOvertureSearch } from '@/lib/overture';
+import { OsmUnavailableError } from '@/lib/osm';
+import { verifyProspectExistence } from '@/lib/research/search-service';
 import type { OvertureSearchArea } from '@/lib/overture';
 
 type CampaignCheckpoint = {
@@ -127,8 +129,25 @@ async function processProspectingCampaignArea(campaignId: string) {
     const remaining = Math.max(0, campaign.maxCandidates - availableCount);
     const nicheMatchedBusinesses = result.businesses.filter((business) => matchesOvertureSearch(business, { niche: campaign.niche }));
     const eligibleBusinesses = await filterAvailableCampaignBusinesses(prisma, campaign.id, nicheMatchedBusinesses);
-    const enriched = await enrichProspectBatch(eligibleBusinesses.slice(0, remaining));
-    const filtered = enriched.filter((business) => (!campaign.criteria || !readBooleanCriterion(campaign.criteria, 'phoneOnly') || Boolean(business.phone || business.whatsapp))
+    const enriched = await enrichProspectBatch(eligibleBusinesses.slice(0, 60));
+    let existenceVerified: typeof enriched;
+    try {
+      existenceVerified = await verifyProspectExistence(enriched);
+    } catch (error) {
+      if (!(error instanceof OsmUnavailableError)) throw error;
+      await prisma.researchCampaign.updateMany({
+        where: { id: campaign.id, status: 'RUNNING', checkpointVersion: campaign.checkpointVersion },
+        data: {
+          checkpoint: { ...apifyCheckpoint(checkpoint), areas: [] },
+          checkpointVersion: { increment: 1 },
+          status: 'FAILED',
+          error: 'A confirmação gratuita de existência ficou indisponível. Nenhuma empresa sem confirmação foi liberada.',
+          dispatchLeaseUntil: null
+        }
+      });
+      return { completed: true, status: 'FAILED' };
+    }
+    const filtered = existenceVerified.filter((business) => (!campaign.criteria || !readBooleanCriterion(campaign.criteria, 'phoneOnly') || Boolean(business.phone || business.whatsapp))
       && (!campaign.criteria || !readBooleanCriterion(campaign.criteria, 'digitalPresence') || Boolean(business.website || business.instagram)));
     const batch = filtered.slice(0, remaining);
     // Search smaller tiles when the source returned no/sparse results too.

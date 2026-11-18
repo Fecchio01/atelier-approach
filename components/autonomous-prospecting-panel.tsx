@@ -361,7 +361,7 @@ function CandidateCard({ candidate, promoting, discarding, error, confirmingIden
           <button type="button" disabled={discarding || promoting || !discardReason} onClick={onDiscard} className="inline-flex min-h-11 items-center rounded-lg border border-white/10 px-3 text-xs text-white/45 transition-colors duration-150 hover:border-red-200/30 hover:text-red-100 motion-reduce:transition-none disabled:opacity-50">{discarding ? 'Descartando…' : 'Descartar empresa'}</button>
         </div> : null}
       </div>
-      <p className="mt-3 text-xs text-white/40">{candidate.evidence.length} evidências guardadas · fonte: Overture</p>
+      <p className="mt-3 text-xs text-white/40">{candidate.evidence.length} evidências guardadas · fonte: {candidate.source}</p>
     </div>
     <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
       <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">Análise do agente</p><span className="text-xs text-white/55">Aderência textual {analysis?.fitScore ?? 0}%</span></div>

@@ -9,6 +9,9 @@ const NOMINATIM_LOOKUP_URL = 'https://nominatim.openstreetmap.org/lookup';
 const USER_AGENT = 'AtelierApproach/1.0 contato@atelier.local';
 const MAX_RESULTS = 1_000;
 const NATIONAL_MAX_RESULTS = 5_000;
+const MAX_EXISTENCE_CHECK_CANDIDATES = 60;
+const EXISTENCE_CHECK_RADIUS_METERS = 150;
+const EXISTENCE_CHECK_TIMEOUT_MS = 8_000;
 const NATIONAL_SUPPLEMENT_THRESHOLD = 500;
 const NATIONAL_SEARCH_BUDGET_MS = 60_000;
 const NATIONAL_REQUEST_TIMEOUT_MS = 8_000;
@@ -187,6 +190,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
   const searchCache = new Map<string, CachedValue<ExternalBusiness[]>>();
   const osmNameCache = new Map<string, string | null>();
   const geocodeCache = new Map<string, CachedValue<{ latitude: number; longitude: number; bounds: SearchBounds | null }>>();
+  const existenceCache = new Map<string, CachedValue<boolean>>();
   const searchSessions = options.searchSessions ?? new Map<string, OsmSearchSession>();
 
   async function startSearch(input: SearchBusinessesInput): Promise<SearchBatch & { searchId: string }> {
@@ -327,6 +331,53 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     const businesses = await enrichBusinesses(dedupeBusinesses(relevantBusinesses), scheduler, osmNameCache);
     setCached(searchCache, cacheKey, businesses);
     return businesses;
+  }
+
+  async function verifyBusinessExistence(businesses: ExternalBusiness[]) {
+    const batch = businesses.slice(0, MAX_EXISTENCE_CHECK_CANDIDATES);
+    const mapsVerifiedIds = new Set(batch.filter(hasDirectGoogleMapsEvidence).map(({ osmId }) => osmId));
+    const candidates = batch.filter((business) => !mapsVerifiedIds.has(business.osmId)
+      && hasUsefulBusinessName(business.name)
+      && typeof business.latitude === 'number' && Number.isFinite(business.latitude)
+      && typeof business.longitude === 'number' && Number.isFinite(business.longitude)
+    );
+    if (!candidates.length) return batch.filter(({ osmId }) => mapsVerifiedIds.has(osmId));
+
+    const verified = new Set<string>();
+    const pending: ExternalBusiness[] = [];
+    for (const candidate of candidates) {
+      const cacheKey = existenceCacheKey(candidate);
+      const cached = getCached(existenceCache, cacheKey);
+      if (cached === true) verified.add(candidate.osmId);
+      else if (cached === false) continue;
+      else pending.push(candidate);
+    }
+
+    if (pending.length) {
+      const query = buildExistenceVerificationQuery(pending);
+      const payload = await fetchOverpass(query, EXISTENCE_CHECK_TIMEOUT_MS);
+      const mappedBusinesses = (payload.elements ?? []).flatMap(normalizeBusiness)
+        .filter((business) => hasUsefulBusinessName(business.name));
+
+      for (const candidate of pending) {
+        const matched = mappedBusinesses.some((mapped) =>
+          normalizeText(mapped.name) === normalizeText(candidate.name)
+          && typeof mapped.latitude === 'number' && typeof mapped.longitude === 'number'
+          && distanceMeters(
+            { latitude: candidate.latitude!, longitude: candidate.longitude! },
+            { latitude: mapped.latitude, longitude: mapped.longitude }
+          ) <= EXISTENCE_CHECK_RADIUS_METERS
+        );
+        setCached(existenceCache, existenceCacheKey(candidate), matched);
+        if (matched) verified.add(candidate.osmId);
+      }
+    }
+
+    return batch.flatMap((candidate) => mapsVerifiedIds.has(candidate.osmId)
+      ? [candidate]
+      : verified.has(candidate.osmId)
+        ? [{ ...candidate, source: 'OpenStreetMap + Overture' as const }]
+        : []);
   }
 
   async function searchNationalBusinesses(input: SearchBusinessesInput, requestScheduler: OsmRequestScheduler, nameCache: Map<string, string | null>) {
@@ -532,7 +583,7 @@ export function createOsmSearchService(options: SearchServiceOptions = {}) {
     cache.set(key, { expiresAt: now() + cacheTtlMs, value });
   }
 
-  return { searchBusinesses, startSearch, continueSearch, resolveSearchBounds };
+  return { searchBusinesses, verifyBusinessExistence, startSearch, continueSearch, resolveSearchBounds };
 }
 
 export class OsmSearchSessionExpiredError extends Error {
@@ -649,6 +700,52 @@ function buildOverpassQuery(
         ? `area["name"="${escapeOverpassRegex(areaName)}"]["boundary"="administrative"]["admin_level"="${areaLevel}"]->.region;\n`
         : '';
   return `[out:json][timeout:25];\n${area}(\n  ${selector}\n);\nout center tags ${resultLimit};`;
+}
+
+function buildExistenceVerificationQuery(candidates: ExternalBusiness[]) {
+  const clauses = candidates.flatMap((candidate) => {
+    const latitude = candidate.latitude;
+    const longitude = candidate.longitude;
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') return [];
+    const pattern = exactOverpassNamePattern(candidate.name);
+    return ['name', 'name:pt', 'contact:name'].map((key) =>
+      `nwr["${key}"~"${pattern}",i](around:${EXISTENCE_CHECK_RADIUS_METERS},${latitude},${longitude});`
+    );
+  });
+  return `[out:json][timeout:8];\n(\n${clauses.join('\n')}\n);\nout center tags 300;`;
+}
+
+function hasDirectGoogleMapsEvidence(business: ExternalBusiness) {
+  return business.source === 'Google Maps (Apify)'
+    && /^apify\/[a-zA-Z0-9_-]{5,240}$/.test(business.osmId)
+    && isDirectGoogleMapsPlaceUrl(business.googleMapsUrl);
+}
+
+export function isDirectGoogleMapsPlaceUrl(value: string | null | undefined) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    const googleMapsHost = ['google.com', 'www.google.com', 'google.com.br', 'www.google.com.br', 'maps.google.com', 'maps.google.com.br'].includes(host);
+    return url.protocol === 'https:' && googleMapsHost
+      && (url.pathname.startsWith('/maps/place/') || url.searchParams.has('cid') || url.searchParams.has('place_id'));
+  } catch {
+    return false;
+  }
+}
+
+function exactOverpassNamePattern(value: string) {
+  const plain = value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR');
+  const equivalents: Record<string, string> = {
+    a: '[aáàâãä]', c: '[cç]', e: '[eéèêë]', i: '[iíìîï]', n: '[nñ]', o: '[oóòôõö]', u: '[uúùûü]'
+  };
+  const pattern = [...plain].map((character) => equivalents[character]
+    ?? character.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('');
+  return `^${pattern}$`;
+}
+
+function existenceCacheKey(business: ExternalBusiness) {
+  return `${business.osmId}|${normalizeText(business.name)}|${business.latitude?.toFixed(5)}|${business.longitude?.toFixed(5)}`;
 }
 
 function buildAutomotiveAestheticsSelectors(includeRepair = false) {
