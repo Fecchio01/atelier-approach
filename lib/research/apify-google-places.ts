@@ -22,9 +22,7 @@ export type ApifySearchStatus =
 
 /** This provider is deliberately opt-in; missing credentials never affect Overture searches. */
 export function isApifyGooglePlacesEnabled() {
-  return process.env.APIFY_PAID_SEARCH_AUTHORIZED === 'true'
-    && process.env.APIFY_PROSPECTING_ENABLED === 'true'
-    && Boolean(process.env.APIFY_API_TOKEN?.trim());
+  return process.env.APIFY_PROSPECTING_ENABLED === 'true' && Boolean(process.env.APIFY_API_TOKEN?.trim());
 }
 
 export async function startApifyGooglePlacesSearch(input: { niche: string; city: string; region: string }) {

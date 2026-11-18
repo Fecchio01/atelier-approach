@@ -6,7 +6,7 @@ import { automationPolicy } from '@/lib/agents/policy';
 import { prisma } from '@/lib/db';
 import { analyzeProspect, getSaoPauloDateKey } from '@/lib/research/autonomous';
 import { getCategoryCalibration } from '@/lib/research/feedback';
-import { countVisibleCampaignCandidates, hasCandidateExistenceEvidence, matchesStoredCandidateNiche } from '@/lib/research/candidates';
+import { countVisibleCampaignCandidates, matchesStoredCandidateNiche } from '@/lib/research/candidates';
 import { isCampaignBatchReady } from '@/lib/research/campaign-batch';
 
 export default async function AgentsPage() {
@@ -18,7 +18,7 @@ export default async function AgentsPage() {
       where: { ownerId: 'team', idempotencyKey: `autonomous:${getSaoPauloDateKey()}` },
       orderBy: { createdAt: 'desc' },
       take: 1,
-      include: { candidates: { orderBy: { firstSeenAt: 'desc' }, take: 100, include: { candidate: { include: { evidence: { orderBy: { capturedAt: 'desc' }, take: 20 }, feedback: { select: { outcome: true, reason: true } } } } } } }
+      include: { candidates: { orderBy: { firstSeenAt: 'desc' }, take: 100, include: { candidate: { include: { evidence: { orderBy: { capturedAt: 'desc' }, take: 8 }, feedback: { select: { outcome: true, reason: true } } } } } } }
     })
   ]);
   const matchingLeads = await prisma.lead.findMany({
@@ -49,8 +49,7 @@ export default async function AgentsPage() {
     error: campaign.error,
     createdAt: campaign.createdAt.toISOString(),
     candidates: isCampaignBatchReady({ ...campaign, candidateCount: availableCounts[index] ?? 0 }) ? campaign.candidates
-      .filter(({ candidate }) => hasCandidateExistenceEvidence(candidate)
-        && matchesStoredCandidateNiche(candidate, campaign.niche))
+      .filter(({ candidate }) => matchesStoredCandidateNiche(candidate, campaign.niche))
       .slice(0, campaign.maxCandidates)
       .map(({ candidate, firstSeenAt }) => ({
       firstSeenAt: firstSeenAt.toISOString(),

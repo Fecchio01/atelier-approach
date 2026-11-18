@@ -5,8 +5,7 @@ import { approachabilityRank, scoreBusiness } from '../../../lib/lead-score';
 import {
   createOsmSearchService,
   ExternalBusiness,
-  isGenericBusinessName,
-  OsmUnavailableError
+  isGenericBusinessName
 } from '../../../lib/osm';
 import {
   OvertureSearchArea,
@@ -15,12 +14,11 @@ import {
   planOvertureSearchAreas,
   splitOvertureSearchArea
 } from '../../../lib/overture';
-import { enrichProspectBatch, searchProspectArea, verifyProspectExistence } from '../../../lib/research/search-service';
+import { enrichProspectBatch, searchProspectArea } from '../../../lib/research/search-service';
 
 export const runtime = 'nodejs';
 
 const UNAVAILABLE_MESSAGE = 'Não foi possível consultar a base Overture nesta região agora. Nenhuma lista de outra fonte foi misturada; tente novamente em alguns instantes.';
-const EXISTENCE_CHECK_UNAVAILABLE_MESSAGE = 'Não foi possível confirmar as empresas em uma fonte independente gratuita. Nenhum resultado sem confirmação foi exibido; tente novamente em alguns instantes.';
 const RATE_LIMIT_MESSAGE = 'Muitas buscas em pouco tempo. Aguarde um minuto antes de tentar novamente.';
 const MAX_SEARCHES_PER_MINUTE = 5;
 const MIN_PROGRESSIVE_SEARCH_RESULTS = 5;
@@ -43,7 +41,6 @@ type SavedSearch = {
 };
 
 class OvertureUnavailableError extends Error {}
-class ExistenceCheckUnavailableError extends Error {}
 
 type ResearchFilters = {
   niche: string;
@@ -88,7 +85,6 @@ export async function GET(request: Request) {
       });
     } catch (error) {
       if (error instanceof OvertureUnavailableError) return unavailableResponse();
-      if (error instanceof ExistenceCheckUnavailableError) return unavailableResponse(EXISTENCE_CHECK_UNAVAILABLE_MESSAGE);
       throw error;
     }
   }
@@ -150,7 +146,6 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     if (error instanceof OvertureUnavailableError) return unavailableResponse();
-    if (error instanceof ExistenceCheckUnavailableError) return unavailableResponse(EXISTENCE_CHECK_UNAVAILABLE_MESSAGE);
     throw error;
   }
 }
@@ -160,25 +155,15 @@ async function consumeOverturePage(savedSearch: SavedSearch, ownerId: string) {
   let queriedAreas = 0;
   let successfulAreaQueries = 0;
   let failedAreaQueries = 0;
-  let existenceCheckAttempted = false;
 
   while (
     businesses.length < MIN_PROGRESSIVE_SEARCH_RESULTS
     && businesses.length < INITIAL_RESULTS_PER_PAGE
-    && !existenceCheckAttempted
     && hasMoreOvertureAreas(savedSearch)
   ) {
     if (savedSearch.overtureQueue.length) {
       const candidates = savedSearch.overtureQueue.splice(0, INITIAL_RESULTS_PER_PAGE - businesses.length);
-      const enrichedCandidates = await enrichProspectBatch(candidates);
-      let verifiedCandidates: ExternalBusiness[];
-      try {
-        verifiedCandidates = await verifyProspectExistence(enrichedCandidates);
-      } catch (error) {
-        if (error instanceof OsmUnavailableError) throw new ExistenceCheckUnavailableError();
-        throw error;
-      }
-      existenceCheckAttempted = true;
+      const verifiedCandidates = await enrichProspectBatch(candidates);
       businesses.push(...await filterBusinessesForResponse(verifiedCandidates, savedSearch.filters, ownerId));
       continue;
     }

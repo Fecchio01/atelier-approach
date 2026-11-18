@@ -5,13 +5,9 @@ import { prisma } from '../../../lib/db';
 import { normalizePublishedPhone, toWhatsAppHref } from '../../../lib/contact-links';
 import { createHumanCrmActor } from '../../../lib/crm/actor';
 import { executeCrmCommand, withCrmActivityActor } from '../../../lib/crm/commands';
-import { OsmUnavailableError } from '../../../lib/osm';
-import type { ExternalBusiness } from '../../../lib/osm';
-import { verifyProspectExistence } from '../../../lib/research/search-service';
 
 type BusinessInput = {
   osmId?: unknown;
-  source?: unknown;
   name?: unknown;
   phone?: unknown;
   website?: unknown;
@@ -38,10 +34,9 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Dados da abordagem inválidos.' }, { status: 400 });
   }
 
-  const submittedBusiness = body.business;
-  const osmId = optionalText(submittedBusiness?.osmId);
-  const name = optionalText(submittedBusiness?.name);
-  const source = optionalText(submittedBusiness?.source);
+  const business = body.business;
+  const osmId = optionalText(business?.osmId);
+  const name = optionalText(business?.name);
   const note = optionalText(body.note) ?? 'Abordagem iniciada a partir da pesquisa.';
   const channel = typeof body.channel === 'string' && Object.values(Channel).includes(body.channel as Channel)
     ? body.channel as Channel
@@ -50,37 +45,6 @@ export async function POST(request: Request) {
   if (!osmId || !name || !channel) {
     return Response.json({ error: 'Informe prospect e canal da abordagem.' }, { status: 400 });
   }
-  if (source !== 'OpenStreetMap + Overture' || !osmId.startsWith('overture/')) {
-    return Response.json({ error: 'Esta empresa não tem confirmação gratuita de existência e não pode ser adicionada ao CRM.' }, { status: 409 });
-  }
-  if (typeof submittedBusiness?.latitude !== 'number' || !Number.isFinite(submittedBusiness.latitude)
-    || Math.abs(submittedBusiness.latitude) > 90
-    || typeof submittedBusiness.longitude !== 'number' || !Number.isFinite(submittedBusiness.longitude)
-    || Math.abs(submittedBusiness.longitude) > 180) {
-    return Response.json({ error: 'Não foi possível confirmar a localização desta empresa.' }, { status: 409 });
-  }
-
-  let verifiedBusiness: ExternalBusiness | undefined;
-  try {
-    [verifiedBusiness] = await verifyProspectExistence([{
-      osmId,
-      name,
-      latitude: submittedBusiness.latitude,
-      longitude: submittedBusiness.longitude,
-      phone: null,
-      website: null,
-      instagram: null,
-      source: 'Overture'
-    }]);
-  } catch (error) {
-    if (error instanceof OsmUnavailableError) {
-      return Response.json({ error: 'A confirmação gratuita de existência está indisponível. Nenhuma empresa foi adicionada.' }, { status: 503 });
-    }
-    throw error;
-  }
-  if (!verifiedBusiness) {
-    return Response.json({ error: 'Esta empresa não foi encontrada em uma fonte independente gratuita e não pode ser adicionada ao CRM.' }, { status: 409 });
-  }
 
   try {
     const lead = await executeCrmCommand(prisma, createHumanCrmActor(user.id), async (tx, actor) => {
@@ -88,15 +52,15 @@ export async function POST(request: Request) {
         data: {
           osmId,
           name,
-          phone: normalizePublishedPhone(optionalText(submittedBusiness?.phone)),
-          website: optionalText(submittedBusiness?.website),
-          instagram: optionalText(submittedBusiness?.instagram),
-          whatsapp: toWhatsAppHref(optionalText(submittedBusiness?.whatsapp))
-            ?? toWhatsAppHref(normalizePublishedPhone(optionalText(submittedBusiness?.phone))),
-          address: optionalText(submittedBusiness?.address),
-          category: optionalText(submittedBusiness?.category),
-          latitude: verifiedBusiness.latitude ?? null,
-          longitude: verifiedBusiness.longitude ?? null,
+          phone: normalizePublishedPhone(optionalText(business?.phone)),
+          website: optionalText(business?.website),
+          instagram: optionalText(business?.instagram),
+          whatsapp: toWhatsAppHref(optionalText(business?.whatsapp))
+            ?? toWhatsAppHref(normalizePublishedPhone(optionalText(business?.phone))),
+          address: optionalText(business?.address),
+          category: optionalText(business?.category),
+          latitude: typeof business?.latitude === 'number' ? business.latitude : null,
+          longitude: typeof business?.longitude === 'number' ? business.longitude : null,
           syncedAt: new Date(),
           stage: 'CONTACTED'
         }

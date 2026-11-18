@@ -6,7 +6,6 @@ import { createHumanCrmActor } from '@/lib/crm/actor';
 import { executeCrmCommand } from '@/lib/crm/commands';
 import { prisma } from '@/lib/db';
 import { normalizePublishedPhone, toWhatsAppHref } from '@/lib/contact-links';
-import { hasCandidateExistenceEvidence } from '@/lib/research/candidates';
 import { saveCandidateFeedback } from '@/lib/research/feedback';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +21,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const result = await executeCrmCommand(prisma, actor, async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "atelier"."ProspectCandidate" WHERE "id" = ${id} FOR UPDATE`;
-      const candidate = await tx.prospectCandidate.findUnique({ where: { id }, include: { evidence: { where: { field: 'googleMapsUrl' }, select: { field: true, value: true } } } });
+      const candidate = await tx.prospectCandidate.findUnique({ where: { id } });
       if (!candidate) return { kind: 'not_found' as const };
 
       if (candidate.status === 'REJECTED' || candidate.discardedAt) return { kind: 'rejected' as const };
@@ -45,8 +44,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         await saveCandidateFeedback(tx, { candidateId: candidate.id, outcome: 'ACCEPTED', category: candidate.category, updatedById: user.id });
         return { kind: 'already_in_crm' as const, leadId: existingLead.id };
       }
-
-      if (!hasCandidateExistenceEvidence(candidate)) return { kind: 'unverified' as const };
 
       const lead = await tx.lead.create({
         data: {
@@ -75,9 +72,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (result.kind === 'rejected') return Response.json({ error: 'Esta candidata foi descartada da pesquisa.' }, { status: 409 });
     if (result.kind === 'identity_review_required') {
       return Response.json({ error: 'Confira a identidade da empresa antes de adicioná-la.', requiresIdentityReview: true }, { status: 409 });
-    }
-    if (result.kind === 'unverified') {
-      return Response.json({ error: 'Esta empresa não tem confirmação gratuita de existência e não pode ser adicionada ao funil.' }, { status: 409 });
     }
     if (result.kind === 'lead_discarded') {
       return Response.json({ error: 'Esta empresa já está na lixeira do CRM.', leadId: result.leadId }, { status: 409 });
