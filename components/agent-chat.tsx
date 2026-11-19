@@ -2,7 +2,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { ChatCircleDotsIcon, CircleNotchIcon, CopyIcon, PaperPlaneTiltIcon, XIcon } from '@phosphor-icons/react';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
+import { usePathname } from 'next/navigation';
 import { DarwinCompanion } from './darwin-companion';
 import { useDarwinPresence } from './darwin-presence';
 
@@ -30,7 +31,7 @@ const quickQuestions = [
 ];
 
 export function AgentChat() {
-  const prefersReducedMotion = useReducedMotion();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -45,8 +46,10 @@ export function AgentChat() {
   const messagesRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<AbortController | null>(null);
   const sessionRef = useRef(0);
-  const companionMode = error ? 'attention' : loading ? 'working' : campaignMode;
+  const companionMode = error ? 'attention' : loading ? 'thinking' : campaignMode;
   const companionStatus = companionMode === 'working' ? 'Pesquisando…'
+    : companionMode === 'queued' ? 'Pesquisa na fila'
+      : companionMode === 'thinking' ? 'Pensando…'
     : companionMode === 'attention' ? 'Preciso da sua atenção'
       : companionMode === 'complete' ? 'Pesquisa concluída' : 'Pronto para ajudar';
 
@@ -159,16 +162,14 @@ export function AgentChat() {
         <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${companionMode === 'attention' ? 'bg-amber-300' : companionMode === 'working' ? 'animate-pulse bg-[var(--atelier-green)] motion-reduce:animate-none' : 'bg-[var(--atelier-green)]'}`} />
         <span className="truncate">{companionStatus}</span>
       </span>
-      <motion.span
-        animate={prefersReducedMotion === false ? { y: [0, -3, 0] } : undefined}
-        transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
+      <span
         className="relative block rounded-[18px] shadow-[0_12px_32px_rgba(0,0,0,0.34)] transition-transform duration-200 hover:scale-105 motion-reduce:transition-none"
       >
-        <DarwinCompanion mode={companionMode} size={72} className="rounded-[18px] ring-1 ring-white/20" />
+        <DarwinCompanion mode={companionMode} size={88} className="rounded-[18px] ring-1 ring-white/20" active={!open && pathname !== '/agentes'} />
         <span aria-hidden="true" className="absolute bottom-1.5 right-1.5 flex size-7 items-center justify-center rounded-full border border-[var(--atelier-green)]/35 bg-[#18201c] text-[var(--atelier-green)] shadow-md">
           <ChatCircleDotsIcon size={16} weight="fill" />
         </span>
-      </motion.span>
+      </span>
     </motion.button>
 
     <dialog
@@ -183,7 +184,7 @@ export function AgentChat() {
       <section className="flex h-full min-h-0 flex-col border-t border-white/10 bg-[#111719] shadow-[-18px_0_60px_rgba(0,0,0,0.32)] sm:border-l sm:border-t-0">
         <header className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-4 sm:px-5">
           <div className="flex min-w-0 items-start gap-3">
-            <DarwinCompanion mode={error ? 'attention' : loading ? 'working' : 'idle'} size={40} className="mt-0.5" />
+            <DarwinCompanion mode={error ? 'attention' : loading ? 'thinking' : campaignMode} size={56} className="mt-0.5" active={open} />
             <div className="min-w-0">
               <h2 ref={titleRef} tabIndex={-1} id="agent-chat-title" className="font-semibold outline-none">Darwin</h2>
               <p className="mt-1 text-xs leading-5 text-white/45">Pesquisa · CRM · metas</p>
