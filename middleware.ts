@@ -16,9 +16,10 @@ export default auth((request) => {
     || pathname.startsWith('/api/cron/autonomous-prospecting-hour/');
   const isMessagingWebhook = pathname === '/api/webhooks/messaging';
   const isPublicBrandAsset = pathname.startsWith('/brand/');
+  const isPublicDarwinAsset = pathname === '/darwin/darwin-v8-mascot.glb';
   const isPublicPwaAsset = pathname === '/manifest.webmanifest' || pathname.startsWith('/icons/');
 
-  if (pathname === '/login' || isRequiredAuthEndpoint || isPublicCronEndpoint || isMessagingWebhook || isPublicBrandAsset || isPublicPwaAsset) {
+  if (pathname === '/login' || isRequiredAuthEndpoint || isPublicCronEndpoint || isMessagingWebhook || isPublicBrandAsset || isPublicDarwinAsset || isPublicPwaAsset) {
     return NextResponse.next();
   }
 

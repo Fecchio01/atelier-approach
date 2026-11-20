@@ -9,11 +9,12 @@ export type DarwinMode = 'idle' | 'queued' | 'thinking' | 'working' | 'attention
 type SceneRenderer = typeof import('./darwin-model-scene').DarwinModelScene;
 
 /** Loads the real 3D Darwin only when the companion can be seen. */
-export function DarwinCompanion({ mode = 'idle', size = 88, className = '', active = true }: {
+export function DarwinCompanion({ mode = 'idle', size = 88, className = '', active = true, fill = false }: {
   mode?: DarwinMode;
   size?: number;
   className?: string;
   active?: boolean;
+  fill?: boolean;
 }) {
   const rootRef = useRef<HTMLSpanElement>(null);
   const [inView, setInView] = useState(false);
@@ -45,7 +46,8 @@ export function DarwinCompanion({ mode = 'idle', size = 88, className = '', acti
     let cancelled = false;
     void import('./darwin-model-scene').then((module) => {
       if (!cancelled) setScene(() => module.DarwinModelScene);
-    }).catch(() => {
+    }).catch((error: unknown) => {
+      if (process.env.NODE_ENV === 'development') console.error('[Darwin] Não foi possível carregar o componente 3D.', error);
       if (!cancelled) setFailed(true);
     });
     return () => { cancelled = true; };
@@ -55,7 +57,7 @@ export function DarwinCompanion({ mode = 'idle', size = 88, className = '', acti
     ref={rootRef}
     aria-hidden="true"
     className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[18px] bg-[#f8f3e8] shadow-[0_8px_24px_rgba(0,0,0,.2)] ring-1 ring-black/10 ${mode === 'attention' ? 'ring-amber-300/70' : mode === 'complete' ? 'ring-[var(--atelier-green)]/70' : ''} ${className}`}
-    style={{ width: size, height: size }}
+    style={{ width: fill ? '100%' : size, height: fill ? '100%' : size }}
   >
     {!active
       ? <DarwinAvatar size={Math.round(size * 0.64)} className="text-[#91d923]" />

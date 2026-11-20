@@ -13,12 +13,63 @@ let darwinAsset: Promise<DarwinAsset> | null = null;
 
 function loadDarwinAsset() {
   if (!darwinAsset) {
-    darwinAsset = new GLTFLoader().loadAsync('/darwin/darwin-v8-mascot.glb').catch((error: unknown) => {
-      darwinAsset = null;
-      throw error;
+    let timeout = 0;
+    const request = new GLTFLoader().loadAsync('/darwin/darwin-v8-mascot.glb');
+    const loadTimeout = new Promise<never>((_resolve, reject) => {
+      timeout = window.setTimeout(() => reject(new Error('O modelo 3D excedeu 30 segundos de carregamento.')), 30_000);
     });
+    darwinAsset = Promise.race([request, loadTimeout])
+      .catch((error: unknown) => {
+        darwinAsset = null;
+        throw error;
+      })
+      .finally(() => window.clearTimeout(timeout));
   }
   return darwinAsset;
+}
+
+function addModelOutlines(root: THREE.Object3D, geometries: THREE.BufferGeometry[], materials: THREE.Material[]) {
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (mesh.isMesh && !mesh.name.toLowerCase().includes('toon outline')) meshes.push(mesh);
+  });
+
+  meshes.forEach((mesh) => {
+    const name = mesh.name.replaceAll('_', ' ').toLowerCase();
+    if (!/darwin convex capsule shell|sculpted porcelain visor bezel|fine warm visor seam|convex forest glass visor|hand socket|green hand module|sprout leaf/.test(name)) return;
+    const sourceGeometry = mesh.geometry;
+    if (!sourceGeometry.boundingBox) sourceGeometry.computeBoundingBox();
+    const bounds = sourceGeometry.boundingBox;
+    if (!bounds || bounds.getSize(new THREE.Vector3()).length() < 0.08) return;
+
+    const geometry = sourceGeometry.clone();
+    const center = bounds.getCenter(new THREE.Vector3());
+    const positions = geometry.attributes.position;
+    for (let index = 0; index < positions.count; index += 1) {
+      positions.setXYZ(
+        index,
+        center.x + (positions.getX(index) - center.x) * 1.014,
+        center.y + (positions.getY(index) - center.y) * 1.014,
+        center.z + (positions.getZ(index) - center.z) * 1.014,
+      );
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+
+    const material = new THREE.MeshBasicMaterial({
+      color: /visor|forest display/i.test(mesh.name) ? '#102817' : '#785332',
+      side: THREE.BackSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const outline = new THREE.Mesh(geometry, material);
+    outline.name = 'toon outline';
+    outline.renderOrder = -1;
+    mesh.add(outline);
+    geometries.push(geometry);
+    materials.push(material);
+  });
 }
 
 function createLoupe(THREERef: typeof THREE, hand: THREE.Object3D, gradient: THREE.DataTexture) {
@@ -89,6 +140,8 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
     let actor: THREE.Group | null = null;
     let eyes: EyeState[] = [];
     const baseColors = new Map<THREE.Material, THREE.Color>();
+    const outlineGeometries: THREE.BufferGeometry[] = [];
+    const outlineMaterials: THREE.Material[] = [];
     const eyeMaterials: THREE.Material[] = [];
     const shellMaterials: THREE.Material[] = [];
     const bezelMaterials: THREE.Material[] = [];
@@ -103,6 +156,9 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
     let intersectionObserver: IntersectionObserver | null = null;
     let nextFrameTimer = 0;
     let previousFrameAt = 0;
+    let pointerX = 0;
+    let pointerY = 0;
+    let pointerActive = false;
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     reducedMotionRef.current = reducedMotion.matches;
@@ -122,6 +178,8 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       mixer?.stopAllAction();
       if (mixer) mixer.uncacheRoot(mixer.getRoot());
       baseColors.forEach((_color, material) => material.dispose());
+      outlineGeometries.forEach((geometry) => geometry.dispose());
+      outlineMaterials.forEach((material) => material.dispose());
       loupe?.traverse((object) => {
         const mesh = object as THREE.Mesh;
         if (!mesh.isMesh) return;
@@ -172,8 +230,8 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       const gazeX = working && !reducedMotionRef.current ? 0.17 * Math.sin((elapsed % 4.8) / 4.8 * Math.PI * 2) : thinking ? 0.015 : 0;
       const gazeY = thinking ? 0.2 : 0;
       eyes.forEach(({ mesh, scale, position }) => {
-        mesh.position.x = position.x + gazeX;
-        mesh.position.y = position.y + gazeY;
+        mesh.position.x = position.x + (pointerActive ? pointerX * 0.12 : gazeX);
+        mesh.position.y = position.y + (pointerActive ? pointerY * 0.08 : gazeY);
         mesh.scale.set(scale.x, scale.y * (attention ? 1.18 : complete && elapsed < 0.42 ? 0.72 : 1 - blink * 0.94), scale.z);
       });
 
@@ -198,7 +256,9 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
     const onMotionChange = () => {
       reducedMotionRef.current = reducedMotion.matches;
       stop();
+      if (reducedMotionRef.current) pointerActive = false;
       if (!reducedMotionRef.current && visibleRef.current) {
+        pointerActive = false;
         applyAnimationRef.current(modeRef.current);
         startAnimation();
       }
@@ -222,6 +282,20 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       else if (!reducedMotionRef.current && visibleRef.current && !frame) startAnimation();
       else renderStatic();
     };
+    const onPointerMove = (event: PointerEvent) => {
+      if (reducedMotionRef.current || event.pointerType !== 'mouse') return;
+      const rect = host.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      pointerX = THREE.MathUtils.clamp(((event.clientX - rect.left) / rect.width) * 2 - 1, -1, 1);
+      pointerY = THREE.MathUtils.clamp(1 - ((event.clientY - rect.top) / rect.height) * 2, -1, 1);
+      pointerActive = true;
+      startAnimation();
+    };
+    const onPointerLeave = () => {
+      if (!pointerActive) return;
+      pointerActive = false;
+      startAnimation();
+    };
 
     try {
       renderer = new THREE.WebGLRenderer({ canvas, alpha: false, antialias: true, powerPreference: 'low-power' });
@@ -238,9 +312,10 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       const fillLight = new THREE.DirectionalLight(0xd7ffad, 0.5);
       fillLight.position.set(5, 0, 4);
       scene.add(fillLight);
-    } catch {
+    } catch (error) {
       renderer?.dispose();
       renderer?.forceContextLoss();
+      if (process.env.NODE_ENV === 'development') console.error('[Darwin] Não foi possível iniciar o renderizador WebGL.', error);
       onUnavailable();
       return;
     }
@@ -248,14 +323,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
     void loadDarwinAsset().then((gltf) => {
       if (disposed || !scene || !camera) return;
       const model = cloneSkeleton(gltf.scene);
-      const bounds = new THREE.Box3();
-      model.traverse((object) => {
-        if ((object as THREE.Mesh).isMesh && !/touch target|target mark|target contact pulse/.test(object.name.toLowerCase())) bounds.expandByObject(object);
-      });
-      const center = bounds.getCenter(new THREE.Vector3());
-      const dimensions = bounds.getSize(new THREE.Vector3());
-      const baseScale = 4.25 / Math.max(dimensions.x, dimensions.y, dimensions.z);
-      model.position.sub(center);
+      model.updateMatrixWorld(true);
 
       const palette = new Uint8Array([40, 40, 40, 255, 115, 115, 115, 255, 255, 255, 255, 255]);
       gradient = new THREE.DataTexture(palette, 3, 1, THREE.RGBAFormat);
@@ -297,6 +365,18 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         }
       });
 
+      addModelOutlines(model, outlineGeometries, outlineMaterials);
+      model.updateMatrixWorld(true);
+      const bounds = new THREE.Box3();
+      model.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (mesh.isMesh && !/touch target|target mark|target contact pulse|toon outline/.test(mesh.name.toLowerCase())) bounds.expandByObject(mesh);
+      });
+      const center = bounds.getCenter(new THREE.Vector3());
+      const dimensions = bounds.getSize(new THREE.Vector3());
+      const baseScale = 4.25 / Math.max(dimensions.x, dimensions.y, dimensions.z);
+      model.position.sub(center);
+
       const applyAppearance = (nextMode: DarwinMode) => {
         baseColors.forEach((color, material) => {
           if ('color' in material) (material as THREE.MeshToonMaterial).color.copy(color);
@@ -326,6 +406,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       applyAnimationRef.current = (nextMode) => {
         if (!mixer) return;
         mixer.stopAllAction();
+        if (loupe) loupe.visible = nextMode === 'working';
         const celebrating = nextMode === 'complete';
         targetNodes.forEach((node) => { node.visible = celebrating; });
         if (reducedMotionRef.current) {
@@ -335,6 +416,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         }
         if (nextMode === 'working') playClip('l hand module highlightaction', true);
         if (celebrating) {
+          playClip('l floating green hand moduleaction', false);
           playClip('target contact pulseaction', false);
           playClip('target markaction', false);
           playClip('touch targetaction', false);
@@ -352,6 +434,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       if (leftHand) {
         leftHandBaseY = leftHand.position.y;
         loupe = createLoupe(THREE, leftHand, gradient);
+        loupe.visible = modeRef.current === 'working';
       }
       camera.position.z = 4.25 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.14;
       camera.lookAt(0, 0, 0);
@@ -380,17 +463,23 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       }
 
       renderStatic();
-    }).catch(() => {
-      if (!disposed) onUnavailable();
+    }).catch((error: unknown) => {
+      if (disposed) return;
+      if (process.env.NODE_ENV === 'development') console.error('[Darwin] Não foi possível carregar public/darwin/darwin-v8-mascot.glb.', error);
+      onUnavailable();
     });
 
     reducedMotion.addEventListener('change', onMotionChange);
     document.addEventListener('visibilitychange', onVisibilityChange);
+    host.addEventListener('pointermove', onPointerMove);
+    host.addEventListener('pointerleave', onPointerLeave);
     return () => {
       disposed = true;
       stop();
       reducedMotion.removeEventListener('change', onMotionChange);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      host.removeEventListener('pointermove', onPointerMove);
+      host.removeEventListener('pointerleave', onPointerLeave);
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
       if (renderer) {
