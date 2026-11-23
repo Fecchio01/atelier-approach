@@ -235,8 +235,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         mesh.scale.set(scale.x, scale.y * (attention ? 1.18 : complete && elapsed < 0.42 ? 0.72 : 1 - blink * 0.94), scale.z);
       });
 
-      const interacting = working || complete;
-      camera.position.z = interacting ? interactionCameraDistance : cameraDistance;
+      camera.position.z = working || complete ? interactionCameraDistance : cameraDistance;
       const delta = previousFrameAt ? Math.min((now - previousFrameAt) / 1000, 0.12) : 0;
       previousFrameAt = now;
       mixer?.update(delta);
@@ -268,7 +267,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         mixer?.stopAllAction();
         if (actor) {
           actor.position.y = 0;
-          actor.rotation.set(0, 0, 0);
+          actor.rotation.set(0, 0.16, 0);
           actor.scale.setScalar(actor.userData.baseScale);
         }
         if (leftHand) leftHand.position.y = leftHandBaseY;
@@ -406,20 +405,23 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         mixer.stopAllAction();
         if (loupe) loupe.visible = nextMode === 'working';
         const celebrating = nextMode === 'complete';
-        const interacting = nextMode === 'working' || celebrating;
-        targetNodes.forEach((node) => { node.visible = interacting; });
+        targetNodes.forEach((node) => { node.visible = celebrating; });
+        if (cameraDistance) camera.position.z = nextMode === 'working' || celebrating ? interactionCameraDistance : cameraDistance;
         if (reducedMotionRef.current) {
           mixer.update(0);
           renderStatic();
           return;
         }
-        if (interacting) {
-          const loop = nextMode === 'working';
-          playClip('l floating green hand moduleaction', loop);
-          playClip('l hand module highlightaction', loop);
-          playClip('target contact pulseaction', loop);
-          playClip('target markaction', loop);
-          playClip('touch targetaction', loop);
+        if (nextMode === 'working') {
+          playClip('l floating green hand moduleaction', true);
+          playClip('l hand module highlightaction', true);
+        }
+        if (celebrating) {
+          playClip('l floating green hand moduleaction', false);
+          playClip('l hand module highlightaction', false);
+          playClip('target contact pulseaction', false);
+          playClip('target markaction', false);
+          playClip('touch targetaction', false);
         }
         mixer.update(0);
         renderStatic();
