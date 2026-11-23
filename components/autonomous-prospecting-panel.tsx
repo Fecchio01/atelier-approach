@@ -228,7 +228,7 @@ export function AutonomousProspectingPanel({ initialCampaigns, dailyLimit, enabl
   return <section aria-labelledby="autonomous-research-heading" className="mt-4 rounded-2xl border border-[var(--atelier-line)] bg-[var(--atelier-surface)] p-3 sm:mt-6 sm:p-5">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.08] pb-4">
       <div className="flex min-w-0 items-start gap-3">
-        <DarwinCompanion mode={companionMode} size={84} className="rounded-xl" />
+        <DarwinCompanion mode={companionMode} size={112} className="rounded-xl" />
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--atelier-green)]">Pesquisa autônoma</p>
           <h2 id="autonomous-research-heading" className="mt-1 text-lg font-semibold">Pesquisa de hoje</h2>

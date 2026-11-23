@@ -49,16 +49,17 @@ function addModelOutlines(root: THREE.Object3D, geometries: THREE.BufferGeometry
     for (let index = 0; index < positions.count; index += 1) {
       positions.setXYZ(
         index,
-        center.x + (positions.getX(index) - center.x) * 1.014,
-        center.y + (positions.getY(index) - center.y) * 1.014,
-        center.z + (positions.getZ(index) - center.z) * 1.014,
+        center.x + (positions.getX(index) - center.x) * 1.008,
+        center.y + (positions.getY(index) - center.y) * 1.008,
+        center.z + (positions.getZ(index) - center.z) * 1.008,
       );
     }
     positions.needsUpdate = true;
     geometry.computeVertexNormals();
 
+    const outlineColor = /visor|forest display|hand module|sprout/i.test(mesh.name) ? '#173a26' : '#785332';
     const material = new THREE.MeshBasicMaterial({
-      color: /visor|forest display/i.test(mesh.name) ? '#102817' : '#785332',
+      color: outlineColor,
       side: THREE.BackSide,
       depthWrite: false,
       toneMapped: false,
@@ -140,6 +141,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
     let actor: THREE.Group | null = null;
     let eyes: EyeState[] = [];
     const baseColors = new Map<THREE.Material, THREE.Color>();
+    const baseEmissiveColors = new Map<THREE.MeshStandardMaterial, THREE.Color>();
     const outlineGeometries: THREE.BufferGeometry[] = [];
     const outlineMaterials: THREE.Material[] = [];
     const eyeMaterials: THREE.Material[] = [];
@@ -156,6 +158,8 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
     let intersectionObserver: IntersectionObserver | null = null;
     let nextFrameTimer = 0;
     let previousFrameAt = 0;
+    let cameraDistance = 0;
+    let interactionCameraDistance = 0;
     let pointerX = 0;
     let pointerY = 0;
     let pointerActive = false;
@@ -214,17 +218,13 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       const breath = reducedMotionRef.current ? 0 : Math.sin(seconds * (working ? 4 : thinking ? 2.4 : 2)) * (working ? 0.025 : 0.016);
 
       actor.position.y = breath + happyBounce * 0.04 + candidateNod * 0.018;
-      actor.rotation.y = working ? 0.3 + Math.sin(elapsed * 0.9) * 0.035 : thinking ? 0.03 : 0;
+      actor.rotation.y = working ? 0.3 + Math.sin(elapsed * 0.9) * 0.035
+        : thinking ? 0.14 + Math.sin(seconds * 0.6) * 0.012
+          : attention ? -0.12 : 0.16 + Math.sin(seconds * 0.6) * 0.018;
       actor.rotation.x = thinking ? (elapsed < 3.2 ? -0.09 : -0.015) : candidateNod * 0.045;
       actor.rotation.z = thinking ? -0.018 : complete ? happyBounce * 0.012 : working ? -0.01 : 0;
       actor.scale.setScalar(actor.userData.baseScale * (1 + happyBounce * 0.005));
 
-      if (leftHand && working) {
-        const phase = elapsed % 4.4;
-        const descend = phase < 1.3 ? phase / 1.3 : phase < 2.8 ? 1 : phase < 4 ? 1 - (phase - 2.8) / 1.2 : 0;
-        const smooth = descend * descend * (3 - 2 * descend);
-        leftHand.position.y = leftHandBaseY - 0.16 * smooth;
-      } else if (leftHand) leftHand.position.y = leftHandBaseY;
       if (loupe) loupe.rotation.z = 0;
 
       const gazeX = working && !reducedMotionRef.current ? 0.17 * Math.sin((elapsed % 4.8) / 4.8 * Math.PI * 2) : thinking ? 0.015 : 0;
@@ -235,12 +235,14 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         mesh.scale.set(scale.x, scale.y * (attention ? 1.18 : complete && elapsed < 0.42 ? 0.72 : 1 - blink * 0.94), scale.z);
       });
 
+      const interacting = working || complete;
+      camera.position.z = interacting ? interactionCameraDistance : cameraDistance;
       const delta = previousFrameAt ? Math.min((now - previousFrameAt) / 1000, 0.12) : 0;
       previousFrameAt = now;
       mixer?.update(delta);
       renderStatic();
 
-      const shouldAnimate = activeMode === 'idle' || activeMode === 'thinking' || activeMode === 'working'
+      const shouldAnimate = activeMode === 'idle' || thinking || activeMode === 'working'
         || activeMode === 'complete' && elapsed < 3;
       if (!reducedMotionRef.current && visibleRef.current && document.visibilityState === 'visible' && shouldAnimate) {
         scheduleNextFrame(activeMode === 'idle' ? 100 : 40);
@@ -339,18 +341,10 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         const objectName = object.name.replaceAll('_', ' ').toLowerCase();
         mesh.material = originalMaterials.map((original) => {
           const materialName = `${original.name} ${objectName}`.toLowerCase();
-          const originalColor = 'color' in original && original.color instanceof THREE.Color ? original.color.clone() : new THREE.Color('#f2d9b9');
-          const color = originalColor;
-          const material = materialName.includes('mint eyes')
-            ? new THREE.MeshBasicMaterial({ color: '#92ffc0', toneMapped: false })
-            : new THREE.MeshToonMaterial({ color, gradientMap: gradient! });
-          if (materialName.includes('forest display')) material.color.set('#0b2615');
-          if (materialName.includes('warm ivory shell')) material.color.set('#f7f7f2');
-          if (materialName.includes('raised porcelain bezel')) material.color.set('#ffffff');
-          if (materialName.includes('fine warm') || materialName.includes('fine warm screen seam')) material.color.set('#d5d3c9');
-          if (materialName.includes('floating green') || materialName.includes('hand module')) material.color.set('#23723a');
-          if (materialName.includes('sprout leaf')) material.color.offsetHSL(0, 0.12, 0.045);
-          baseColors.set(material, material.color.clone());
+          // Keep Blender's exported Principled BSDF materials (roughness, sheen and emission).
+          const material = original.clone();
+          if ('color' in material && material.color instanceof THREE.Color) baseColors.set(material, material.color.clone());
+          if (material instanceof THREE.MeshStandardMaterial) baseEmissiveColors.set(material, material.emissive.clone());
           if (materialName.includes('mint eyes')) eyeMaterials.push(material);
           if (objectName.includes('darwin convex capsule shell') || objectName.includes('hand socket side volume')) shellMaterials.push(material);
           if (objectName.includes('sculpted porcelain visor bezel') || objectName.includes('hand socket porcelain lip')) bezelMaterials.push(material);
@@ -379,13 +373,17 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
 
       const applyAppearance = (nextMode: DarwinMode) => {
         baseColors.forEach((color, material) => {
-          if ('color' in material) (material as THREE.MeshToonMaterial).color.copy(color);
+          if ('color' in material) (material as THREE.MeshStandardMaterial).color.copy(color);
         });
+        baseEmissiveColors.forEach((color, material) => material.emissive.copy(color));
         if (nextMode === 'attention') {
-          visorMaterials.forEach((material) => { if ('color' in material) (material as THREE.MeshToonMaterial).color.set('#401716'); });
-          eyeMaterials.forEach((material) => { if ('color' in material) (material as THREE.MeshBasicMaterial).color.set('#ff4135'); });
-          shellMaterials.forEach((material) => { if ('color' in material) (material as THREE.MeshToonMaterial).color.set('#fff0ed'); });
-          bezelMaterials.forEach((material) => { if ('color' in material) (material as THREE.MeshToonMaterial).color.set('#f8e7e3'); });
+          visorMaterials.forEach((material) => { if ('color' in material) (material as THREE.MeshStandardMaterial).color.set('#401716'); });
+          eyeMaterials.forEach((material) => {
+            if ('color' in material) (material as THREE.MeshStandardMaterial).color.set('#ff4135');
+            if (material instanceof THREE.MeshStandardMaterial) material.emissive.set('#c21719');
+          });
+          shellMaterials.forEach((material) => { if ('color' in material) (material as THREE.MeshStandardMaterial).color.set('#fff0ed'); });
+          bezelMaterials.forEach((material) => { if ('color' in material) (material as THREE.MeshStandardMaterial).color.set('#f8e7e3'); });
         }
       };
       applyAppearanceRef.current = (nextMode) => { applyAppearance(nextMode); renderStatic(); };
@@ -408,24 +406,24 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         mixer.stopAllAction();
         if (loupe) loupe.visible = nextMode === 'working';
         const celebrating = nextMode === 'complete';
-        targetNodes.forEach((node) => { node.visible = celebrating; });
+        const interacting = nextMode === 'working' || celebrating;
+        targetNodes.forEach((node) => { node.visible = interacting; });
         if (reducedMotionRef.current) {
           mixer.update(0);
           renderStatic();
           return;
         }
-        if (nextMode === 'working') playClip('l hand module highlightaction', true);
-        if (celebrating) {
-          playClip('l floating green hand moduleaction', false);
-          playClip('target contact pulseaction', false);
-          playClip('target markaction', false);
-          playClip('touch targetaction', false);
+        if (interacting) {
+          const loop = nextMode === 'working';
+          playClip('l floating green hand moduleaction', loop);
+          playClip('l hand module highlightaction', loop);
+          playClip('target contact pulseaction', loop);
+          playClip('target markaction', loop);
+          playClip('touch targetaction', loop);
         }
         mixer.update(0);
         renderStatic();
       };
-      applyAnimationRef.current(modeRef.current);
-
       actor = new THREE.Group();
       actor.userData.baseScale = baseScale;
       actor.scale.setScalar(baseScale);
@@ -436,8 +434,11 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         loupe = createLoupe(THREE, leftHand, gradient);
         loupe.visible = modeRef.current === 'working';
       }
-      camera.position.z = 4.25 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.14;
+      cameraDistance = 4.25 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.14;
+      interactionCameraDistance = cameraDistance * 1.22;
+      camera.position.z = cameraDistance;
       camera.lookAt(0, 0, 0);
+      applyAnimationRef.current(modeRef.current);
 
       resizeObserver = new ResizeObserver(() => {
         if (!renderer || !camera || !host) return;
