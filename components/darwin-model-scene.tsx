@@ -218,9 +218,9 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       const breath = reducedMotionRef.current ? 0 : Math.sin(seconds * (working ? 4 : thinking ? 2.4 : 2)) * (working ? 0.025 : 0.016);
 
       actor.position.y = breath + happyBounce * 0.04 + candidateNod * 0.018;
-      actor.rotation.y = working ? 0.3 + Math.sin(elapsed * 0.9) * 0.035
-        : thinking ? 0.14 + Math.sin(seconds * 0.6) * 0.012
-          : attention ? -0.12 : 0.16 + Math.sin(seconds * 0.6) * 0.018;
+      actor.rotation.y = working ? 0.42 + Math.sin(elapsed * 0.9) * 0.035
+        : thinking ? 0.36 + Math.sin(seconds * 0.6) * 0.012
+          : attention ? -0.32 : 0.38 + Math.sin(seconds * 0.6) * 0.018;
       actor.rotation.x = thinking ? (elapsed < 3.2 ? -0.09 : -0.015) : candidateNod * 0.045;
       actor.rotation.z = thinking ? -0.018 : complete ? happyBounce * 0.012 : working ? -0.01 : 0;
       actor.scale.setScalar(actor.userData.baseScale * (1 + happyBounce * 0.005));
@@ -267,7 +267,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         mixer?.stopAllAction();
         if (actor) {
           actor.position.y = 0;
-          actor.rotation.set(0, 0.16, 0);
+          actor.rotation.set(0, 0.38, 0);
           actor.scale.setScalar(actor.userData.baseScale);
         }
         if (leftHand) leftHand.position.y = leftHandBaseY;
