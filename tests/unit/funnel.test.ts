@@ -3,8 +3,8 @@ import { describe, expect, test } from 'vitest';
 import { auxiliaryFunnelStages, isApproachStage, isInterestStage, isMeetingStage, mainFunnelStages, normalizeFunnelStage, stageLabels } from '../../lib/funnel';
 
 describe('funnel', () => {
-  test('orders the eight operational funnel stages', () => {
-    expect(mainFunnelStages).toEqual(['NEW', 'CONTACTED', 'IN_CONVERSATION', 'QUALIFIED', 'PROPOSAL', 'MEETING', 'FOLLOW_UP', 'WON']);
+  test('orders the seven operational funnel stages', () => {
+    expect(mainFunnelStages).toEqual(['CONTACTED', 'IN_CONVERSATION', 'QUALIFIED', 'PROPOSAL', 'MEETING', 'FOLLOW_UP', 'WON']);
     expect(auxiliaryFunnelStages).toEqual(['NO_RESPONSE', 'DISCARDED']);
     expect(stageLabels.PROPOSAL).toBe('Proposta enviada');
   });
@@ -29,7 +29,6 @@ describe('funnel', () => {
     expect(normalizeFunnelStage('')).toBe('CONTACTED');
     const persisted = ['NEW', 'CONTACTED', 'INTEREST', 'IN_CONVERSATION'];
     expect(persisted.filter((stage) => normalizeFunnelStage(stage) === 'CONTACTED')).toHaveLength(1);
-    expect(persisted.filter((stage) => normalizeFunnelStage(stage) === 'NEW')).toHaveLength(1);
     expect(persisted.filter((stage) => normalizeFunnelStage(stage) === 'IN_CONVERSATION')).toHaveLength(2);
   });
 
