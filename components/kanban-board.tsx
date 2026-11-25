@@ -50,6 +50,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
   const router = useRouter();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(focusedLeadId ?? null);
   const [stageOverrides, setStageOverrides] = useState<Record<string, LeadStage>>({});
+  const [pendingStageIds, setPendingStageIds] = useState<string[]>([]);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<CrmBoardSort>('current');
@@ -137,7 +138,9 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
     return filterCrmBoardLeads(searchCrmLeads(leadsWithPendingStages, searchQuery), boardFilter);
   }, [currentLeads, searchQuery, boardFilter, stageOverrides]);
   const hasSearch = Boolean(searchQuery.trim());
-  const trashedLeads = currentLeads.filter((lead) => lead.stage === 'DISCARDED');
+  const trashedLeads = currentLeads
+    .map((lead) => stageOverrides[lead.id] ? { ...lead, stage: stageOverrides[lead.id] } : lead)
+    .filter((lead) => lead.stage === 'DISCARDED');
   const selectedLead = currentLeads.find((lead) => lead.id === selectedLeadId);
   const selectedFollowUpOrigin = selectedLead?.followUpOriginStage ?? selectedLead?.followUps.find((item) => item.state === 'PENDING')?.returnStage ?? null;
 
@@ -178,6 +181,7 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
             return <motion.div key={lead.id} layoutId={`crm-lead-${lead.id}`} initial={false} transition={getMotionTransition(false, 'normal')}>
               <motion.button {...getDashboardCardMotionProps(prefersReducedMotion)} id={`lead-${lead.id}`} data-lead-id={lead.id} type="button" aria-label={`Abrir detalhes de ${displayCompanyName(lead.name)}`} onClick={() => setSelectedLeadId(lead.id)} className="group grid min-h-[84px] w-full gap-3 rounded-lg border border-white/[0.075] bg-[#151b20] p-3 text-left shadow-[0_10px_24px_rgba(0,0,0,.12)] hover:border-white/20 hover:bg-[#192127] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--atelier-green)]">
               <span className="line-clamp-2 break-words text-[13px] font-semibold leading-snug text-white/90">{displayCompanyName(lead.name)}</span>
+              {pendingStageIds.includes(lead.id) ? <span role="status" className="text-[10px] font-medium text-[var(--atelier-green)]">Salvando etapa…</span> : null}
               {normalizeFunnelStage(lead.stage) === 'FOLLOW_UP' && followUpOrigin ? <span className="text-[10px] font-medium text-[var(--atelier-green)]/80">Veio de {stageLabels[normalizeFunnelStage(followUpOrigin)]}</span> : null}
               <span className="flex items-center justify-between gap-2 text-[10px] text-white/40">
                 <span className="flex min-w-0 items-center gap-1.5"><span className={`h-2 w-2 shrink-0 rounded-full ${channels.length ? 'bg-[var(--atelier-green)]' : 'bg-white/35'}`} />{latest ? <time dateTime={latest.createdAt}>Há atividade</time> : 'Sem contato'}</span>
@@ -276,7 +280,20 @@ export function KanbanBoard({ leads, focusedLeadId, services, followUpDelayDays,
       setRemovedIds((previous) => [...previous, id]);
       setSelectedLeadId(null);
       router.refresh();
+    }} onStagePending={(stage) => {
+      if (stage) {
+        setStageOverrides((previous) => ({ ...previous, [selectedLead.id]: stage }));
+        setPendingStageIds((previous) => previous.includes(selectedLead.id) ? previous : [...previous, selectedLead.id]);
+      } else {
+        setStageOverrides((previous) => {
+          const next = { ...previous };
+          delete next[selectedLead.id];
+          return next;
+        });
+        setPendingStageIds((previous) => previous.filter((id) => id !== selectedLead.id));
+      }
     }} onUpdated={(updatedStage) => {
+      setPendingStageIds((previous) => previous.filter((id) => id !== selectedLead.id));
       if (!updatedStage) return;
       const stageChanged = normalizeFunnelStage(updatedStage) !== normalizeFunnelStage(selectedLead.stage);
       if (stageChanged) {

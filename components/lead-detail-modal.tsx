@@ -40,7 +40,7 @@ function dateTimeLabel(value: string) {
   return new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays, members = [], currentMemberId, onClose, onUpdated, onDeleted }: { lead: CrmLead; services: CommercialServiceOption[]; followUpDelayDays: number; members?: CrmTaskFormMember[]; currentMemberId?: string | null; onClose: () => void; onUpdated: (stage?: Stage) => void; onDeleted: (id: string) => void }) {
+export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays, members = [], currentMemberId, onClose, onUpdated, onStagePending, onDeleted }: { lead: CrmLead; services: CommercialServiceOption[]; followUpDelayDays: number; members?: CrmTaskFormMember[]; currentMemberId?: string | null; onClose: () => void; onUpdated: (stage?: Stage) => void; onStagePending?: (stage: Stage | null) => void; onDeleted: (id: string) => void }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -206,7 +206,9 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
     const details: Record<string, unknown> = {};
     if (stageChanged) details.stage = stageDraft;
     if (stageDraft === 'MEETING') details.meetingAt = meetingAtInput ? new Date(meetingAtInput).toISOString() : null;
-    await updateLead(id, details);
+    if (stageChanged) onStagePending?.(stageDraft);
+    const saved = await updateLead(id, details);
+    if (!saved && stageChanged) onStagePending?.(null);
   }
 
   async function scheduleFollowUp(lead: CrmLead) {
@@ -335,7 +337,7 @@ export function LeadDetailModal({ lead: initialLead, services, followUpDelayDays
                 {stageDraft === 'MEETING' ? <label className="grid min-w-0 gap-2 text-xs font-medium text-white/55">Data e hora da reunião
                   <input aria-label="Data e hora da reunião" type="datetime-local" value={meetingAtInput} onChange={(event) => setMeetingAtInput(event.target.value)} className="min-h-12 w-full min-w-0 rounded-lg border border-white/[0.14] bg-[#11171c] px-3 text-sm text-white" />
                 </label> : null}
-                <button type="button" disabled={savingId === lead.id || stageDraft === 'WON' || (!stageChanged && !(stageDraft === 'MEETING' && meetingDateChanged))} onClick={() => saveStageChange(lead.id)} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">{stageDraft === 'MEETING' && !stageChanged && meetingDateChanged ? 'Salvar data da reunião' : 'Salvar alterações'}</button>
+                <button type="button" aria-live="polite" disabled={savingId === lead.id || stageDraft === 'WON' || (!stageChanged && !(stageDraft === 'MEETING' && meetingDateChanged))} onClick={() => saveStageChange(lead.id)} className="min-h-11 rounded-lg bg-[var(--atelier-green)] px-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">{savingId === lead.id && stageChanged ? 'Salvando etapa…' : stageDraft === 'MEETING' && !stageChanged && meetingDateChanged ? 'Salvar data da reunião' : 'Salvar alterações'}</button>
               </div>
               {showFollowUpCard ? <div className="grid min-w-0 content-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
                 <p className="text-xs leading-5 text-white/55">Ao entrar em Follow-up, o retorno é agendado automaticamente em {followUpDelayDays} {followUpDelayDays === 1 ? 'dia' : 'dias'}.</p>
