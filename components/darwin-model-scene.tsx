@@ -218,10 +218,14 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       const breath = reducedMotionRef.current ? 0 : Math.sin(seconds * (working ? 4 : thinking ? 2.4 : 2)) * (working ? 0.025 : 0.016);
 
       actor.position.y = breath + happyBounce * 0.04 + candidateNod * 0.018;
-      actor.rotation.y = working ? 0.78 + Math.sin(elapsed * 0.9) * 0.04
-        : thinking ? 0.72 + Math.sin(seconds * 0.6) * 0.014
-          : attention ? -0.72 : 0.72 + Math.sin(seconds * 0.6) * 0.02;
-      actor.rotation.x = thinking ? (elapsed < 3.2 ? -0.09 : -0.015) : candidateNod * 0.045;
+      const settling = complete && elapsed < 3;
+      const followX = pointerActive ? pointerX : 0;
+      const followY = pointerActive ? pointerY : 0;
+      // Facing the viewer by default; the head leans toward the cursor like in the gallery.
+      actor.rotation.y = working ? 0.5 + Math.sin(elapsed * 0.9) * 0.04 + followX * 0.03
+        : attention ? Math.sin(seconds * 9) * 0.012 + followX * 0.04
+          : followX * 0.16 + (reducedMotionRef.current ? 0 : Math.sin(seconds * 0.6) * 0.012);
+      actor.rotation.x = (thinking ? (elapsed < 3.2 ? -0.09 : -0.015) : candidateNod * 0.045) - followY * 0.06;
       actor.rotation.z = thinking ? -0.018 : complete ? happyBounce * 0.012 : working ? -0.01 : 0;
       actor.scale.setScalar(actor.userData.baseScale * (1 + happyBounce * 0.005));
 
@@ -235,16 +239,18 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         mesh.scale.set(scale.x, scale.y * (attention ? 1.18 : complete && elapsed < 0.42 ? 0.72 : 1 - blink * 0.94), scale.z);
       });
 
-      camera.position.z = working || complete ? interactionCameraDistance : cameraDistance;
+      camera.position.z = working || settling ? interactionCameraDistance : cameraDistance;
+      if (complete && !settling && targetNodes.some((node) => node.visible)) {
+        // Celebration is over: hide the touch target and go back to the normal idle pose.
+        targetNodes.forEach((node) => { node.visible = false; });
+      }
       const delta = previousFrameAt ? Math.min((now - previousFrameAt) / 1000, 0.12) : 0;
       previousFrameAt = now;
       mixer?.update(delta);
       renderStatic();
 
-      const shouldAnimate = activeMode === 'idle' || thinking || activeMode === 'working'
-        || activeMode === 'complete' && elapsed < 3;
-      if (!reducedMotionRef.current && visibleRef.current && document.visibilityState === 'visible' && shouldAnimate) {
-        scheduleNextFrame(activeMode === 'idle' ? 100 : 40);
+      if (!reducedMotionRef.current && visibleRef.current && document.visibilityState === 'visible') {
+        scheduleNextFrame(thinking || working || settling ? 40 : 100);
       } else frame = 0;
     };
 
@@ -267,7 +273,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         mixer?.stopAllAction();
         if (actor) {
           actor.position.y = 0;
-          actor.rotation.set(0, modeRef.current === 'attention' ? -0.72 : 0.72, 0);
+          actor.rotation.set(0, modeRef.current === 'working' ? 0.5 : 0, 0);
           actor.scale.setScalar(actor.userData.baseScale);
         }
         if (leftHand) leftHand.position.y = leftHandBaseY;
@@ -287,8 +293,10 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       if (reducedMotionRef.current || event.pointerType !== 'mouse') return;
       const rect = host.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
-      pointerX = THREE.MathUtils.clamp(((event.clientX - rect.left) / rect.width) * 2 - 1, -1, 1);
-      pointerY = THREE.MathUtils.clamp(1 - ((event.clientY - rect.top) / rect.height) * 2, -1, 1);
+      // Relative to the mascot's center so Darwin follows the cursor anywhere on the page.
+      const reach = Math.max(rect.width, 240);
+      pointerX = THREE.MathUtils.clamp((event.clientX - (rect.left + rect.width / 2)) / reach, -1, 1);
+      pointerY = THREE.MathUtils.clamp(-(event.clientY - (rect.top + rect.height / 2)) / reach, -1, 1);
       pointerActive = true;
       startAnimation();
     };
@@ -447,7 +455,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       actor = new THREE.Group();
       actor.userData.baseScale = baseScale;
       actor.scale.setScalar(baseScale);
-      actor.rotation.y = modeRef.current === 'attention' ? -0.72 : 0.72;
+      actor.rotation.y = modeRef.current === 'working' ? 0.5 : 0;
       actor.add(model);
       scene.add(actor);
       if (leftHand) {
@@ -493,15 +501,15 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
 
     reducedMotion.addEventListener('change', onMotionChange);
     document.addEventListener('visibilitychange', onVisibilityChange);
-    host.addEventListener('pointermove', onPointerMove);
-    host.addEventListener('pointerleave', onPointerLeave);
+    window.addEventListener('pointermove', onPointerMove);
+    document.documentElement.addEventListener('pointerleave', onPointerLeave);
     return () => {
       disposed = true;
       stop();
       reducedMotion.removeEventListener('change', onMotionChange);
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      host.removeEventListener('pointermove', onPointerMove);
-      host.removeEventListener('pointerleave', onPointerLeave);
+      window.removeEventListener('pointermove', onPointerMove);
+      document.documentElement.removeEventListener('pointerleave', onPointerLeave);
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
       if (renderer) {
