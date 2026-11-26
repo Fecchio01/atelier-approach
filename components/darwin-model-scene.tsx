@@ -49,9 +49,9 @@ function addModelOutlines(root: THREE.Object3D, geometries: THREE.BufferGeometry
     for (let index = 0; index < positions.count; index += 1) {
       positions.setXYZ(
         index,
-        center.x + (positions.getX(index) - center.x) * 1.008,
-        center.y + (positions.getY(index) - center.y) * 1.008,
-        center.z + (positions.getZ(index) - center.z) * 1.008,
+        center.x + (positions.getX(index) - center.x) * 1.014,
+        center.y + (positions.getY(index) - center.y) * 1.014,
+        center.z + (positions.getZ(index) - center.z) * 1.014,
       );
     }
     positions.needsUpdate = true;
@@ -306,11 +306,11 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       scene = new THREE.Scene();
       scene.background = null;
       camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-      scene.add(new THREE.HemisphereLight(0xffe5c2, 0x527048, 1.0));
-      const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+      scene.add(new THREE.HemisphereLight(0xffe5c2, 0x527048, 1.35));
+      const keyLight = new THREE.DirectionalLight(0xffffff, 2);
       keyLight.position.set(-4, 7, 8);
       scene.add(keyLight);
-      const fillLight = new THREE.DirectionalLight(0xd7ffad, 0.32);
+      const fillLight = new THREE.DirectionalLight(0xd7ffad, 0.5);
       fillLight.position.set(5, 0, 4);
       scene.add(fillLight);
       const rimLight = new THREE.DirectionalLight(0xb8f79b, 0.75);
@@ -329,8 +329,8 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       const model = cloneSkeleton(gltf.scene);
       model.updateMatrixWorld(true);
 
-      const palette = new Uint8Array([40, 40, 40, 255, 115, 115, 115, 255, 255, 255, 255, 255]);
-      gradient = new THREE.DataTexture(palette, 3, 1, THREE.RGBAFormat);
+      const palette = new Uint8Array([34, 62, 112, 188, 255]);
+      gradient = new THREE.DataTexture(palette, 5, 1, THREE.RedFormat);
       gradient.minFilter = THREE.NearestFilter;
       gradient.magFilter = THREE.NearestFilter;
       gradient.generateMipmaps = false;
@@ -343,10 +343,22 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         const objectName = object.name.replaceAll('_', ' ').toLowerCase();
         mesh.material = originalMaterials.map((original) => {
           const materialName = `${original.name} ${objectName}`.toLowerCase();
-          // Keep Blender's exported Principled BSDF materials (roughness, sheen and emission).
-          const material = original.clone();
+          // Same cel-shaded look as the Darwin gallery (mascote-v8.html).
+          const baseColor = (original as THREE.MeshStandardMaterial).color?.clone() ?? new THREE.Color('#f2d9b9');
+          let material: THREE.Material;
+          if (materialName.includes('mint eyes')) {
+            material = new THREE.MeshBasicMaterial({ color: '#92ffc0', toneMapped: false });
+          } else {
+            const toon = new THREE.MeshToonMaterial({ color: baseColor, gradientMap: gradient });
+            if (materialName.includes('forest display')) toon.color.set('#0b2615');
+            if (materialName.includes('warm ivory shell')) toon.color.set('#f7f7f2');
+            if (materialName.includes('raised porcelain bezel')) toon.color.set('#ffffff');
+            if (materialName.includes('fine warm visor seam')) toon.color.set('#d5d3c9');
+            if (materialName.includes('floating green') || materialName.includes('hand module')) toon.color.set('#23723a');
+            if (materialName.includes('sprout leaf')) toon.color.offsetHSL(0, 0.12, 0.045);
+            material = toon;
+          }
           if ('color' in material && material.color instanceof THREE.Color) baseColors.set(material, material.color.clone());
-          if (material instanceof THREE.MeshStandardMaterial) baseEmissiveColors.set(material, material.emissive.clone());
           if (materialName.includes('mint eyes')) eyeMaterials.push(material);
           if (objectName.includes('darwin convex capsule shell') || objectName.includes('hand socket side volume')) shellMaterials.push(material);
           if (objectName.includes('sculpted porcelain visor bezel') || objectName.includes('hand socket porcelain lip')) bezelMaterials.push(material);
