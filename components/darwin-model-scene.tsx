@@ -218,9 +218,9 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       const breath = reducedMotionRef.current ? 0 : Math.sin(seconds * (working ? 4 : thinking ? 2.4 : 2)) * (working ? 0.025 : 0.016);
 
       actor.position.y = breath + happyBounce * 0.04 + candidateNod * 0.018;
-      actor.rotation.y = working ? 0.6 + Math.sin(elapsed * 0.9) * 0.04
-        : thinking ? 0.52 + Math.sin(seconds * 0.6) * 0.014
-          : attention ? -0.46 : 0.55 + Math.sin(seconds * 0.6) * 0.02;
+      actor.rotation.y = working ? 0.78 + Math.sin(elapsed * 0.9) * 0.04
+        : thinking ? 0.72 + Math.sin(seconds * 0.6) * 0.014
+          : attention ? -0.72 : 0.72 + Math.sin(seconds * 0.6) * 0.02;
       actor.rotation.x = thinking ? (elapsed < 3.2 ? -0.09 : -0.015) : candidateNod * 0.045;
       actor.rotation.z = thinking ? -0.018 : complete ? happyBounce * 0.012 : working ? -0.01 : 0;
       actor.scale.setScalar(actor.userData.baseScale * (1 + happyBounce * 0.005));
@@ -267,7 +267,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
         mixer?.stopAllAction();
         if (actor) {
           actor.position.y = 0;
-          actor.rotation.set(0, 0.55, 0);
+          actor.rotation.set(0, modeRef.current === 'attention' ? -0.72 : 0.72, 0);
           actor.scale.setScalar(actor.userData.baseScale);
         }
         if (leftHand) leftHand.position.y = leftHandBaseY;
@@ -299,12 +299,12 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
     };
 
     try {
-      renderer = new THREE.WebGLRenderer({ canvas, alpha: false, antialias: true, powerPreference: 'low-power' });
+      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.setClearColor('#f8f3e8', 1);
+      renderer.setClearColor(0x000000, 0);
       scene = new THREE.Scene();
-      scene.background = new THREE.Color('#f8f3e8');
+      scene.background = null;
       camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
       scene.add(new THREE.HemisphereLight(0xffe5c2, 0x527048, 1.0));
       const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -432,6 +432,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       actor = new THREE.Group();
       actor.userData.baseScale = baseScale;
       actor.scale.setScalar(baseScale);
+      actor.rotation.y = modeRef.current === 'attention' ? -0.72 : 0.72;
       actor.add(model);
       scene.add(actor);
       if (leftHand) {
@@ -500,7 +501,7 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
     };
   }, [onUnavailable]);
 
-  return <span ref={hostRef} className="block size-full overflow-hidden rounded-[inherit]" style={{ background: '#f8f3e8' }}>
+  return <span ref={hostRef} className="block size-full overflow-visible">
     <canvas ref={canvasRef} className="block size-full" />
   </span>;
 }

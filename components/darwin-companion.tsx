@@ -56,7 +56,7 @@ export function DarwinCompanion({ mode = 'idle', size = 88, className = '', acti
   return <span
     ref={rootRef}
     aria-hidden="true"
-    className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[18px] bg-[#f8f3e8] shadow-[0_8px_24px_rgba(0,0,0,.2)] ring-1 ring-black/10 ${mode === 'attention' ? 'ring-amber-300/70' : mode === 'complete' ? 'ring-[var(--atelier-green)]/70' : ''} ${className}`}
+    className={`relative inline-flex shrink-0 items-center justify-center overflow-visible drop-shadow-[0_8px_10px_rgba(0,0,0,.3)] ${mode === 'attention' ? 'drop-shadow-[0_0_10px_rgba(250,204,21,.35)]' : mode === 'complete' ? 'drop-shadow-[0_0_10px_rgba(163,230,53,.35)]' : ''} ${className}`}
     style={{ width: fill ? '100%' : size, height: fill ? '100%' : size }}
   >
     {!active
@@ -66,7 +66,7 @@ export function DarwinCompanion({ mode = 'idle', size = 88, className = '', acti
       : Scene && active && inView
         ? <Scene mode={mode} onUnavailable={handleUnavailable} />
         : <span className="flex size-8 items-center justify-center rounded-full bg-white/60 text-[#527b46]" aria-hidden="true"><CircleNotchIcon size={17} className="animate-spin motion-reduce:animate-none" /></span>}
-    {mode === 'attention' ? <span className="absolute bottom-1 right-1 flex size-5 items-center justify-center rounded-full bg-[#f3c969] text-[#231d0d] ring-2 ring-[#f8f3e8]"><WarningCircleIcon size={14} weight="fill" /></span> : null}
-    {mode === 'complete' ? <span className="absolute bottom-1 right-1 flex size-5 items-center justify-center rounded-full bg-[var(--atelier-green)] text-[#17200f] ring-2 ring-[#f8f3e8]"><CheckIcon size={13} weight="bold" /></span> : null}
+    {mode === 'attention' ? <span className="absolute bottom-1 right-1 flex size-5 items-center justify-center rounded-full bg-[#f3c969] text-[#231d0d] ring-2 ring-[#101518]"><WarningCircleIcon size={14} weight="fill" /></span> : null}
+    {mode === 'complete' ? <span className="absolute bottom-1 right-1 flex size-5 items-center justify-center rounded-full bg-[var(--atelier-green)] text-[#17200f] ring-2 ring-[#101518]"><CheckIcon size={13} weight="bold" /></span> : null}
   </span>;
 }

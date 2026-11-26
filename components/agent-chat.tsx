@@ -161,9 +161,9 @@ export function AgentChat() {
         <span className="truncate">{companionStatus}</span>
       </span>
       <span
-        className="relative block size-[68px] rounded-[18px] shadow-[0_12px_32px_rgba(0,0,0,0.34)] transition-transform duration-200 hover:scale-105 motion-reduce:transition-none sm:size-[88px]"
+        className="relative block size-[68px] transition-transform duration-200 hover:scale-105 motion-reduce:transition-none sm:size-[88px]"
       >
-        <DarwinCompanion mode={companionMode} size={88} fill className="rounded-[18px] ring-1 ring-white/20" active={!open} />
+        <DarwinCompanion mode={companionMode} size={88} fill active={!open} />
         <span aria-hidden="true" className="absolute bottom-1 right-1 flex size-6 items-center justify-center rounded-full border border-[var(--atelier-green)]/35 bg-[#18201c] text-[var(--atelier-green)] shadow-md sm:bottom-1.5 sm:right-1.5 sm:size-7">
           <ChatCircleDotsIcon size={14} weight="fill" className="sm:size-4" />
         </span>
