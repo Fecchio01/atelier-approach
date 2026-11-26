@@ -385,7 +385,7 @@ export function matchesOvertureSearch(
 
 function isClothingNiche(niche: string) {
   return ['loja de roupa', 'loja de roupas', 'roupas', 'vestuario', 'clothing', 'clothing store', 'apparel', 'apparel store',
-    'fashion store', 'fashion boutique', 'moda feminina', 'moda masculina', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing', 'multimarcas']
+    'fashion store', 'fashion boutique', 'moda feminina', 'moda masculina', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing", 'multimarcas']
     .includes(normalizeSearchTerm(niche));
 }
 
