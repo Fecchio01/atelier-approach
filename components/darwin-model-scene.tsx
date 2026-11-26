@@ -339,9 +339,10 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
       model.traverse((object) => {
         const mesh = object as THREE.Mesh;
         if (!mesh.isMesh) return;
+        const sourceIsArray = Array.isArray(mesh.material);
         const originalMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         const objectName = object.name.replaceAll('_', ' ').toLowerCase();
-        mesh.material = originalMaterials.map((original) => {
+        const converted = originalMaterials.map((original) => {
           const materialName = `${original.name} ${objectName}`.toLowerCase();
           // Same cel-shaded look as the Darwin gallery (mascote-v8.html).
           const baseColor = (original as THREE.MeshStandardMaterial).color?.clone() ?? new THREE.Color('#f2d9b9');
@@ -365,6 +366,8 @@ export function DarwinModelScene({ mode, onUnavailable }: { mode: DarwinMode; on
           if (objectName.includes('convex forest glass visor')) visorMaterials.push(material);
           return material;
         });
+        // A single material must stay single: an array without geometry groups renders nothing.
+        mesh.material = sourceIsArray ? converted : converted[0];
         if (objectName.includes('mint eye')) eyes.push({ mesh, scale: mesh.scale.clone(), position: mesh.position.clone() });
         if (objectName.includes('l floating green hand module')) leftHand = object;
         if (/^(touch target|target mark|target contact pulse)$/.test(objectName)) {
