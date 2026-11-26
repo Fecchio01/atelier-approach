@@ -31,14 +31,16 @@ const AUTO_PRODUCT_CATEGORY_PATTERN = /(^| )(auto_parts|car_parts|vehicle_parts|
 const AUTO_PRODUCT_NAME_PATTERN = /\b(auto pecas|autopecas|car parts|auto parts|pecas automotivas|produtos automotivos|automotive products|loja de pecas|loja de acessorios|auto accessories|automotive accessories|concessionaria|dealership|revenda de veiculos|veiculos usados|pneus|tire shop|tyre shop)\b/;
 const UNRELATED_AUTO_PLACE_PATTERN = /retirement home|casa de repouso|residencial senior|corretora de seguros|insurance|detran|protecao veicular|clube de beneficios/i;
 const OPTICAL_BUSINESS_PATTERN = /(^| )(otica|oticas|otico|oticos|optica|opticas|optico|opticos|optic|optics|optical|optical store|optical shop|optician|opticians|optometrist|optometria|optometry|eyewear|eyeglass|glasses store|vision center)( |$)/;
-const VEHICLE_BUSINESS_PATTERN = /(^| )(auto dealer|car dealer|automotive dealer|vehicle dealer|motorcycle dealer|auto repair|automotive repair|car repair|vehicle repair|auto parts|car parts|vehicle parts|car wash|auto wash|automotive store|vehicle sales|used car dealer|concessionaria|loja de carros|loja de veiculos|revenda de veiculos|automoveis|carros usados)( |$)|\b(car multimarcas|multimarcas automotiva|multimarcas automotive|veiculos multimarcas)\b/;
+const VEHICLE_BUSINESS_PATTERN = /(^| )(auto dealer|car dealer|car dealership|automotive dealer|vehicle dealer|used vehicle dealer|motorcycle dealer|auto sales|car sales|vehicle sales|auto repair|automotive repair|car repair|vehicle repair|auto parts|car parts|vehicle parts|car wash|auto wash|automotive store|used car dealer|concessionaria|loja de carros|loja de veiculos|revenda de veiculos|automoveis|carros usados)( |$)|\b(car multimarcas|multimarcas automotiva|multimarcas automotive|veiculos multimarcas)\b/;
 const CLOTHING_CATEGORY_PATTERN = /(^| )(clothing|clothing store|clothes store|apparel|apparel store|fashion|fashion store|fashion boutique|clothing boutique|boutique|lingerie store|underwear store|shoe store|fashion accessories)( |$)/;
+const CLOTHING_CATEGORY_TERMS = ['clothing', 'clothing store', 'clothes store', 'apparel', 'apparel store', 'fashion', 'fashion store', 'fashion boutique', 'clothing boutique', 'boutique', 'lingerie store', 'underwear store', 'shoe store', 'fashion accessories'];
 const CLOTHING_NAME_TERMS = [
   'loja de roupa', 'loja de roupas', 'roupa', 'roupas', 'vestuario', 'clothing store', 'clothing',
   'apparel store', 'apparel', 'fashion store', 'fashion boutique', 'moda feminina', 'moda masculina',
   'lingerie', 'loja de lingerie', 'lingerie store', 'underwear store', 'roupa intima'
 ];
 const FOOD_RETAIL_CATEGORY_PATTERN = /(^| )(supermarket|grocery|grocery store|food store|food market|market|convenience store|wholesale food|food wholesaler|cash and carry|mercado|supermercado|mercearia|minimercado|distribuidor de alimentos)( |$)/;
+const FOOD_RETAIL_CATEGORY_TERMS = ['supermarket', 'grocery', 'grocery store', 'food store', 'food market', 'market', 'convenience store', 'wholesale food', 'food wholesaler', 'cash and carry', 'mercado', 'supermercado', 'mercearia', 'minimercado', 'distribuidor de alimentos'];
 const FOOD_BASKET_NAME_TERMS = ['cesta basica', 'cestas basicas', 'cesta de alimentos', 'cestas de alimentos', 'kit de alimentos', 'food basket', 'basic food basket'];
 const INCOMPATIBLE_FOOD_CATEGORY_PATTERN = /(^| )(automotive|auto dealer|car dealer|vehicle dealer|motorcycle dealer|auto repair|automotive repair|hospital|clinic|medical center|healthcare|restaurant|bar|hotel|school|university|beauty salon|hair salon|real estate|insurance|bank|financial services)( |$)/;
 const CONTACT_URL = /https?:\/\/[^\s,;]+/gi;
@@ -413,6 +415,16 @@ function buildOvertureSearchCondition(
 
 function getNicheSearchTerms(niche: string) {
   const normalizedNiche = normalizeSearchTerm(niche);
+  if (isClothingNiche(normalizedNiche)) {
+    return Array.from(new Set([
+      ...CLOTHING_CATEGORY_TERMS,
+      ...CLOTHING_NAME_TERMS,
+      ...(normalizedNiche === 'multimarcas' ? ['multimarcas'] : [])
+    ]));
+  }
+  if (isFoodBasketNiche(normalizedNiche)) {
+    return Array.from(new Set([...FOOD_BASKET_NAME_TERMS, ...FOOD_RETAIL_CATEGORY_TERMS]));
+  }
   const aliases = NICHE_TAXONOMY_TERMS[normalizedNiche] ?? [];
   return Array.from(new Set([normalizedNiche, ...aliases.map(normalizeSearchTerm)].filter(Boolean)));
 }
