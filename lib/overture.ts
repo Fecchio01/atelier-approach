@@ -31,6 +31,16 @@ const AUTO_PRODUCT_CATEGORY_PATTERN = /(^| )(auto_parts|car_parts|vehicle_parts|
 const AUTO_PRODUCT_NAME_PATTERN = /\b(auto pecas|autopecas|car parts|auto parts|pecas automotivas|produtos automotivos|automotive products|loja de pecas|loja de acessorios|auto accessories|automotive accessories|concessionaria|dealership|revenda de veiculos|veiculos usados|pneus|tire shop|tyre shop)\b/;
 const UNRELATED_AUTO_PLACE_PATTERN = /retirement home|casa de repouso|residencial senior|corretora de seguros|insurance|detran|protecao veicular|clube de beneficios/i;
 const OPTICAL_BUSINESS_PATTERN = /(^| )(otica|oticas|otico|oticos|optica|opticas|optico|opticos|optic|optics|optical|optical store|optical shop|optician|opticians|optometrist|optometria|optometry|eyewear|eyeglass|glasses store|vision center)( |$)/;
+const VEHICLE_BUSINESS_PATTERN = /(^| )(auto dealer|car dealer|automotive dealer|vehicle dealer|motorcycle dealer|auto repair|automotive repair|car repair|vehicle repair|auto parts|car parts|vehicle parts|car wash|auto wash|automotive store|vehicle sales|used car dealer|concessionaria|loja de carros|loja de veiculos|revenda de veiculos|automoveis|carros usados)( |$)|\b(car multimarcas|multimarcas automotiva|multimarcas automotive|veiculos multimarcas)\b/;
+const CLOTHING_CATEGORY_PATTERN = /(^| )(clothing|clothing store|clothes store|apparel|apparel store|fashion|fashion store|fashion boutique|clothing boutique|boutique|lingerie store|underwear store|shoe store|fashion accessories)( |$)/;
+const CLOTHING_NAME_TERMS = [
+  'loja de roupa', 'loja de roupas', 'roupa', 'roupas', 'vestuario', 'clothing store', 'clothing',
+  'apparel store', 'apparel', 'fashion store', 'fashion boutique', 'moda feminina', 'moda masculina',
+  'lingerie', 'loja de lingerie', 'lingerie store', 'underwear store', 'roupa intima'
+];
+const FOOD_RETAIL_CATEGORY_PATTERN = /(^| )(supermarket|grocery|grocery store|food store|food market|market|convenience store|wholesale food|food wholesaler|cash and carry|mercado|supermercado|mercearia|minimercado|distribuidor de alimentos)( |$)/;
+const FOOD_BASKET_NAME_TERMS = ['cesta basica', 'cestas basicas', 'cesta de alimentos', 'cestas de alimentos', 'kit de alimentos', 'food basket', 'basic food basket'];
+const INCOMPATIBLE_FOOD_CATEGORY_PATTERN = /(^| )(automotive|auto dealer|car dealer|vehicle dealer|motorcycle dealer|auto repair|automotive repair|hospital|clinic|medical center|healthcare|restaurant|bar|hotel|school|university|beauty salon|hair salon|real estate|insurance|bank|financial services)( |$)/;
 const CONTACT_URL = /https?:\/\/[^\s,;]+/gi;
 const NICHE_TAXONOMY_TERMS: Record<string, string[]> = {
   barbearia: ['barber', 'barber shop', 'barbershop'],
@@ -62,6 +72,9 @@ const NICHE_TAXONOMY_TERMS: Record<string, string[]> = {
   'womens clothing': ['women’s clothing', 'fashion store', 'fashion boutique', 'apparel', 'clothing', 'loja de roupa', 'moda feminina'],
   "women's clothing": ['womens clothing', 'fashion store', 'fashion boutique', 'apparel', 'clothing', 'loja de roupa', 'moda feminina'],
   'mens clothing': ['men’s clothing', 'fashion store', 'fashion boutique', 'apparel', 'clothing', 'loja de roupa', 'moda masculina'],
+  multimarcas: ['multimarcas', 'loja de roupa', 'loja de roupas', 'roupas', 'vestuario', 'clothing store', 'clothing', 'apparel store', 'fashion store', 'fashion boutique', 'moda feminina', 'moda masculina', 'lingerie'],
+  'cesta basica': ['cestas basicas', 'cesta de alimentos', 'cestas de alimentos', 'kit de alimentos', 'food basket', 'basic food basket', 'grocery store', 'supermarket', 'food store', 'food market', 'mercado', 'supermercado', 'mercearia'],
+  'cestas basicas': ['cesta basica', 'cesta de alimentos', 'cestas de alimentos', 'kit de alimentos', 'food basket', 'basic food basket', 'grocery store', 'supermarket', 'food store', 'food market', 'mercado', 'supermercado', 'mercearia'],
   "men's clothing": ['mens clothing', 'fashion store', 'fashion boutique', 'apparel', 'clothing', 'loja de roupa', 'moda masculina'],
   oficina: ['automotive repair', 'auto repair', 'mechanic'],
   'oficina mecanica': ['automotive repair', 'auto repair', 'mechanic'],
@@ -338,7 +351,25 @@ export function matchesOvertureSearch(
 
   const normalizedNiche = normalizeSearchTerm(criteria.niche);
   const searchableText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''} ${business.name}`);
-  if (isClothingNiche(normalizedNiche) && OPTICAL_BUSINESS_PATTERN.test(searchableText)) return false;
+  if (isClothingNiche(normalizedNiche)) {
+    if (OPTICAL_BUSINESS_PATTERN.test(searchableText) || VEHICLE_BUSINESS_PATTERN.test(searchableText)) return false;
+    const categoryText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''}`);
+    const hasClothingCategory = CLOTHING_CATEGORY_PATTERN.test(categoryText);
+    const hasClothingNameEvidence = CLOTHING_NAME_TERMS.some((term) => matchesWholeSearchPhrase(normalizeSearchTerm(business.name), term));
+    // "Multimarcas" is common in car dealer names. It only means clothing here
+    // when Overture also identifies an apparel category or the name says clothing.
+    if (normalizedNiche === 'multimarcas' && !hasClothingCategory && !hasClothingNameEvidence) return false;
+    if (!hasClothingCategory && !hasClothingNameEvidence) return false;
+    return true;
+  }
+
+  if (isFoodBasketNiche(normalizedNiche)) {
+    const categoryText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''}`);
+    if (INCOMPATIBLE_FOOD_CATEGORY_PATTERN.test(categoryText)) return false;
+    const hasFoodRetailCategory = FOOD_RETAIL_CATEGORY_PATTERN.test(categoryText);
+    const hasBasketNameEvidence = FOOD_BASKET_NAME_TERMS.some((term) => matchesWholeSearchPhrase(normalizeSearchTerm(business.name), term));
+    return hasFoodRetailCategory || hasBasketNameEvidence;
+  }
 
   // A café keyword in a hospital's name does not establish a café business.
   // Keep unknown/broad classifications and cafés located inside hospitals.
@@ -352,8 +383,12 @@ export function matchesOvertureSearch(
 
 function isClothingNiche(niche: string) {
   return ['loja de roupa', 'loja de roupas', 'roupas', 'vestuario', 'clothing', 'clothing store', 'apparel', 'apparel store',
-    'fashion store', 'fashion boutique', 'moda feminina', 'moda masculina', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing"]
+    'fashion store', 'fashion boutique', 'moda feminina', 'moda masculina', 'womens clothing', "women's clothing", 'mens clothing', "men's clothing', 'multimarcas']
     .includes(normalizeSearchTerm(niche));
+}
+
+function isFoodBasketNiche(niche: string) {
+  return ['cesta basica', 'cestas basicas'].includes(normalizeSearchTerm(niche));
 }
 
 function buildOvertureSearchCondition(
