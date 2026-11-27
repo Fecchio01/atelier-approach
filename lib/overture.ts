@@ -14,6 +14,22 @@ const OVERTURE_QUERY_TIMEOUT_MS = 45_000;
 const CATALOG_TTL_MS = 6 * 60 * 60_000;
 const QUERY_CACHE_TTL_MS = 10 * 60_000;
 export const DEFAULT_OVERTURE_NICHE = 'estética automotiva';
+// Overture scores how likely each place is to exist at that location (0-1). Below ~0.5 it is
+// mostly stale or duplicated records (e.g. chains that left the city), which looked like
+// "companies that do not exist" in the research. Tunable without a deploy via env.
+const DEFAULT_MIN_OVERTURE_CONFIDENCE = 0.5;
+export function getMinOvertureConfidence() {
+  const configured = Number(process.env.OVERTURE_MIN_CONFIDENCE);
+  return Number.isFinite(configured) && configured >= 0 && configured <= 1 ? configured : DEFAULT_MIN_OVERTURE_CONFIDENCE;
+}
+// A generic Overture category says nothing about the activity, so the name may decide.
+const GENERIC_CATEGORY_PATTERN = /^(yes|no|business|services|commercial|professional services|shopping|retail|store|business to business)?$/;
+function isGenericPlaceCategory(category: string | null | undefined) {
+  return GENERIC_CATEGORY_PATTERN.test(normalizeSearchTerm(category ?? ''));
+}
+function hasKnownNicheTaxonomy(niche: string) {
+  return Object.hasOwn(NICHE_TAXONOMY_TERMS, normalizeSearchTerm(niche));
+}
 
 type OvertureRow = Record<string, unknown>;
 type QueryExecutor = (sql: string) => Promise<OvertureRow[]>;
@@ -32,8 +48,9 @@ const AUTO_PRODUCT_NAME_PATTERN = /\b(auto pecas|autopecas|car parts|auto parts|
 const UNRELATED_AUTO_PLACE_PATTERN = /retirement home|casa de repouso|residencial senior|corretora de seguros|insurance|detran|protecao veicular|clube de beneficios/i;
 const OPTICAL_BUSINESS_PATTERN = /(^| )(otica|oticas|otico|oticos|optica|opticas|optico|opticos|optic|optics|optical|optical store|optical shop|optician|opticians|optometrist|optometria|optometry|eyewear|eyeglass|glasses store|vision center)( |$)/;
 const VEHICLE_BUSINESS_PATTERN = /(^| )(auto dealer|car dealer|car dealership|automotive dealer|vehicle dealer|used vehicle dealer|motorcycle dealer|auto sales|car sales|vehicle sales|auto repair|automotive repair|car repair|vehicle repair|auto parts|car parts|vehicle parts|car wash|auto wash|automotive store|used car dealer|concessionaria|loja de carros|loja de veiculos|revenda de veiculos|automoveis|carros usados)( |$)|\b(car multimarcas|multimarcas automotiva|multimarcas automotive|veiculos multimarcas)\b/;
-const CLOTHING_CATEGORY_PATTERN = /(^| )(clothing|clothing store|clothes store|apparel|apparel store|fashion|fashion store|fashion boutique|clothing boutique|boutique|lingerie store|underwear store|shoe store|fashion accessories)( |$)/;
-const CLOTHING_CATEGORY_TERMS = ['clothing', 'clothing store', 'clothes store', 'apparel', 'apparel store', 'fashion', 'fashion store', 'fashion boutique', 'clothing boutique', 'boutique', 'lingerie store', 'underwear store', 'shoe store', 'fashion accessories'];
+const CLOTHING_CATEGORY_PATTERN = /(^| )(clothing|clothing store|clothes store|apparel|apparel store|fashion|fashion store|fashion boutique|clothing boutique|boutique|lingerie store|underwear store)( |$)/;
+const CLOTHING_EXCLUDED_PRIMARY_PATTERN = /(^| )(shoe store|shoe shop|jewelry store|jewelry|jeweler|luggage store|luggage|handbag store|fashion accessories store|fashion accessories|watch store|sunglasses store)( |$)/;
+const CLOTHING_CATEGORY_TERMS = ['clothing', 'clothing store', 'clothes store', 'apparel', 'apparel store', 'fashion', 'fashion store', 'fashion boutique', 'clothing boutique', 'boutique', 'lingerie store', 'underwear store'];
 const CLOTHING_NAME_TERMS = [
   'loja de roupa', 'loja de roupas', 'roupa', 'roupas', 'vestuario', 'clothing store', 'clothing',
   'apparel store', 'apparel', 'fashion store', 'fashion boutique', 'moda feminina', 'moda masculina',
@@ -309,8 +326,10 @@ export function buildOvertureQuery(
       AND (NOT regexp_matches(${nameText}, '${AUTO_PRODUCT_NAME_PATTERN.source.replaceAll("'", "''")}')
         OR regexp_matches(${nameText}, '${TARGET_AUTO_SERVICE_NAME_PATTERN.source.replaceAll("'", "''")}'))`
     : '';
+  const primaryCategoryText = "regexp_replace(replace(replace(translate(lower(coalesce(taxonomy.primary, '')), 'áàâãéêíóôõúç', 'aaaaeeiooouc'), '_', ' '), '-', ' '), '\s+', ' ', 'g')";
   const opticalBusinessExclusion = !criteria.businessName && isClothingNiche(criteria.niche)
-    ? `AND NOT regexp_matches(${opticalSearchText}, '${OPTICAL_BUSINESS_PATTERN.source.replaceAll("'", "''")}')`
+    ? `AND NOT regexp_matches(${opticalSearchText}, '${OPTICAL_BUSINESS_PATTERN.source.replaceAll("'", "''")}')
+      AND NOT regexp_matches(${primaryCategoryText}, '${CLOTHING_EXCLUDED_PRIMARY_PATTERN.source.replaceAll("'", "''")}')`
     : '';
   return `
     SELECT
@@ -328,11 +347,13 @@ export function buildOvertureQuery(
       array_to_string(socials, ' ') AS socials,
       ST_Y(geometry) AS latitude,
       ST_X(geometry) AS longitude,
-      operating_status
+      operating_status,
+      confidence
     FROM read_parquet(${placesPaths}, filename = true, hive_partitioning = 1)
     WHERE bbox.xmin BETWEEN ${bounds.west} AND ${bounds.east}
       AND bbox.ymin BETWEEN ${bounds.south} AND ${bounds.north}
       AND operating_status IS DISTINCT FROM 'permanently_closed'
+      AND coalesce(confidence, 0) >= ${getMinOvertureConfidence()}
       AND ${searchCondition}
       ${automotiveProductExclusion}
       ${opticalBusinessExclusion}
@@ -355,6 +376,8 @@ export function matchesOvertureSearch(
   const searchableText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''} ${business.name}`);
   if (isClothingNiche(normalizedNiche)) {
     if (OPTICAL_BUSINESS_PATTERN.test(searchableText) || VEHICLE_BUSINESS_PATTERN.test(searchableText)) return false;
+    // Shoes, jewelry and bags share the "fashion" hierarchy but are not clothing stores.
+    if (CLOTHING_EXCLUDED_PRIMARY_PATTERN.test(normalizeSearchTerm(business.category ?? ''))) return false;
     const categoryText = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''}`);
     const hasClothingCategory = CLOTHING_CATEGORY_PATTERN.test(categoryText);
     const hasClothingNameEvidence = CLOTHING_NAME_TERMS.some((term) => matchesWholeSearchPhrase(normalizeSearchTerm(business.name), term));
@@ -380,7 +403,14 @@ export function matchesOvertureSearch(
     return false;
   }
 
-  return getNicheSearchTerms(criteria.niche).some((term) => matchesWholeSearchPhrase(searchableText, term));
+  const terms = getNicheSearchTerms(criteria.niche);
+  if (hasKnownNicheTaxonomy(criteria.niche) && !isGenericPlaceCategory(business.category)) {
+    // The place has a specific category: a niche word in its name is not enough
+    // ("Restaurante ..." classified as a hotel is not a restaurant).
+    const categoryOnly = normalizeSearchTerm(`${business.category ?? ''} ${business.categoryHierarchy ?? ''}`);
+    return terms.some((term) => matchesWholeSearchPhrase(categoryOnly, term));
+  }
+  return terms.some((term) => matchesWholeSearchPhrase(searchableText, term));
 }
 
 function isClothingNiche(niche: string) {
@@ -407,10 +437,14 @@ function buildOvertureSearchCondition(
     const serviceNames = TARGET_AUTO_SERVICE_NAME_PATTERN.source.replaceAll("'", "''");
     return `(regexp_matches(${categoryText}, '${serviceCategories}') OR regexp_matches(${nameText}, '${serviceNames}'))`;
   }
-  return `(${getNicheSearchTerms(criteria.niche).map((term) => {
-    const phrasePattern = `(^|[^a-z0-9])${escapeRegex(term)}([^a-z0-9]|$)`;
-    return `(regexp_matches(${normalizedCategoryText}, '${escapeSqlString(phrasePattern)}') OR regexp_matches(${normalizedNameText}, '${escapeSqlString(phrasePattern)}'))`;
-  }).join(' OR ')})`;
+  const terms = getNicheSearchTerms(criteria.niche);
+  const phrase = (term: string) => escapeSqlString(`(^|[^a-z0-9])${escapeRegex(term)}([^a-z0-9]|$)`);
+  const categoryMatches = terms.map((term) => `regexp_matches(${normalizedCategoryText}, '${phrase(term)}')`).join(' OR ');
+  const nameMatches = terms.map((term) => `regexp_matches(${normalizedNameText}, '${phrase(term)}')`).join(' OR ');
+  if (!hasKnownNicheTaxonomy(criteria.niche)) return `((${categoryMatches}) OR (${nameMatches}))`;
+  // Known niche: the name only counts when Overture has no specific category for the place.
+  const genericPrimary = `regexp_matches(regexp_replace(replace(replace(coalesce(lower(taxonomy.primary), ''), '_', ' '), '-', ' '), '\s+', ' ', 'g'), '${escapeSqlString(GENERIC_CATEGORY_PATTERN.source)}')`;
+  return `((${categoryMatches}) OR (${genericPrimary} AND (${nameMatches})))`;
 }
 
 function getNicheSearchTerms(niche: string) {

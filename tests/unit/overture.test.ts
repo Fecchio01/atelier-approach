@@ -393,3 +393,43 @@ describe('Overture automotive places', () => {
     )).toBe(true);
   }, 90_000);
 });
+
+describe('Overture result quality', () => {
+  const bounds = { west: -51.3, south: -30.2, east: -51, north: -29.95 };
+  const release = '2026-11-18.0';
+  const file = `s3://overturemaps-us-west-2/release/${release}/theme=places/type=place/part-0.parquet`;
+
+  test('drops low-confidence places in SQL, with a default of 0.5', () => {
+    const sql = buildOvertureQuery(bounds, release, [file], { niche: 'barbearia' });
+    expect(sql).toContain('coalesce(confidence, 0) >= 0.5');
+    expect(sql).toContain('confidence');
+  });
+
+  test('lets the confidence floor be tuned through OVERTURE_MIN_CONFIDENCE', () => {
+    process.env.OVERTURE_MIN_CONFIDENCE = '0.7';
+    try {
+      expect(buildOvertureQuery(bounds, release, [file], { niche: 'barbearia' })).toContain('coalesce(confidence, 0) >= 0.7');
+    } finally {
+      delete process.env.OVERTURE_MIN_CONFIDENCE;
+    }
+  });
+
+  test('a niche word in the name does not override a specific, different category', () => {
+    const rows = [
+      { id: 'a', name: 'Restaurante Vista Mar', category: 'hotel', category_hierarchy: 'accommodation hotel' },
+      { id: 'b', name: 'Cantina Bella', category: 'italian_restaurant', category_hierarchy: 'eat_and_drink restaurant italian_restaurant' },
+      { id: 'c', name: 'Restaurante Sem Categoria', category: null, category_hierarchy: null }
+    ];
+    expect(normalizeOverturePlaces(rows, { niche: 'restaurante' }).map((business) => business.name))
+      .toEqual(['Cantina Bella', 'Restaurante Sem Categoria']);
+  });
+
+  test('clothing searches exclude shoe, jewelry and luggage stores', () => {
+    const rows = [
+      { id: 'shoe', name: 'Sapão Pneus', category: 'shoe_store', category_hierarchy: 'shopping fashion_and_apparel_store shoe_store' },
+      { id: 'jewel', name: 'Joias Real', category: 'jewelry_store', category_hierarchy: 'shopping fashion_and_apparel_store jewelry_store' },
+      { id: 'cloth', name: 'First Class', category: 'womens_clothing_store', category_hierarchy: 'shopping fashion_and_apparel_store womens_clothing_store' }
+    ];
+    expect(normalizeOverturePlaces(rows, { niche: 'loja de roupa' }).map((business) => business.name)).toEqual(['First Class']);
+  });
+});
