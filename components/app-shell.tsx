@@ -73,7 +73,7 @@ export function AppShell({ children, user, onSignOut }: { children: React.ReactN
         <form action={onSignOut}><button type="submit" className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-white/45 hover:bg-white/[0.045] hover:text-white"><SignOutIcon size={16} /> Sair da conta</button></form>
       </div>
     </aside>
-    <div data-testid="app-content-canvas" className="atelier-app-canvas min-w-0">
+    <div data-testid="app-content-canvas" className="atelier-app-canvas min-w-0 pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0">
       <MobileNavigation
         pathname={pathname}
         user={user}

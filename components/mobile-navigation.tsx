@@ -7,8 +7,8 @@ import {
   BuildingsIcon,
   ChartBarIcon,
   ChartLineUpIcon,
+  DotsThreeIcon,
   FunnelIcon,
-  ListIcon,
   SignOutIcon,
   SquaresFourIcon,
   TargetIcon,
@@ -26,6 +26,17 @@ export const appRoutes = [
   { href: '/metas', label: 'Metas', Icon: TargetIcon },
   { href: '/relatorios', label: 'Relatórios', Icon: ChartBarIcon }
 ];
+
+const primaryMobileRoutes = [
+  { href: '/', label: 'Painel', Icon: SquaresFourIcon },
+  { href: '/pesquisa', label: 'Pesquisar', Icon: BuildingsIcon },
+  { href: '/crm', label: 'CRM', Icon: FunnelIcon },
+  { href: '/agentes', label: 'Darwin', Icon: DarwinAvatar }
+];
+
+const secondaryMobileRoutes = appRoutes.filter((route) =>
+  !primaryMobileRoutes.some((primaryRoute) => primaryRoute.href === route.href)
+);
 
 function routeIsActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
@@ -51,13 +62,10 @@ export function MobileNavigation({
     setIsOpen(false);
   }
 
-  function toggleDrawer() {
+  function openDrawer() {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (dialog.open) {
-      closeDrawer();
-      return;
-    }
+    if (dialog.open) return;
     dialog.showModal();
     setIsOpen(true);
   }
@@ -66,34 +74,59 @@ export function MobileNavigation({
     closeDrawer();
   }
 
+  const isMoreActive = secondaryMobileRoutes.some((route) => routeIsActive(pathname, route.href)) || pathname.startsWith('/configuracoes');
+
   return <>
     <header data-atelier-floating className="sticky top-0 z-30 border-b border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl backdrop-saturate-150 md:hidden">
       <div className="flex min-h-16 items-center justify-between gap-2 px-4 py-2">
         <AppNavigationLink href="/" label="Painel" onNavigationStart={onNavigationStart} className="flex min-w-0 items-center gap-2 font-semibold tracking-[-0.03em]">
           {brandLogo}
         </AppNavigationLink>
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            aria-label={isOpen ? 'Fechar menu' : 'Abrir menu'}
-            aria-expanded={isOpen}
-            aria-controls="mobile-navigation-dialog"
-            onClick={toggleDrawer}
-            className="flex size-11 items-center justify-center rounded-lg text-white/75 hover:bg-white/[0.06] hover:text-[var(--atelier-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]"
-          >
-            {isOpen ? <XIcon size={22} aria-hidden="true" /> : <ListIcon size={22} aria-hidden="true" />}
-          </button>
-          <AppNavigationLink href="/configuracoes" label="Meu perfil" onNavigationStart={onNavigationStart} aria-label="Meu perfil" className="flex size-11 items-center justify-center rounded-lg text-[var(--atelier-green)] hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
-            <ProfileAvatar name={user.name} src={user.image} className="size-8 rounded-lg" />
-          </AppNavigationLink>
-        </div>
+        <AppNavigationLink href="/configuracoes" label="Meu perfil" onNavigationStart={onNavigationStart} aria-label="Meu perfil" className="flex size-11 shrink-0 items-center justify-center rounded-lg text-[var(--atelier-green)] hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--atelier-green)]">
+          <ProfileAvatar name={user.name} src={user.image} className="size-8 rounded-lg" />
+        </AppNavigationLink>
       </div>
     </header>
+
+    <nav aria-label="Navegação principal mobile" data-atelier-floating className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] px-[max(0.5rem,env(safe-area-inset-left))] pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_-12px_32px_rgba(3,5,6,0.22)] backdrop-blur-2xl backdrop-saturate-150 md:hidden">
+      <div className="mx-auto grid min-h-[3.65rem] max-w-xl grid-cols-5 items-stretch gap-0.5">
+        {primaryMobileRoutes.map((route) => {
+          const active = routeIsActive(pathname, route.href);
+          const Icon = route.Icon;
+          return <AppNavigationLink
+            key={route.href}
+            href={route.href}
+            label={route.label}
+            onNavigationStart={onNavigationStart}
+            scroll={route.href === '/pesquisa' ? false : undefined}
+            aria-current={active ? 'page' : undefined}
+            className={`relative flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--atelier-green)] ${active ? 'font-semibold text-[var(--atelier-green)]' : 'text-white/60 hover:bg-white/[0.05] hover:text-white'}`}
+          >
+            {active && <span aria-hidden="true" className="absolute inset-x-3 top-0 h-px rounded-full bg-[var(--atelier-green)]" />}
+            <Icon size={20} weight="regular" aria-hidden="true" />
+            <span>{route.label}</span>
+          </AppNavigationLink>;
+        })}
+        <button
+          type="button"
+          aria-label={isOpen ? 'Mais opções, menu aberto' : 'Mais opções'}
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          aria-controls="mobile-navigation-dialog"
+          onClick={openDrawer}
+          className={`relative flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] leading-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--atelier-green)] ${isMoreActive ? 'font-semibold text-[var(--atelier-green)]' : 'text-white/60 hover:bg-white/[0.05] hover:text-white'}`}
+        >
+          {isMoreActive && <span aria-hidden="true" className="absolute inset-x-3 top-0 h-px rounded-full bg-[var(--atelier-green)]" />}
+          <DotsThreeIcon size={22} weight="bold" aria-hidden="true" />
+          <span>Mais</span>
+        </button>
+      </div>
+    </nav>
 
     <dialog
       ref={dialogRef}
       id="mobile-navigation-dialog"
-      aria-label="Navegação principal no menu mobile"
+      aria-label="Mais opções de navegação"
       onCancel={(event) => { event.preventDefault(); closeDrawer(); }}
       onClose={() => setIsOpen(false)}
       onClick={(event) => {
@@ -113,8 +146,8 @@ export function MobileNavigation({
             </button>
           </div>
 
-          <nav aria-label="Navegação principal no menu mobile" className="mt-5 grid gap-1">
-            {appRoutes.map((route) => {
+          <nav aria-label="Mais opções" className="mt-5 grid gap-1">
+            {secondaryMobileRoutes.map((route) => {
               const active = routeIsActive(pathname, route.href);
               const Icon = route.Icon;
               return <AppNavigationLink

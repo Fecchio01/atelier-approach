@@ -154,7 +154,7 @@ export function AgentChat() {
       aria-haspopup="dialog"
       aria-expanded={open}
       aria-controls="agent-chat-dialog"
-      className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-[calc(env(safe-area-inset-right)+1rem)] z-40 flex flex-col items-center gap-2 rounded-2xl p-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--atelier-green)] sm:bottom-6 sm:right-6"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] right-[calc(env(safe-area-inset-right)+1rem)] z-40 flex flex-col items-center gap-2 rounded-2xl p-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--atelier-green)] sm:right-6 md:bottom-6"
     >
       <span className={`inline-flex min-h-8 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border bg-[#18201c]/95 px-3 text-xs font-medium text-white shadow-lg backdrop-blur-sm ${companionMode === 'attention' ? 'border-amber-300/35' : companionMode === 'complete' ? 'border-[var(--atelier-green)]/40' : 'border-white/15'}`}>
         <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${companionMode === 'attention' ? 'bg-amber-300' : companionMode === 'working' ? 'animate-pulse bg-[var(--atelier-green)] motion-reduce:animate-none' : 'bg-[var(--atelier-green)]'}`} />
