@@ -7,10 +7,10 @@ export const metadata: Metadata = {
   description: 'Plataforma comercial Arvelo',
   icons: {
     icon: [
-      { url: '/icons/arvelo-approach-192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/arvelo-approach-512.png', sizes: '512x512', type: 'image/png' }
+      { url: '/icons/arvelo-approach-192.png?v=2', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/arvelo-approach-512.png?v=2', sizes: '512x512', type: 'image/png' }
     ],
-    apple: [{ url: '/icons/arvelo-approach-apple.png', sizes: '180x180', type: 'image/png' }]
+    apple: [{ url: '/icons/arvelo-approach-apple.png?v=2', sizes: '180x180', type: 'image/png' }]
   },
   appleWebApp: {
     capable: true,
