@@ -88,8 +88,8 @@ export function MobileNavigation({
       </div>
     </header>
 
-    <nav aria-label="Navegação principal mobile" data-atelier-floating className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--atelier-floating-border)] bg-[var(--atelier-floating-surface)] px-[max(0.5rem,env(safe-area-inset-left))] pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_-12px_32px_rgba(3,5,6,0.22)] backdrop-blur-2xl backdrop-saturate-150 md:hidden">
-      <div className="mx-auto grid min-h-[3.65rem] max-w-xl grid-cols-5 items-stretch gap-0.5">
+    <nav aria-label="Navegação principal mobile" data-atelier-floating className="fixed left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-30 mx-auto max-w-[31rem] rounded-[1.65rem] border border-white/[0.16] bg-[rgba(18,25,22,0.72)] px-1.5 pb-1.5 pt-1.5 shadow-[0_14px_38px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.18)] ring-1 ring-black/10 backdrop-blur-[28px] backdrop-saturate-[180%] md:hidden">
+      <div className="mx-auto grid min-h-[3.65rem] grid-cols-5 items-stretch gap-0.5">
         {primaryMobileRoutes.map((route) => {
           const active = routeIsActive(pathname, route.href);
           const Icon = route.Icon;
@@ -100,11 +100,11 @@ export function MobileNavigation({
             onNavigationStart={onNavigationStart}
             scroll={route.href === '/pesquisa' ? false : undefined}
             aria-current={active ? 'page' : undefined}
-            className={`relative flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--atelier-green)] ${active ? 'font-semibold text-[var(--atelier-green)]' : 'text-white/60 hover:bg-white/[0.05] hover:text-white'}`}
+            className={`relative flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-[1.15rem] px-1 text-[10px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--atelier-green)] ${active ? 'font-semibold text-[var(--atelier-green)]' : 'text-white/65 hover:bg-white/[0.045] hover:text-white'}`}
           >
-            {active && <span aria-hidden="true" className="absolute inset-x-3 top-0 h-px rounded-full bg-[var(--atelier-green)]" />}
-            <Icon size={20} weight="regular" aria-hidden="true" />
-            <span>{route.label}</span>
+            {active && <span aria-hidden="true" className="absolute inset-0 rounded-[1.15rem] bg-white/[0.085] shadow-[inset_0_1px_0_rgba(255,255,255,0.13)]" />}
+            <Icon size={20} weight="regular" className="relative z-[1]" aria-hidden="true" />
+            <span className="relative z-[1]">{route.label}</span>
           </AppNavigationLink>;
         })}
         <button
@@ -114,11 +114,11 @@ export function MobileNavigation({
           aria-expanded={isOpen}
           aria-controls="mobile-navigation-dialog"
           onClick={openDrawer}
-          className={`relative flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] leading-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--atelier-green)] ${isMoreActive ? 'font-semibold text-[var(--atelier-green)]' : 'text-white/60 hover:bg-white/[0.05] hover:text-white'}`}
+          className={`relative flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-[1.15rem] px-1 text-[10px] leading-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--atelier-green)] ${isMoreActive ? 'font-semibold text-[var(--atelier-green)]' : 'text-white/65 hover:bg-white/[0.045] hover:text-white'}`}
         >
-          {isMoreActive && <span aria-hidden="true" className="absolute inset-x-3 top-0 h-px rounded-full bg-[var(--atelier-green)]" />}
-          <DotsThreeIcon size={22} weight="bold" aria-hidden="true" />
-          <span>Mais</span>
+          {isMoreActive && <span aria-hidden="true" className="absolute inset-0 rounded-[1.15rem] bg-white/[0.085] shadow-[inset_0_1px_0_rgba(255,255,255,0.13)]" />}
+          <DotsThreeIcon size={22} weight="bold" className="relative z-[1]" aria-hidden="true" />
+          <span className="relative z-[1]">Mais</span>
         </button>
       </div>
     </nav>

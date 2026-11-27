@@ -145,5 +145,8 @@ dialog {
 .atelier-scrollbar-hidden-x { scrollbar-width: none; }
 .atelier-scrollbar-hidden-x::-webkit-scrollbar { display: none; }
 .atelier-app-canvas { min-height: 100dvh; background: var(--atelier-canvas-background); }
+.atelier-route-enter { animation: atelier-route-enter 240ms var(--atelier-motion-easing) both; }
+@keyframes atelier-route-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .atelier-route-enter { animation: none; } }
 .mobile-safe-area { padding: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left)); }
 @media (min-width: 640px) { .mobile-safe-area { padding: 2rem; } }

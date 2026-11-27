@@ -9,17 +9,17 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    background_color: '#070a08',
-    theme_color: '#070a08',
+    background_color: '#0b100e',
+    theme_color: '#0b100e',
     icons: [
       {
-        src: '/icons/arvelo-approach-192.png?v=2',
+        src: '/icons/arvelo-approach-192.png?v=3',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any'
       },
       {
-        src: '/icons/arvelo-approach-512.png?v=2',
+        src: '/icons/arvelo-approach-512.png?v=3',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any'
