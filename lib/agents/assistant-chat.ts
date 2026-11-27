@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db';
 import { buildRecommendations, buildReport, getRecentReportRange } from '@/lib/reports';
 import { getSaoPauloDateKey } from '@/lib/research/autonomous';
 import { createDarwinGoalSuggestion, type GoalSuggestionResult } from '@/lib/agents/goal-planner';
+import type { GoalMetricKey } from '@/lib/metrics';
 
 const MAX_OUTPUT_TOKENS = 360;
 const APPROACH_DRAFT_MAX_TOKENS = 260;
@@ -52,7 +53,10 @@ export async function answerAssistantChat(
     }
 
     const now = new Date();
-    const results = await Promise.all(goalRequest.kinds.map((kind) => createDarwinGoalSuggestion(kind, now, true)));
+    const results = await Promise.all(goalRequest.kinds.map((kind) => createDarwinGoalSuggestion(kind, now, {
+      refreshTargets: true,
+      overrides: goalRequest.overrides[kind]
+    })));
     const context = await loadAssistantContext(message, leadId);
     return {
       reply: formatGoalWriteReply(results, context.data.goals),
@@ -89,8 +93,11 @@ export async function answerAssistantChat(
   return { reply, sources: { ...context.sources, engine } };
 }
 
-function detectGoalWriteRequest(message: string): { kinds: Array<'WEEKLY' | 'MONTHLY'> } | null {
-  const lowerMessage = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+type GoalPeriod = 'WEEKLY' | 'MONTHLY';
+type GoalWriteRequest = { kinds: GoalPeriod[]; overrides: Record<GoalPeriod, Partial<Record<GoalMetricKey, number>>> };
+
+function detectGoalWriteRequest(message: string): GoalWriteRequest | null {
+  const lowerMessage = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ');
   if (!/\b(?:meta|metas|objetivo|objetivos)\b/.test(lowerMessage)) return null;
   // Never perform writes from a question, negation, conditional request, or
   // explanatory prompt. Accept both direct commands and explicit delegated
@@ -100,7 +107,7 @@ function detectGoalWriteRequest(message: string): { kinds: Array<'WEEKLY' | 'MON
     return null;
   }
   const command = lowerMessage.replace(/^\s*(?:darwin\s*[,!:]?\s*)?(?:por favor\s*[,!:]?\s*)?/, '');
-  const writeVerb = '(?:crie|cria|criar|criasse|defina|define|definir|definisse|preencha|preenche|preencher|preenchesse|monte|monta|montar|montasse|estabeleca|estabelece|estabelecer|estabelecesse|faca|faz|fazer|fizesse|gere|gera|gerar|gerasse|configure|configura|configurar|configurasse)';
+  const writeVerb = '(?:crie|cria|criar|criasse|defina|define|definir|definisse|preencha|preenche|preencher|preenchesse|monte|monta|montar|montasse|estabeleca|estabelece|estabelecer|estabelecesse|faca|faz|fazer|fizesse|gere|gera|gerar|gerasse|configure|configura|configurar|configurasse|atualize|atualiza|atualizar|altere|altera|alterar|ajuste|ajusta|ajustar|corrija|corrige|corrigir)';
   const directCommand = new RegExp(`^(?:${writeVerb})\\b`).test(command);
   const delegatedCommand = [
     new RegExp(`^(?:(?:eu\\s+)?(?:quero|pedi|peco|mande|manda|faca|faz|preciso)\\s+(?:(?:para|pra)\\s+)?(?:(?:que\\s+)?(?:(?:o\\s+)?(?:ele|darwin)|(?:o\\s+)?proprio\\s+darwin|voce)(?:\\s+(?:mesmo|proprio))?\\s+)?${writeVerb}\\b)`),
@@ -109,9 +116,91 @@ function detectGoalWriteRequest(message: string): { kinds: Array<'WEEKLY' | 'MON
   if (!directCommand && !delegatedCommand) return null;
 
   const kinds: Array<'WEEKLY' | 'MONTHLY'> = [];
-  if (/\b(?:semanal|semanais|semana)\b/.test(lowerMessage)) kinds.push('WEEKLY');
-  if (/\b(?:mensal|mensais|mes)\b/.test(lowerMessage)) kinds.push('MONTHLY');
-  return { kinds };
+  if (/\b(?:semanal|semanais|semana|semanas)\b/.test(lowerMessage)) kinds.push('WEEKLY');
+  if (/\b(?:mensal|mensais|mes|meses)\b/.test(lowerMessage)) kinds.push('MONTHLY');
+  if (!kinds.length) kinds.push('WEEKLY', 'MONTHLY');
+  return {
+    kinds,
+    overrides: {
+      WEEKLY: parseGoalMetricOverrides(lowerMessage, 'WEEKLY'),
+      MONTHLY: parseGoalMetricOverrides(lowerMessage, 'MONTHLY')
+    }
+  };
+}
+
+const goalMetricTerms: Record<GoalMetricKey, string[]> = {
+  approaches: ['abordagens', 'abordagem'],
+  interests: ['interesses', 'interesse'],
+  meetings: ['reunioes', 'reuniao'],
+  proposalsSent: ['propostas enviadas', 'proposta enviada', 'propostas', 'proposta'],
+  sales: ['vendas fechadas', 'venda fechada', 'vendas', 'venda'],
+  revenue: ['receita de vendas', 'receita'],
+  mrr: ['mrr'],
+  followUpsCompleted: ['follow ups concluidos', 'follow up concluido', 'followups concluidos', 'followup concluido'],
+  conversionRate: ['taxa de conversao', 'conversao']
+};
+
+function parseGoalMetricOverrides(message: string, kind: GoalPeriod): Partial<Record<GoalMetricKey, number>> {
+  const overrides: Partial<Record<GoalMetricKey, number>> = {};
+  const amount = '(\\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?|\\d+(?:,\\d+)?|\\d+(?:\\.\\d+)?)';
+  const currency = '(?:r\\$\\s*)?';
+
+  for (const metric of Object.keys(goalMetricTerms) as GoalMetricKey[]) {
+    const terms = [...goalMetricTerms[metric]].sort((a, b) => b.length - a.length);
+    const term = `(?:${terms.join('|')})`;
+    const matches: Array<{ raw: string; index: number; end: number }> = [];
+    for (const pattern of [
+      new RegExp(`\\b${term}\\b\\s*(?:de|para|em|:|=)?\\s*${currency}${amount}`, 'g'),
+      new RegExp(`${currency}${amount}\\s*(?:de|para)?\\s*\\b${term}\\b`, 'g')
+    ]) {
+      for (const match of message.matchAll(pattern)) {
+        const raw = match[1] ?? match[2];
+        if (raw) matches.push({ raw, index: match.index ?? 0, end: (match.index ?? 0) + match[0].length });
+      }
+    }
+
+    const scoped = matches.filter(({ index, end }) => resolveNearbyGoalPeriod(message, index, end) === kind);
+    const candidates = scoped.length ? scoped : matches;
+    const selected = candidates.at(-1);
+    if (!selected) continue;
+
+    const value = parseGoalNumber(selected.raw);
+    if (!Number.isFinite(value) || value <= 0 || value > 1_000_000_000) continue;
+    if (metric === 'conversionRate' && value > 100) continue;
+    overrides[metric] = ['approaches', 'interests', 'meetings', 'proposalsSent', 'sales', 'followUpsCompleted'].includes(metric)
+      ? Math.round(value)
+      : value;
+  }
+  return overrides;
+}
+
+function resolveNearbyGoalPeriod(message: string, index: number, end: number): GoalPeriod | null {
+  const separatorBefore = [message.lastIndexOf(';', index), message.lastIndexOf('\n', index), message.lastIndexOf('. ', index)]
+    .sort((first, second) => second - first)[0];
+  const sectionStart = separatorBefore < 0 ? 0 : separatorBefore + (message.slice(separatorBefore, separatorBefore + 2) === '. ' ? 2 : 1);
+  const nextSemicolon = message.indexOf(';', end);
+  const nextNewline = message.indexOf('\n', end);
+  const nextSentence = message.indexOf('. ', end);
+  const sectionEnd = [nextSemicolon, nextNewline, nextSentence].filter((position) => position >= 0).sort((a, b) => a - b)[0] ?? message.length;
+  const section = message.slice(sectionStart, sectionEnd);
+  const weeklyWords = [...section.matchAll(/\b(?:semanal|semanais|semana|semanas)\b/g)];
+  const monthlyWords = [...section.matchAll(/\b(?:mensal|mensais|mes|meses)\b/g)];
+  if (weeklyWords.length && !monthlyWords.length) return 'WEEKLY';
+  if (monthlyWords.length && !weeklyWords.length) return 'MONTHLY';
+
+  const center = (index + end) / 2;
+  const nearby = [...weeklyWords.map((match) => ({ kind: 'WEEKLY' as const, index: match.index ?? 0 })),
+    ...monthlyWords.map((match) => ({ kind: 'MONTHLY' as const, index: match.index ?? 0 }))]
+    .map((marker) => ({ ...marker, distance: Math.abs(sectionStart + marker.index - center) }))
+    .filter((marker) => marker.distance <= 36)
+    .sort((first, second) => first.distance - second.distance);
+  return nearby[0]?.kind ?? null;
+}
+
+function parseGoalNumber(raw: string) {
+  if (raw.includes(',')) return Number(raw.replaceAll('.', '').replace(',', '.'));
+  if (/^\d{1,3}(?:\.\d{3})+$/.test(raw)) return Number(raw.replaceAll('.', ''));
+  return Number(raw);
 }
 
 function formatGoalWriteReply(results: GoalSuggestionResult[], value: unknown) {
@@ -125,15 +214,22 @@ function formatGoalWriteReply(results: GoalSuggestionResult[], value: unknown) {
     approaches: 'abordagens', interests: 'interesses', meetings: 'reuniões', proposalsSent: 'propostas enviadas',
     sales: 'vendas', revenue: 'receita', mrr: 'MRR', followUpsCompleted: 'follow-ups concluídos', conversionRate: 'conversão'
   };
+  const estimatedRates: Partial<Record<GoalMetricKey, string>> = {
+    interests: '20%', meetings: '10%', proposalsSent: '5%', sales: '2%', revenue: 'preço médio do catálogo',
+    mrr: 'preço médio mensal do catálogo', followUpsCompleted: '20%', conversionRate: '2%'
+  };
   const periods = results.map((result) => {
     const key = result.kind === 'WEEKLY' ? 'weekly' : 'monthly';
     const name = result.kind === 'WEEKLY' ? 'Semanal' : 'Mensal';
     const withoutEvidence = result.unavailableMetrics.map((metric) => labels[metric] ?? metric);
     const evidenceNote = withoutEvidence.length
-      ? ` Não defini ${withoutEvidence.join(', ')} porque ainda não encontrei resultados registrados suficientes para estimar esses alvos.`
+      ? ` Não defini ${withoutEvidence.join(', ')} porque faltam histórico de vendas ou serviços ativos com preço cadastrado para estimar esses valores.`
       : '';
     const projectionNote = result.projectedMetrics.length
       ? ` Projetei pelo ritmo observado no ciclo atual: ${result.projectedMetrics.map((metric) => labels[metric] ?? metric).join(', ')}.`
+      : '';
+    const estimateNote = result.estimatedMetrics.length
+      ? ` Estimei ${result.estimatedMetrics.map((metric) => `${labels[metric] ?? metric}${estimatedRates[metric] ? ` (${estimatedRates[metric]})` : ''}`).join(', ')} porque faltava histórico suficiente; você pode corrigir pelo chat ou na página Metas.`
       : '';
     if (result.status === 'no_history') return `${name}: não encontrei resultados registrados suficientes para salvar metas sem inventar números.${evidenceNote}`;
     if (result.status === 'unchanged') return `${name}: as metas existentes já estavam atualizadas.${evidenceNote}`;
@@ -151,7 +247,10 @@ function formatGoalWriteReply(results: GoalSuggestionResult[], value: unknown) {
       ? ` Indicadores personalizados mantidos: ${goal.customGoals.map(({ name, target, unit }) => `${name} ${target}${unit ? ` ${unit}` : ''}`).join(' · ')}.`
       : '';
     const savedLabel = result.status === 'created' ? 'criei e salvei' : 'atualizei';
-    return `${name}: ${savedLabel} ${result.metricsSaved} campo(s) na área Metas${targets.length ? ` — ${targets.join(' · ')}` : ''}. Abordagens seguem o limite diário de prospecção; os demais alvos existentes foram preservados.${projectionNote}${custom}${evidenceNote}`;
+    const updateNote = result.status === 'created'
+      ? ' Abordagens seguem o limite diário de prospecção.'
+      : ' Recalculei os indicadores com os dados disponíveis e apliquei as correções informadas.';
+    return `${name}: ${savedLabel} ${result.metricsSaved} campo(s) na área Metas${targets.length ? ` — ${targets.join(' · ')}` : ''}.${updateNote}${projectionNote}${estimateNote}${custom}${evidenceNote}`;
   });
   return periods.join(' ');
 }

@@ -7,6 +7,13 @@ import { getTeamGoalActualsByPeriod, type GoalMetricActuals, type GoalMetricKey 
 
 const OWNER_ID = '__team__';
 const metricKeys: GoalMetricKey[] = ['approaches', 'interests', 'meetings', 'proposalsSent', 'sales', 'revenue', 'mrr', 'followUpsCompleted', 'conversionRate'];
+const estimatedFunnelRates: Partial<Record<GoalMetricKey, number>> = {
+  interests: 0.2,
+  meetings: 0.1,
+  proposalsSent: 0.05,
+  sales: 0.02,
+  followUpsCompleted: 0.2
+};
 const saoPauloDate = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
 });
@@ -106,14 +113,6 @@ async function previousGoalPeriods(current: GoalPeriodWindow, monthlyStartDay: n
   return previousPeriods(current, monthlyStartDay);
 }
 
-function countMissingSuggestedTargets(goal: {
-  approachesTarget: number | null; interestsTarget: number | null; meetingsTarget: number | null;
-  proposalsSentTarget: number | null; salesTarget: number | null; revenueTarget: number | null;
-  mrrTarget: number | null; followUpsCompletedTarget: number | null; conversionRateTarget: number | null;
-}, targets: Record<GoalMetricKey, number | null>) {
-  return metricKeys.filter((key) => goal[`${key}Target` as keyof typeof goal] == null && targets[key] !== null).length;
-}
-
 function targetFields(targets: Record<GoalMetricKey, number | null>) {
   return {
     approachesTarget: targets.approaches,
@@ -128,6 +127,47 @@ function targetFields(targets: Record<GoalMetricKey, number | null>) {
   };
 }
 
+function estimateMissingTargets(targets: Record<GoalMetricKey, number | null>, approachesTarget: number) {
+  const estimatedMetrics: GoalMetricKey[] = [];
+  for (const [metric, rate] of Object.entries(estimatedFunnelRates) as Array<[GoalMetricKey, number]>) {
+    if (targets[metric] !== null) continue;
+    targets[metric] = Math.max(1, Math.ceil(approachesTarget * rate));
+    estimatedMetrics.push(metric);
+  }
+  if (targets.conversionRate === null) {
+    targets.conversionRate = 2;
+    estimatedMetrics.push('conversionRate');
+  }
+  return estimatedMetrics;
+}
+
+function estimateFinancialTargets(
+  targets: Record<GoalMetricKey, number | null>,
+  services: Array<{ price: number; billingType: 'ONE_TIME' | 'MONTHLY' }>
+) {
+  const estimatedMetrics: GoalMetricKey[] = [];
+  const sales = targets.sales ?? 0;
+  if (sales <= 0 || !services.length) return estimatedMetrics;
+
+  if (targets.revenue === null) {
+    const averageServicePrice = services.reduce((sum, service) => sum + service.price, 0) / services.length;
+    if (averageServicePrice > 0) {
+      targets.revenue = Math.ceil(sales * averageServicePrice / 10) * 10;
+      estimatedMetrics.push('revenue');
+    }
+  }
+
+  const monthlyServices = services.filter((service) => service.billingType === 'MONTHLY');
+  if (targets.mrr === null && monthlyServices.length) {
+    const averageMonthlyPrice = monthlyServices.reduce((sum, service) => sum + service.price, 0) / monthlyServices.length;
+    if (averageMonthlyPrice > 0) {
+      targets.mrr = Math.ceil(sales * averageMonthlyPrice / 10) * 10;
+      estimatedMetrics.push('mrr');
+    }
+  }
+  return estimatedMetrics;
+}
+
 export type GoalSuggestionStatus = 'created' | 'updated' | 'unchanged' | 'no_history' | 'concurrent_change';
 
 type ExistingGoalTargets = Partial<Record<`${GoalMetricKey}Target`, number | null>>;
@@ -138,13 +178,19 @@ export type GoalSuggestionResult = {
   metricsSaved: number;
   unavailableMetrics: GoalMetricKey[];
   projectedMetrics: GoalMetricKey[];
+  estimatedMetrics: GoalMetricKey[];
 };
 
 function unavailableMetrics(targets: Record<GoalMetricKey, number | null>, existing?: ExistingGoalTargets): GoalMetricKey[] {
   return metricKeys.filter((metric) => targets[metric] === null && existing?.[`${metric}Target`] == null);
 }
 
-async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthlyStartDay: number, now: Date, replaceApproaches: boolean): Promise<GoalSuggestionResult> {
+type GoalSuggestionOptions = {
+  refreshTargets?: boolean;
+  overrides?: Partial<Record<GoalMetricKey, number>>;
+};
+
+async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthlyStartDay: number, now: Date, options: GoalSuggestionOptions): Promise<GoalSuggestionResult> {
   const key = { ownerId: OWNER_ID, periodKind: kind, periodStart: current.start };
   const existing = await prisma.goal.findUnique({ where: { ownerId_periodKind_periodStart: key } });
 
@@ -156,12 +202,28 @@ async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthl
   const approachesTarget = dailyLimit * countProspectingDays(current.start, current.end);
   targets.approaches = approachesTarget;
   let projectedMetrics: GoalMetricKey[] = [];
-  if (replaceApproaches) {
+  if (options.refreshTargets) {
     const currentActuals = await getTeamGoalActualsByPeriod([current], now);
-    if (currentActuals[0]) projectedMetrics = fillTargetsFromCurrentPace(targets, currentActuals[0], current, now, existing ?? undefined);
+    if (currentActuals[0]) projectedMetrics = fillTargetsFromCurrentPace(targets, currentActuals[0], current, now);
+  }
+  const estimatedMetrics = estimateMissingTargets(targets, approachesTarget);
+  const services = await prisma.serviceCatalogItem.findMany({
+    where: { isActive: true },
+    select: { price: true, billingType: true }
+  });
+  estimatedMetrics.push(...estimateFinancialTargets(targets, services.map((service) => ({
+    price: Number(service.price),
+    billingType: service.billingType
+  }))));
+  for (const [metric, target] of Object.entries(options.overrides ?? {}) as Array<[GoalMetricKey, number]>) {
+    targets[metric] = target;
+    const estimatedIndex = estimatedMetrics.indexOf(metric);
+    if (estimatedIndex >= 0) estimatedMetrics.splice(estimatedIndex, 1);
   }
   const metricsToSave = existing
-    ? countMissingSuggestedTargets(existing, targets) + (replaceApproaches && existing.approachesTarget != null && existing.approachesTarget !== approachesTarget ? 1 : 0)
+    ? metricKeys.filter((metric) => targets[metric] !== null
+      && (options.refreshTargets || existing[`${metric}Target` as keyof typeof existing] == null)
+      && existing[`${metric}Target` as keyof typeof existing] !== targets[metric]).length
     : metricKeys.filter((metric) => targets[metric] !== null).length;
   if (metricsToSave === 0) {
     return {
@@ -171,21 +233,19 @@ async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthl
         : 'no_history',
       metricsSaved: 0,
       unavailableMetrics: unavailableMetrics(targets, existing ?? undefined),
-      projectedMetrics
+      projectedMetrics,
+      estimatedMetrics
     };
   }
 
   if (existing) {
-    // Fill blank built-in metrics; on an explicit chat request, recalculate
-    // approaches from the configured daily prospecting limit. Keep custom goals.
+    // Scheduled runs fill blank targets. Explicit chat requests refresh all
+    // targets with available evidence while preserving custom goals.
     const proposedFields = targetFields(targets);
     const data = Object.fromEntries(metricKeys.flatMap((metric) => {
-      if (metric === 'approaches' && replaceApproaches) {
-        if (existing.approachesTarget === approachesTarget) return [];
-        return [['approachesTarget', approachesTarget]];
-      }
-      if (existing[`${metric}Target` as keyof typeof existing] !== null || targets[metric] === null) return [];
-      const field = `${metric}Target`;
+      const field = `${metric}Target` as `${GoalMetricKey}Target`;
+      if (targets[metric] === null || (!options.refreshTargets && existing[field] != null)) return [];
+      if (existing[field] === targets[metric]) return [];
       return [[field, proposedFields[field as keyof typeof proposedFields]]];
     })) as Partial<ReturnType<typeof targetFields>>;
     const update = await prisma.goal.updateMany({
@@ -198,23 +258,24 @@ async function planCycle(kind: GoalPeriodKind, current: GoalPeriodWindow, monthl
       status: update.count === 1 ? 'updated' : 'concurrent_change',
       metricsSaved: update.count === 1 ? metricsToSave : 0,
       unavailableMetrics: unavailableMetrics(targets, existing),
-      projectedMetrics
+      projectedMetrics,
+      estimatedMetrics
     };
   }
 
   try {
     await prisma.goal.create({ data: { ...key, periodEnd: current.end, ...targetFields(targets), customGoals: [] } });
     revalidateGoals();
-    return { kind, status: 'created', metricsSaved: metricsToSave, unavailableMetrics: unavailableMetrics(targets), projectedMetrics };
+    return { kind, status: 'created', metricsSaved: metricsToSave, unavailableMetrics: unavailableMetrics(targets), projectedMetrics, estimatedMetrics };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return { kind, status: 'concurrent_change', metricsSaved: 0, unavailableMetrics: unavailableMetrics(targets), projectedMetrics };
+      return { kind, status: 'concurrent_change', metricsSaved: 0, unavailableMetrics: unavailableMetrics(targets), projectedMetrics, estimatedMetrics };
     }
     throw error;
   }
 }
 
-export async function createDarwinGoalSuggestion(kind: GoalPeriodKind, now = new Date(), replaceApproaches = false): Promise<GoalSuggestionResult> {
+export async function createDarwinGoalSuggestion(kind: GoalPeriodKind, now = new Date(), options: GoalSuggestionOptions = {}): Promise<GoalSuggestionResult> {
   const settings = await prisma.teamGoalSettings.findUnique({ where: { id: 'team' } });
   const monthlyStartDay = settings?.monthlyStartDay ?? 1;
   const activeGoals = await prisma.goal.findMany({
@@ -230,7 +291,7 @@ export async function createDarwinGoalSuggestion(kind: GoalPeriodKind, now = new
   const current = active
     ? { kind, start: active.periodStart, end: active.periodEnd }
     : getGoalPeriodWindow(kind, now, monthlyStartDay);
-  return planCycle(kind, current, monthlyStartDay, now, replaceApproaches);
+  return planCycle(kind, current, monthlyStartDay, now, options);
 }
 
 async function revalidateGoals() {
