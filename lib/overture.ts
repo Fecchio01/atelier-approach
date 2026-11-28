@@ -326,7 +326,7 @@ export function buildOvertureQuery(
       AND (NOT regexp_matches(${nameText}, '${AUTO_PRODUCT_NAME_PATTERN.source.replaceAll("'", "''")}')
         OR regexp_matches(${nameText}, '${TARGET_AUTO_SERVICE_NAME_PATTERN.source.replaceAll("'", "''")}'))`
     : '';
-  const primaryCategoryText = "regexp_replace(replace(replace(translate(lower(coalesce(taxonomy.primary, '')), 'áàâãéêíóôõúç', 'aaaaeeiooouc'), '_', ' '), '-', ' '), '\s+', ' ', 'g')";
+  const primaryCategoryText = "regexp_replace(replace(replace(translate(lower(coalesce(taxonomy.primary, '')), 'áàâãéêíóôõúç', 'aaaaeeiooouc'), '_', ' '), '-', ' '), '\\s+', ' ', 'g')";
   const opticalBusinessExclusion = !criteria.businessName && isClothingNiche(criteria.niche)
     ? `AND NOT regexp_matches(${opticalSearchText}, '${OPTICAL_BUSINESS_PATTERN.source.replaceAll("'", "''")}')
       AND NOT regexp_matches(${primaryCategoryText}, '${CLOTHING_EXCLUDED_PRIMARY_PATTERN.source.replaceAll("'", "''")}')`
@@ -443,7 +443,7 @@ function buildOvertureSearchCondition(
   const nameMatches = terms.map((term) => `regexp_matches(${normalizedNameText}, '${phrase(term)}')`).join(' OR ');
   if (!hasKnownNicheTaxonomy(criteria.niche)) return `((${categoryMatches}) OR (${nameMatches}))`;
   // Known niche: the name only counts when Overture has no specific category for the place.
-  const genericPrimary = `regexp_matches(regexp_replace(replace(replace(coalesce(lower(taxonomy.primary), ''), '_', ' '), '-', ' '), '\s+', ' ', 'g'), '${escapeSqlString(GENERIC_CATEGORY_PATTERN.source)}')`;
+  const genericPrimary = `regexp_matches(regexp_replace(replace(replace(coalesce(lower(taxonomy.primary), ''), '_', ' '), '-', ' '), '\\s+', ' ', 'g'), '${escapeSqlString(GENERIC_CATEGORY_PATTERN.source)}')`;
   return `((${categoryMatches}) OR (${genericPrimary} AND (${nameMatches})))`;
 }
 
