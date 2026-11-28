@@ -7,20 +7,20 @@ export const metadata: Metadata = {
   description: 'Plataforma comercial Arvelo',
   icons: {
     icon: [
-      { url: '/icons/arvelo-approach-192.png?v=3', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/arvelo-approach-512.png?v=3', sizes: '512x512', type: 'image/png' }
+      { url: '/icons/arvelo-approach-192.png?v=4', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/arvelo-approach-512.png?v=4', sizes: '512x512', type: 'image/png' }
     ],
-    apple: [{ url: '/icons/arvelo-approach-apple.png?v=3', sizes: '180x180', type: 'image/png' }]
+    apple: [{ url: '/icons/arvelo-approach-apple.png?v=4', sizes: '180x180', type: 'image/png' }]
   },
   appleWebApp: {
     capable: true,
     title: 'Arvelo Approach',
-    statusBarStyle: 'black-translucent'
+    statusBarStyle: 'default'
   }
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0b100e',
+  themeColor: '#f5f3eb',
   colorScheme: 'dark'
 };
 
@@ -28,15 +28,15 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="pt-BR">
       <head>
-        <link rel="apple-touch-startup-image" href="/launch/ios-390x844.png?v=3" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-        <link rel="apple-touch-startup-image" href="/launch/ios-393x852.png?v=3" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-        <link rel="apple-touch-startup-image" href="/launch/ios-402x874.png?v=3" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-        <link rel="apple-touch-startup-image" href="/launch/ios-414x896.png?v=3" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-        <link rel="apple-touch-startup-image" href="/launch/ios-428x926.png?v=3" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-        <link rel="apple-touch-startup-image" href="/launch/ios-430x932.png?v=3" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-        <link rel="apple-touch-startup-image" href="/launch/ios-440x956.png?v=3" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-        <link rel="apple-touch-startup-image" href="/launch/ios-375x812.png?v=3" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-        <link rel="apple-touch-startup-image" href="/launch/ios-375x667.png?v=3" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+        <link rel="apple-touch-startup-image" href="/launch/ios-390x844.png?v=4" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+        <link rel="apple-touch-startup-image" href="/launch/ios-393x852.png?v=4" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+        <link rel="apple-touch-startup-image" href="/launch/ios-402x874.png?v=4" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+        <link rel="apple-touch-startup-image" href="/launch/ios-414x896.png?v=4" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+        <link rel="apple-touch-startup-image" href="/launch/ios-428x926.png?v=4" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+        <link rel="apple-touch-startup-image" href="/launch/ios-430x932.png?v=4" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+        <link rel="apple-touch-startup-image" href="/launch/ios-440x956.png?v=4" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+        <link rel="apple-touch-startup-image" href="/launch/ios-375x812.png?v=4" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+        <link rel="apple-touch-startup-image" href="/launch/ios-375x667.png?v=4" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
       </head>
       <body>
         {children}
